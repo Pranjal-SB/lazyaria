@@ -162,8 +162,7 @@ func (f *field) checkKind(s string) error {
 	case "duration":
 		_, err = ParseDuration(s)
 	case "extra_args":
-		name := strings.TrimLeft(s, "-")
-		if strings.HasPrefix(name, "rpc-") || name == "enable-rpc" {
+		if rpcOption(s) {
 			return fmt.Errorf("rpc-* options are not allowed (%s); the RPC endpoint is managed by lazyaria", s)
 		}
 	case "keys":
@@ -176,6 +175,19 @@ func (f *field) checkKind(s string) error {
 		}
 	}
 	return err
+}
+
+// rpcOption reports whether an aria2 argument touches the RPC endpoint. It
+// also catches getopt_long abbreviations like --enable-rp.
+func rpcOption(arg string) bool {
+	name := strings.TrimLeft(strings.TrimSpace(arg), "-")
+	if i := strings.IndexAny(name, "= \t"); i >= 0 {
+		name = name[:i]
+	}
+	name = strings.ToLower(name)
+	return strings.HasPrefix(name, "rpc") ||
+		(len(name) >= 2 && strings.HasPrefix("rpc", name)) ||
+		(len(name) >= len("enable-r") && strings.HasPrefix("enable-rpc", name))
 }
 
 // fail builds the user facing error: key, optional line, reason and default.

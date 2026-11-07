@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -18,8 +19,11 @@ func ParseSize(s string) (int64, error) {
 		}
 	}
 	n, err := strconv.ParseFloat(t, 64)
-	if err != nil || n < 0 {
+	if err != nil || n < 0 || math.IsInf(n, 0) || math.IsNaN(n) {
 		return 0, fmt.Errorf("invalid size %q (use a number with optional K, M, G or T, e.g. 4M)", s)
+	}
+	if n*mult >= math.MaxInt64 {
+		return 0, fmt.Errorf("size %q is too large (maximum is 8E, about 9.2e18 bytes)", s)
 	}
 	return int64(n * mult), nil
 }

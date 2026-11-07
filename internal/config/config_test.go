@@ -117,6 +117,29 @@ func TestRejectRPCExtraArgs(t *testing.T) {
 	}
 }
 
+func TestRPCGuard(t *testing.T) {
+	f := lookup("engine.aria2_extra_args")
+	for _, a := range []string{"rpc-secret=x", "--rpc-secret", "--enable-rpc=false", "--enable-rpc",
+		"--enable-rp", " --rpc-secret=x", "-rpc-listen-port=1", "--RPC-SECRET=x"} {
+		if err := f.check([]string{a}); err == nil {
+			t.Errorf("%q accepted", a)
+		}
+	}
+	for _, a := range []string{"--max-tries=3", "--enable-dht=false", "--enable-mmap"} {
+		if err := f.check([]string{a}); err != nil {
+			t.Errorf("%q rejected: %v", a, err)
+		}
+	}
+}
+
+func TestParseSizeRejects(t *testing.T) {
+	for _, in := range []string{"inf", "nan", "1e30", "-1", "9000000000T"} {
+		if _, err := ParseSize(in); err == nil {
+			t.Errorf("%q accepted", in)
+		}
+	}
+}
+
 func TestParseSize(t *testing.T) {
 	for in, want := range map[string]int64{"0": 0, "512K": 524288, "4M": 4194304, "1.5G": 1610612736} {
 		if got, err := ParseSize(in); err != nil || got != want {
