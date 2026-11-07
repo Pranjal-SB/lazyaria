@@ -1,0 +1,6 @@
+/lazyaria
+/dist/
+*.aria2
+coverage.out
+.env
+/testdata/tmp/
