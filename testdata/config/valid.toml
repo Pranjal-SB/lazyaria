@@ -1,0 +1,20 @@
+version = 1
+
+[downloads]
+max_concurrent = 8
+min_split_size = "8M"
+
+[retry]
+auto_retry = ["429", "network"]
+backoff_factor = 3
+
+[engine]
+aria2_extra_args = ["--max-overall-download-limit=0"]
+
+[keys]
+preset = "vim"
+pause_resume = ["space", "p"]
+
+[theme]
+accent = 4
+selection = "reverse"
