@@ -133,10 +133,85 @@ func TestDirsCreated0700(t *testing.T) {
 			t.Fatalf("%s: %v %v", d, fi, err)
 		}
 	}
-	if err := os.Chmod(p.StateDir, 0o755); err != nil {
+}
+
+func TestEnsureDirsFixesLooseMode(t *testing.T) {
+	root := t.TempDir()
+	st := filepath.Join(root, "state")
+	if err := os.Mkdir(st, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := EnsureDirs(p); err == nil {
-		t.Fatal("expected error for loose mode")
+	if err := os.Chmod(st, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureDirs(Paths{StateDir: st, RuntimeDir: filepath.Join(root, "run")}); err != nil {
+		t.Fatal(err)
+	}
+	if fi, _ := os.Stat(st); fi.Mode().Perm() != 0o700 {
+		t.Fatalf("mode %v", fi.Mode())
+	}
+}
+
+func TestEnsureDirsSymlinkedState(t *testing.T) {
+	root := t.TempDir()
+	real := filepath.Join(root, "real")
+	if err := os.Mkdir(real, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureDirs(Paths{StateDir: link, RuntimeDir: filepath.Join(root, "run")}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTmpFallbackSymlinkRejected(t *testing.T) {
+	tmp := t.TempDir()
+	target := t.TempDir()
+	if err := os.Symlink(target, filepath.Join(tmp, fmt.Sprintf("lazyaria-%d", os.Getuid()))); err != nil {
+		t.Fatal(err)
+	}
+	env := envMap(map[string]string{"HOME": "/home/u", "XDG_STATE_HOME": "/" + strings.Repeat("a", 119)})
+	_, err := resolvePaths(&Settings{}, env, tmp)
+	if err == nil || !strings.Contains(err.Error(), "unsafe permissions") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestSocketLimitBoundary(t *testing.T) {
+	const suffix = "/lazyaria/lazyaria.sock" // 23 bytes
+	for n, wantTmp := range map[int]bool{103 - len(suffix): false, 104 - len(suffix): true} {
+		rt := "/" + strings.Repeat("r", n-1)
+		env := envMap(map[string]string{"HOME": "/home/u", "XDG_RUNTIME_DIR": rt})
+		tmp := t.TempDir()
+		p, err := resolvePaths(&Settings{}, env, tmp)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.HasPrefix(p.Socket, tmp); got != wantTmp {
+			t.Fatalf("len %d: socket %q tmp=%v want %v", len(p.Socket), p.Socket, got, wantTmp)
+		}
+	}
+}
+
+func TestUserDirsForms(t *testing.T) {
+	for line, want := range map[string]string{
+		`XDG_DOWNLOAD_DIR="$HOME/Dl" # c`: "/home/u/Dl",
+		`XDG_DOWNLOAD_DIR="${HOME}/Dl/"`:  "/home/u/Dl",
+		`XDG_DOWNLOAD_DIR="$HOMEX/Dl"`:    "/home/u/Downloads",
+		`XDG_DOWNLOAD_DIR="$HOME"`:        "/home/u",
+	} {
+		home := t.TempDir()
+		_ = home
+		cfg := t.TempDir()
+		if err := os.WriteFile(filepath.Join(cfg, "user-dirs.dirs"), []byte(line+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		got := userDownloadDir(cfg, "/home/u")
+		if got != want {
+			t.Fatalf("%s: got %q want %q", line, got, want)
+		}
 	}
 }

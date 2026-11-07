@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 )
 
-// maxSocketPath is the sun_path limit on the strictest supported platform (macOS/BSD).
+// maxSocketPath is sun_path on macOS/BSD: 104 bytes including the NUL, so 103 usable.
 const maxSocketPath = 104
 
 // Paths holds every resolved filesystem location lazyaria uses.
@@ -48,7 +49,7 @@ func resolvePaths(s *Settings, env func(string) string, tmpRoot string) (Paths, 
 	} else {
 		p.RuntimeDir = filepath.Join(p.StateDir, "run")
 	}
-	if len(p.RuntimeDir+"/lazyaria.sock") > maxSocketPath && s.Advanced.SocketPath == "" {
+	if len(p.RuntimeDir+"/lazyaria.sock") >= maxSocketPath && s.Advanced.SocketPath == "" {
 		dir := filepath.Join(tmpRoot, fmt.Sprintf("lazyaria-%d", os.Getuid()))
 		if err := checkTmpDir(dir); err != nil {
 			return Paths{}, err
@@ -60,8 +61,8 @@ func resolvePaths(s *Settings, env func(string) string, tmpRoot string) (Paths, 
 	p.AriaConf = filepath.Join(p.RuntimeDir, "aria2.conf")
 	if s.Advanced.SocketPath != "" {
 		p.Socket = s.Advanced.SocketPath
-		if len(p.Socket) > maxSocketPath {
-			return Paths{}, fmt.Errorf("advanced.socket_path is %d bytes, limit is %d; use a shorter path", len(p.Socket), maxSocketPath)
+		if len(p.Socket) >= maxSocketPath {
+			return Paths{}, fmt.Errorf("advanced.socket_path is %d bytes, limit is %d; use a shorter path", len(p.Socket), maxSocketPath-1)
 		}
 	}
 
@@ -92,12 +93,40 @@ func userDownloadDir(cfgHome, home string) string {
 		if !ok || strings.TrimSpace(k) != "XDG_DOWNLOAD_DIR" {
 			continue
 		}
-		v = strings.ReplaceAll(strings.Trim(strings.TrimSpace(v), `"`), "$HOME", home)
+		v = filepath.Clean(expandHome(unquoteValue(v), home))
 		if filepath.IsAbs(v) {
 			return v
 		}
 	}
 	return def
+}
+
+var homeVar = regexp.MustCompile(`\$\{HOME\}|\$HOME(/|$)`)
+
+// expandHome only expands $HOME when it ends a path component.
+func expandHome(v, home string) string {
+	return homeVar.ReplaceAllStringFunc(v, func(m string) string {
+		if m == "${HOME}" {
+			return home
+		}
+		return home + strings.TrimPrefix(m, "$HOME")
+	})
+}
+
+// unquoteValue takes a quoted value up to its closing quote, or a bare word up to a space or '#'.
+func unquoteValue(v string) string {
+	v = strings.TrimSpace(v)
+	if strings.HasPrefix(v, `"`) {
+		v = v[1:]
+		if i := strings.IndexByte(v, '"'); i >= 0 {
+			v = v[:i]
+		}
+		return v
+	}
+	if i := strings.IndexAny(v, " \t#"); i >= 0 {
+		v = v[:i]
+	}
+	return v
 }
 
 func checkTmpDir(dir string) error {
@@ -114,23 +143,45 @@ func checkTmpDir(dir string) error {
 func verifyDir(dir string, fi os.FileInfo) error {
 	st, ok := fi.Sys().(*syscall.Stat_t)
 	if !fi.IsDir() || !ok || int(st.Uid) != os.Getuid() || fi.Mode().Perm() != 0o700 {
-		return fmt.Errorf("%s has unsafe permissions (must be a directory owned by you with mode 0700); remove or fix it, or run `lazyaria doctor`", dir)
+		return fmt.Errorf("%s has unsafe permissions (must be a directory owned by you with mode 0700, not a symlink); remove or fix it, or run `lazyaria doctor`", dir)
 	}
 	return nil
 }
 
-// EnsureDirs creates the state and runtime dirs (0700) and verifies owner and mode.
+// EnsureDirs creates the state and runtime dirs (0700). Symlinked dirs are followed and
+// loose modes on our own dirs are tightened; a foreign owner is an error. The /tmp
+// fallback is held to the strict no-symlink, exact-0700 rule.
 func EnsureDirs(p Paths) error {
+	uid := os.Getuid()
 	for _, d := range []string{p.StateDir, p.RuntimeDir} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			return fmt.Errorf("create %s: %w", d, err)
 		}
-		fi, err := os.Lstat(d)
+		if filepath.Base(d) == fmt.Sprintf("lazyaria-%d", uid) {
+			fi, err := os.Lstat(d)
+			if err != nil {
+				return err
+			}
+			if err := verifyDir(d, fi); err != nil {
+				return err
+			}
+			continue
+		}
+		fi, err := os.Stat(d)
 		if err != nil {
 			return err
 		}
-		if err := verifyDir(d, fi); err != nil {
-			return err
+		st, ok := fi.Sys().(*syscall.Stat_t)
+		if !fi.IsDir() || !ok {
+			return fmt.Errorf("%s is not a directory; remove it or run `lazyaria doctor`", d)
+		}
+		if int(st.Uid) != uid {
+			return fmt.Errorf("%s is owned by uid %d, not you (uid %d); chown it to yourself or remove it, or run `lazyaria doctor`", d, st.Uid, uid)
+		}
+		if fi.Mode().Perm() != 0o700 {
+			if err := os.Chmod(d, 0o700); err != nil {
+				return fmt.Errorf("chmod %s: %w", d, err)
+			}
 		}
 	}
 	return nil
