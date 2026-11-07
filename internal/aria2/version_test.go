@@ -81,3 +81,10 @@ func TestCheckVersion_Banner(t *testing.T) {
 		t.Fatalf("%q %v", v, err)
 	}
 }
+
+func TestCheckVersion_MissingBareName(t *testing.T) {
+	_, err := CheckVersion("aria2c-definitely-not-installed-xyz")
+	if !errors.Is(err, ErrNotFound) || !strings.Contains(err.Error(), "aria2c not found") {
+		t.Fatalf("err %v", err)
+	}
+}

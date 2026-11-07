@@ -44,7 +44,7 @@ func CheckVersion(path string) (string, error) {
 		switch {
 		case ctx.Err() != nil:
 			return "", fmt.Errorf("aria2: %q --version timed out after %s: %s", path, versionTimeout, fixHint)
-		case errors.Is(err, fs.ErrNotExist):
+		case errors.Is(err, fs.ErrNotExist) || errors.Is(err, exec.ErrNotFound):
 			return "", fmt.Errorf("%w at %q: %s", ErrNotFound, path, fixHint)
 		case errors.Is(err, fs.ErrPermission):
 			return "", fmt.Errorf("%w at %q: check file permissions or set engine.aria2c_path; run `lazyaria doctor`", ErrNotExecutable, path)
