@@ -1,12 +1,15 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"strings"
 	"time"
+
+	"github.com/Pranjal-SB/lazyaria/internal/textutil"
 )
 
 type State string
@@ -124,7 +127,19 @@ func scanJob(r scanner) (*Job, error) {
 }
 
 func args(j *Job) ([]any, error) {
-	uris, err := json.Marshal(nonNil(j.URIs))
+	uris, err := marshal(nonNil(j.URIs))
+	if err != nil {
+		return nil, err
+	}
+	norm := make([]string, 0, len(j.URIs))
+	for _, u := range j.URIs {
+		n, err := textutil.NormalizeURL(u)
+		if err != nil {
+			n = u
+		}
+		norm = append(norm, n)
+	}
+	normJSON, err := marshal(norm)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +147,7 @@ func args(j *Job) ([]any, error) {
 	if o == nil {
 		o = map[string]string{}
 	}
-	opts, err := json.Marshal(o)
+	opts, err := marshal(o)
 	if err != nil {
 		return nil, err
 	}
@@ -144,9 +159,20 @@ func args(j *Job) ([]any, error) {
 		dev = int64(*j.DirDev)
 	}
 	return []any{j.ID, j.Kind, j.Engine, j.EngineRef, string(j.State), j.ErrorKind, code, j.ErrorMsg,
-		j.Name, string(uris), j.Torrent, j.Dir, j.Out, dev, j.TotalBytes, j.DoneBytes, string(opts),
+		j.Name, uris, j.Torrent, j.Dir, j.Out, dev, j.TotalBytes, j.DoneBytes, opts,
 		j.LimitDown, j.LimitUp, j.Category, j.Queue, j.Priority, j.RetryCount, ms(j.RetryAt), j.Referrer,
-		j.CreatedAt.UnixMilli(), ms(j.StartedAt), ms(j.FinishedAt), ms(j.RemovedAt)}, nil
+		j.CreatedAt.UnixMilli(), ms(j.StartedAt), ms(j.FinishedAt), ms(j.RemovedAt), normJSON}, nil
+}
+
+// marshal skips HTML escaping so & < > stay literal in stored JSON.
+func marshal(v any) (string, error) {
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return "", err
+	}
+	return strings.TrimSuffix(b.String(), "\n"), nil
 }
 
 func nonNil(s []string) []string {
@@ -156,14 +182,14 @@ func nonNil(s []string) []string {
 	return s
 }
 
-const placeholders = `?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?`
+const placeholders = `?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?`
 
 func (s *Store) InsertJob(ctx context.Context, j *Job) error {
 	a, err := args(j)
 	if err != nil {
 		return err
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO jobs(`+cols+`) VALUES(`+placeholders+`)`, a...)
+	_, err = s.db.ExecContext(ctx, `INSERT INTO jobs(`+cols+`, norm_uris) VALUES(`+placeholders+`)`, a...)
 	return err
 }
 
@@ -201,79 +227,12 @@ func (s *Store) UpdateJob(ctx context.Context, id string, fn func(*Job) error) (
 	if err != nil {
 		return nil, err
 	}
-	set := strings.Join(strings.Fields(strings.ReplaceAll(cols, ",", "=?,")+"=?"), " ")
+	set := strings.Join(strings.Fields(strings.ReplaceAll(cols+", norm_uris", ",", "=?,")+"=?"), " ")
 	if _, err := tx.ExecContext(ctx, `UPDATE jobs SET `+set+` WHERE id=?`, append(a, id)...); err != nil {
 		return nil, err
 	}
-	return j, tx.Commit()
-}
-
-func (s *Store) list(ctx context.Context, where string, a []any, limit, offset int) ([]*Job, error) {
-	q := `SELECT ` + cols + ` FROM jobs ` + where + ` ` + smartOrder
-	if limit > 0 {
-		q += ` LIMIT ? OFFSET ?`
-		a = append(a, limit, offset)
-	}
-	rows, err := s.db.QueryContext(ctx, q, a...)
-	if err != nil {
+	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var out []*Job
-	for rows.Next() {
-		j, err := scanJob(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, j)
-	}
-	return out, rows.Err()
-}
-
-func (s *Store) ListJobs(ctx context.Context, f Filter) ([]*Job, error) {
-	var conds []string
-	var a []any
-	if len(f.States) > 0 {
-		conds = append(conds, `state IN (`+strings.TrimSuffix(strings.Repeat("?,", len(f.States)), ",")+`)`)
-		for _, st := range f.States {
-			a = append(a, string(st))
-		}
-	} else if !f.IncludeHistory {
-		conds = append(conds, `state NOT IN ('done','removed')`)
-	} else {
-		conds = append(conds, `state != 'removed'`)
-	}
-	return s.list(ctx, `WHERE `+strings.Join(conds, " AND "), a, f.Limit, f.Offset)
-}
-
-var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
-
-// Search matches q against names and URIs, skipping removed jobs.
-func (s *Store) Search(ctx context.Context, q string, limit, offset int) ([]*Job, error) {
-	pat := `%` + likeEscaper.Replace(q) + `%`
-	return s.list(ctx, `WHERE state != 'removed' AND (name LIKE ? ESCAPE '\' OR uris LIKE ? ESCAPE '\')`,
-		[]any{pat, pat}, limit, offset)
-}
-
-// FindByNormalizedURL returns a live job that has norm as one of its URIs.
-func (s *Store) FindByNormalizedURL(ctx context.Context, norm string) (*Job, error) {
-	js, err := s.list(ctx, `WHERE state != 'removed' AND EXISTS
-		(SELECT 1 FROM json_each(jobs.uris) WHERE value = ?)`, []any{norm}, 1, 0)
-	if err != nil {
-		return nil, err
-	}
-	if len(js) == 0 {
-		return nil, ErrNotFound
-	}
-	return js[0], nil
-}
-
-// PurgeRemoved hard-deletes soft-removed jobs removed before the cutoff.
-func (s *Store) PurgeRemoved(ctx context.Context, before time.Time) (int, error) {
-	r, err := s.db.ExecContext(ctx, `DELETE FROM jobs WHERE state='removed' AND removed_at < ?`, before.UnixMilli())
-	if err != nil {
-		return 0, err
-	}
-	n, err := r.RowsAffected()
-	return int(n), err
+	return j, nil
 }

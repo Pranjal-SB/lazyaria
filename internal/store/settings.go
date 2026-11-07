@@ -1,6 +1,12 @@
 package store
 
-import "context"
+import (
+	"context"
+
+	"github.com/Pranjal-SB/lazyaria/internal/config"
+)
+
+var _ config.Overrides = (*Store)(nil)
 
 // All returns every runtime setting override. It satisfies config.Overrides.
 func (s *Store) All() (map[string]string, error) {

@@ -6,7 +6,6 @@ import (
 	"embed"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"net/url"
 	"os"
@@ -44,6 +43,10 @@ func Open(p string) (*Store, error) {
 }
 
 func openWith(p string, migs fs.FS) (*Store, error) {
+	p, err := filepath.Abs(p)
+	if err != nil {
+		return nil, err
+	}
 	f, err := os.OpenFile(p, os.O_CREATE, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("create database %s: %w (check the state dir permissions)", p, err)
@@ -127,7 +130,7 @@ func (s *Store) migrate(p string, migs fs.FS) error {
 			continue
 		}
 		if cur > 0 { // nothing worth saving on a fresh database
-			if err := backup(p, n); err != nil {
+			if err := s.backup(p, n); err != nil {
 				return fmt.Errorf("back up before migration %d: %w", n, err)
 			}
 		}
@@ -136,7 +139,11 @@ func (s *Store) migrate(p string, migs fs.FS) error {
 			return err
 		}
 		if err := s.apply(n, string(body)); err != nil {
-			return fmt.Errorf("migration %s: %w (restore %s.bak-v%d if needed)", name, err, p, n)
+			hint := ""
+			if cur > 0 {
+				hint = fmt.Sprintf(" (restore %s.bak-v%d if needed)", p, n)
+			}
+			return fmt.Errorf("migration %s: %w%s", name, err, hint)
 		}
 		cur = n
 	}
@@ -159,27 +166,15 @@ func (s *Store) apply(n int, body string) error {
 	return tx.Commit()
 }
 
-// backup copies the database to p.bak-vN and prunes all but the newest two.
-func backup(p string, n int) error {
-	// Fold the WAL into the main file so the copy is complete.
-	if db, err := sql.Open("sqlite", "file:"+p); err == nil {
-		db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`)
-		db.Close()
-	}
-	src, err := os.Open(p)
-	if err != nil {
+// backup snapshots the database to p.bak-vN (VACUUM INTO sees the WAL) and
+// prunes all but the newest two.
+func (s *Store) backup(p string, n int) error {
+	dst := p + ".bak-v" + strconv.Itoa(n)
+	os.Remove(dst) // VACUUM INTO refuses an existing file
+	if _, err := s.db.Exec(`VACUUM INTO ?`, dst); err != nil {
 		return err
 	}
-	defer src.Close()
-	dst, err := os.OpenFile(p+".bak-v"+strconv.Itoa(n), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(dst, src); err != nil {
-		dst.Close()
-		return err
-	}
-	if err := dst.Close(); err != nil {
+	if err := os.Chmod(dst, 0o600); err != nil {
 		return err
 	}
 	prefix := filepath.Base(p) + ".bak-v"

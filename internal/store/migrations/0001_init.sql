@@ -8,6 +8,7 @@ CREATE TABLE jobs (
   error_kind    TEXT, error_code INTEGER, error_msg TEXT,
   name          TEXT NOT NULL,
   uris          TEXT NOT NULL,
+  norm_uris     TEXT NOT NULL DEFAULT '[]',
   torrent       BLOB,
   dir           TEXT NOT NULL, out TEXT,
   dir_dev       INTEGER,

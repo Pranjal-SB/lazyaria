@@ -13,10 +13,8 @@ import (
 	"testing/fstest"
 	"time"
 
-	"github.com/Pranjal-SB/lazyaria/internal/config"
+	"github.com/Pranjal-SB/lazyaria/internal/textutil"
 )
-
-var _ config.Overrides = (*Store)(nil)
 
 var ctx = context.Background()
 
@@ -65,6 +63,8 @@ func TestMigrationBackup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	j := job("keep", Queued)
+	s.InsertJob(ctx, j) // sits in the WAL until checkpoint
 	s.Close()
 	base, _ := fs.Sub(migrationsFS, "migrations")
 	body, _ := fs.ReadFile(base, "0001_init.sql")
@@ -80,6 +80,14 @@ func TestMigrationBackup(t *testing.T) {
 	if _, err := os.Stat(p + ".bak-v2"); err != nil {
 		t.Fatal(err)
 	}
+	bs, err := Open(p + ".bak-v2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bs.Close()
+	if _, err := bs.GetJob(ctx, j.ID); err != nil {
+		t.Fatalf("backup lacks row: %v", err)
+	}
 	if v, _ := s.version(); v != 2 {
 		t.Fatalf("version %d", v)
 	}
@@ -87,9 +95,13 @@ func TestMigrationBackup(t *testing.T) {
 
 func TestBackupKeepsLastTwo(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "l.db")
-	os.WriteFile(p, []byte("x"), 0o600)
+	s, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
 	for n := 2; n <= 4; n++ {
-		if err := backup(p, n); err != nil {
+		if err := s.backup(p, n); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -289,5 +301,64 @@ func TestPurgeRemoved(t *testing.T) {
 	}
 	if _, err := s.GetJob(ctx, fresh.ID); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestFindByNormalizedURLNormalizes(t *testing.T) {
+	s := open(t)
+	j := job("a", Queued)
+	j.URIs = []string{"http://host/x?a=2&b=1"}
+	s.InsertJob(ctx, j)
+	norm, err := textutil.NormalizeURL("HTTP://Host:80/x?b=1&a=2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.FindByNormalizedURL(ctx, norm)
+	if err != nil || got.ID != j.ID {
+		t.Fatalf("got %v %v", got, err)
+	}
+	if got.URIs[0] != "http://host/x?a=2&b=1" {
+		t.Fatal("raw uri changed")
+	}
+}
+
+func TestSearchURIsNotJSON(t *testing.T) {
+	s := open(t)
+	j := job("a", Queued)
+	j.URIs = []string{"http://h/p?a=1&b=2", "http://h/q"}
+	s.InsertJob(ctx, j)
+	for q, want := range map[string]int{"1&b": 1, "[": 0, `","`: 0} {
+		got, err := s.Search(ctx, q, 10, 0)
+		if err != nil || len(got) != want {
+			t.Fatalf("%q: %d %v", q, len(got), err)
+		}
+	}
+}
+
+func TestFailedMigrationRollsBack(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "l.db")
+	s, _ := Open(p)
+	s.Close()
+	base, _ := fs.Sub(migrationsFS, "migrations")
+	body, _ := fs.ReadFile(base, "0001_init.sql")
+	m := fstest.MapFS{
+		"0001_init.sql": {Data: body},
+		"0002_bad.sql":  {Data: []byte("CREATE TABLE partial(a); INSERT INTO nope VALUES(1);")},
+	}
+	if _, err := openWith(p, m); err == nil {
+		t.Fatal("want error")
+	}
+	s, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if v, _ := s.version(); v != 1 {
+		t.Fatalf("version %d", v)
+	}
+	var n int
+	s.db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE name='partial'`).Scan(&n)
+	if n != 0 {
+		t.Fatal("partial table left behind")
 	}
 }
