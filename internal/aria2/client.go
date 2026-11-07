@@ -235,15 +235,10 @@ func (c *Client) dispatch(b []byte) {
 }
 
 // Call invokes an aria2 method, adding the secret token as first param.
+// A call cancelled after it was sent may still run on aria2, so always pass a
+// context with a deadline and treat a timeout as "outcome unknown".
 func (c *Client) Call(ctx context.Context, method string, params []any, out any) error {
 	return c.call(ctx, method, c.withToken(params), out)
-}
-
-func (c *Client) withToken(params []any) []any {
-	if c.secret == "" {
-		return params
-	}
-	return append([]any{"token:" + c.secret}, params...)
 }
 
 func (c *Client) call(ctx context.Context, method string, params []any, out any) error {
@@ -293,31 +288,4 @@ func (c *Client) call(ctx context.Context, method string, params []any, out any)
 		forget()
 		return ctx.Err()
 	}
-}
-
-// Multicall batches calls through system.multicall, with a token on each
-// sub-call. Results are unwrapped; the first failed sub-call becomes the error.
-func (c *Client) Multicall(ctx context.Context, calls []Call) ([]json.RawMessage, error) {
-	subs := make([]map[string]any, len(calls))
-	for i, cl := range calls {
-		subs[i] = map[string]any{"methodName": cl.Method, "params": c.withToken(cl.Params)}
-	}
-	var raw []json.RawMessage
-	if err := c.call(ctx, "system.multicall", []any{subs}, &raw); err != nil {
-		return nil, err
-	}
-	res := make([]json.RawMessage, len(raw))
-	for i, r := range raw {
-		var ok []json.RawMessage
-		if json.Unmarshal(r, &ok) == nil && len(ok) == 1 {
-			res[i] = ok[0]
-			continue
-		}
-		var e RPCError
-		if json.Unmarshal(r, &e) == nil && e.Message != "" {
-			return nil, &e
-		}
-		return nil, fmt.Errorf("aria2: malformed multicall result %s", r)
-	}
-	return res, nil
 }

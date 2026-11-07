@@ -78,16 +78,21 @@ func TestOutOfOrderResponses(t *testing.T) {
 
 func TestNotificationRouting(t *testing.T) {
 	f := startFake(t, "127.0.0.1:0", func(ctx context.Context, c *websocket.Conn) {
-		c.Write(ctx, websocket.MessageText, []byte(`{"jsonrpc":"2.0","method":"aria2.onDownloadComplete","params":[{"gid":"abc"}]}`))
 		for {
 			r, err := readReq(ctx, c)
 			if err != nil {
 				return
 			}
+			// push the notification while the call is in flight, then answer it.
+			c.Write(ctx, websocket.MessageText, []byte(`{"jsonrpc":"2.0","method":"aria2.onDownloadComplete","params":[{"gid":"abc"}]}`))
 			reply(ctx, c, r.ID, `"OK"`)
 		}
 	})
 	c := dial(t, f.URL(), Options{})
+	var out string
+	if err := c.Call(context.Background(), "m", nil, &out); err != nil || out != "OK" {
+		t.Fatalf("%v %q", err, out)
+	}
 	select {
 	case n := <-c.Notifications():
 		if n != (Notification{Method: "aria2.onDownloadComplete", GID: "abc"}) {
@@ -96,10 +101,26 @@ func TestNotificationRouting(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("no notification")
 	}
-	// the notification must not have consumed anything: a call still resolves.
-	var out string
-	if err := c.Call(context.Background(), "m", nil, &out); err != nil || out != "OK" {
-		t.Fatalf("%v %q", err, out)
+}
+
+func TestMulticallMixedResults(t *testing.T) {
+	f := startFake(t, "127.0.0.1:0", func(ctx context.Context, c *websocket.Conn) {
+		r, err := readReq(ctx, c)
+		if err != nil {
+			return
+		}
+		reply(ctx, c, r.ID, `[["a"],{"code":1,"message":"GID not found"},["c"]]`)
+		c.Read(ctx)
+	})
+	c := dial(t, f.URL(), Options{})
+	res, err := c.Multicall(context.Background(), make([]Call, 3))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res) != 3 || string(res[0].Raw) != `"a"` || res[0].Err != nil ||
+		res[1].Err == nil || res[1].Err.Code != 1 || res[1].Err.Message != "GID not found" || res[1].Raw != nil ||
+		string(res[2].Raw) != `"c"` || res[2].Err != nil {
+		t.Fatalf("%+v", res)
 	}
 }
 
@@ -124,7 +145,7 @@ func TestMulticallTokens(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(res) != 2 || string(res[0]) != `"a"` || string(res[1]) != `"b"` {
+	if len(res) != 2 || string(res[0].Raw) != `"a"` || string(res[1].Raw) != `"b"` {
 		t.Fatalf("res %s", res)
 	}
 	raw := <-got
