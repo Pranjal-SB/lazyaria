@@ -104,7 +104,7 @@ func (m *Manager) poll(ctx context.Context) {
 	var down, up int64
 	for i, st := range sts {
 		if lostStatus(st) {
-			if err := m.recover(ctx, polled[i]); engineDown(err) {
+			if err := m.gone(ctx, polled[i], st); engineDown(err) {
 				return
 			}
 			continue

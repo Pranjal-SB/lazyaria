@@ -110,7 +110,7 @@ func (m *Manager) retryNow(id string) {
 		return // paused, removed or refreshed while waiting
 	}
 	_, err = m.readd(ctx, j, false, "retry")
-	if err == nil || errors.Is(err, engine.ErrNotRunning) {
+	if err == nil || errors.Is(err, errDirMissing) || errors.Is(err, engine.ErrNotRunning) {
 		return // without an engine, Reconcile re-arms the timer once it is back
 	}
 	kind, msg := "add-failed", err.Error()

@@ -31,8 +31,8 @@ type AddParams struct {
 
 // Add stores the job, with its gid, first and only then hands it to the
 // engine, so a crash in between leaves a row Reconcile can match or re-add.
-// With reliability.duplicates = "skip" a known link returns the existing
-// job and a finished target file returns *SkippedError; nothing is added.
+// With reliability.duplicates = "skip" a duplicate returns *SkippedError
+// (with the existing job for a known link) and nothing is added.
 func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 	if len(p.URIs) == 0 && len(p.Torrent) == 0 {
 		return nil, errors.New("nothing to download: give a link or a torrent file")
@@ -57,7 +57,7 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 	if mode := m.s.Reliability.Duplicates; !p.Force && mode != "allow" {
 		if j := m.findDuplicate(ctx, p.URIs); j != nil {
 			if mode == "skip" {
-				return j, nil
+				return j, &SkippedError{Existing: j}
 			}
 			return nil, &DuplicateError{Existing: j}
 		}
@@ -71,7 +71,8 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 	if ns := m.noSpace(dir, p.Total, 0); ns != nil {
 		return nil, ns
 	}
-	j := m.newJob(dir, p)
+	paused := p.StartPaused || m.s.Downloads.StartPaused
+	j := m.newJob(dir, p, paused)
 	if err := m.st.InsertJob(ctx, j); err != nil {
 		return nil, fmt.Errorf("save the new job: %w", err)
 	}
@@ -79,7 +80,6 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 		m.log.Warn("record job event", "job", j.ID, "err", err)
 	}
 	m.bus.Publish(Event{Type: "job.added", Job: j})
-	paused := p.StartPaused || m.s.Downloads.StartPaused
 	ref, err := m.e.Add(ctx, m.request(j, paused))
 	if engineDown(err) {
 		// The add may or may not have landed under the job's gid; the poll
@@ -148,7 +148,9 @@ func (m *Manager) noSpace(dir string, total, done int64) *NoSpaceError {
 	return &NoSpaceError{Dir: dir, Need: need, Free: free}
 }
 
-func (m *Manager) newJob(dir string, p AddParams) *store.Job {
+// newJob builds the intent row. A start-paused job is paused from the
+// start, so a re-add after an unconfirmed engine add keeps it paused.
+func (m *Manager) newJob(dir string, p AddParams, paused bool) *store.Job {
 	opts := maps.Clone(p.Options)
 	if opts == nil {
 		opts = map[string]string{}
@@ -172,6 +174,9 @@ func (m *Manager) newJob(dir string, p AddParams) *store.Job {
 		ID: store.NewID(), Kind: kind, Engine: "aria2", State: store.Queued,
 		Name: textutil.SanitizeName(displayName(p.Out, uris), fat),
 		URIs: uris, Torrent: p.Torrent, Dir: dir, Options: opts, Queue: "main", CreatedAt: m.now(),
+	}
+	if paused {
+		j.State = store.Paused
 	}
 	if p.Out != "" {
 		out := textutil.SanitizeName(p.Out, fat)

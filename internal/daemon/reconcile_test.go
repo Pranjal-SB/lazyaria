@@ -218,3 +218,79 @@ func TestReconcile_RearmsRetry(t *testing.T) {
 type listMisses struct{ *fakeEngine }
 
 func (listMisses) List(context.Context) ([]engine.EngineStatus, error) { return nil, nil }
+
+func TestAttachRespectsExternalRemove(t *testing.T) {
+	r := newRig(t)
+	r.m.Attach = true
+	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}})
+	ref := r.ref(t, j.ID)
+	r.e.setState(ref, "removed") // someone removed it through aria2 directly
+	r.m.poll(bg)
+	got := r.get(t, j.ID)
+	if got.State != store.Removed || got.RemovedAt == nil || !r.hasEvent(t, j.ID, "removed-externally") {
+		t.Fatalf("state %s", got.State)
+	}
+	if adds, _ := r.e.count(); adds != 1 {
+		t.Fatalf("adds %d, want only the first", adds)
+	}
+}
+
+func TestSupervisedRemovedRowNotReadded(t *testing.T) {
+	r := newRig(t)
+	j := r.insert(t, store.Removed, "old1", nil)
+	r.e.setState("old1", "removed")
+	if err := r.m.gone(bg, j, engine.EngineStatus{Ref: "old1", Known: true, State: "removed"}); err != nil {
+		t.Fatal(err)
+	}
+	if adds, _ := r.e.count(); adds != 0 {
+		t.Fatalf("adds %d, want 0", adds)
+	}
+	// A live row with a removed result is still ours to re-add.
+	live := r.insert(t, store.Active, "old2", nil)
+	r.e.setState("old2", "removed")
+	r.m.poll(bg)
+	if adds, _ := r.e.count(); adds != 1 || r.get(t, live.ID).State != store.Queued {
+		t.Fatalf("adds %d", adds)
+	}
+}
+
+func TestRetryIntoMissingDir(t *testing.T) {
+	r := newRig(t)
+	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}})
+	r.fail429(t, j.ID)
+	r.m.dev = func(string) (uint64, error) { return 0, errors.New("unmounted") }
+	r.m.fireRetry(j.ID)
+	got := r.get(t, j.ID)
+	if got.State != store.Error || *got.ErrorKind != "dir-missing" || *got.DirDev != 7 {
+		t.Fatalf("state %s kind %v dev %v", got.State, got.ErrorKind, got.DirDev)
+	}
+	if adds, _ := r.e.count(); adds != 1 {
+		t.Fatalf("adds %d, want only the first", adds)
+	}
+}
+
+func TestCompletedOfflineNotRedownloaded(t *testing.T) {
+	r := newRig(t)
+	started := r.clk.now()
+	out := "full.bin"
+	total := int64(5)
+	os.WriteFile(filepath.Join(r.dir, out), []byte("12345"), 0o600)
+	j := r.insert(t, store.Active, "old1", func(j *store.Job) { j.Out, j.StartedAt, j.TotalBytes = &out, &started, &total })
+	if err := r.m.Reconcile(bg); err != nil {
+		t.Fatal(err)
+	}
+	if adds, _ := r.e.count(); adds != 0 {
+		t.Fatalf("adds %d, want 0", adds)
+	}
+	if got := r.get(t, j.ID); got.State != store.Done || !r.hasEvent(t, j.ID, "completed-offline") {
+		t.Fatalf("state %s", got.State)
+	}
+	// A short file is a partial download and is re-added.
+	short := "short.bin"
+	os.WriteFile(filepath.Join(r.dir, short), []byte("12"), 0o600)
+	k := r.insert(t, store.Active, "old2", func(j *store.Job) { j.Out, j.StartedAt, j.TotalBytes = &short, &started, &total })
+	r.m.Reconcile(bg)
+	if adds, _ := r.e.count(); adds != 1 || r.get(t, k.ID).State != store.Queued {
+		t.Fatalf("short file: adds %d", adds)
+	}
+}

@@ -161,8 +161,9 @@ func TestAddDuplicateModes(t *testing.T) {
 					t.Fatalf("url: %v", err)
 				}
 			case "skip":
-				if err != nil || j.ID != first.ID {
-					t.Fatalf("url: want the existing job, got %v %v", j, err)
+				var skip *SkippedError
+				if !errors.As(err, &skip) || skip.Existing == nil || skip.Existing.ID != first.ID || j.ID != first.ID || skip.Error() == "" {
+					t.Fatalf("url: want SkippedError with the existing job, got %v %v", j, err)
 				}
 			}
 
@@ -192,4 +193,27 @@ func TestAddPartialTargetIsNotDuplicate(t *testing.T) {
 	os.WriteFile(filepath.Join(r.dir, "part.bin"), []byte("x"), 0o600)
 	os.WriteFile(filepath.Join(r.dir, "part.bin.aria2"), []byte("x"), 0o600)
 	r.add(t, AddParams{URIs: []string{"http://example.com/part.bin"}})
+}
+
+func TestStartPausedIntentSurvivesLostAdd(t *testing.T) {
+	r := newRig(t)
+	down := &downEngine{fakeEngine: r.e}
+	r.m.e = down
+	j, err := r.m.Add(bg, AddParams{URIs: []string{"http://example.com/a.iso"}, Dir: r.dir, StartPaused: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := r.get(t, j.ID); got.State != store.Paused || got.EngineRef == nil {
+		t.Fatalf("intent row %s ref %v, want paused with a gid", got.State, got.EngineRef)
+	}
+	r.m.e = r.e // the engine is back
+	if err := r.m.Reconcile(bg); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.e.adds) != 1 || !r.e.adds[0].Paused {
+		t.Fatalf("re-add %+v, want one paused add", r.e.adds)
+	}
+	if got := r.get(t, j.ID); got.State != store.Paused {
+		t.Fatalf("state %s, want paused", got.State)
+	}
 }

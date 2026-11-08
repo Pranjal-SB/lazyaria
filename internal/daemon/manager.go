@@ -30,6 +30,10 @@ type Manager struct {
 
 	// Files deletes a job's payload for Remove with deleteFiles set.
 	Files FileRemover
+	// Attach is set when the daemon uses an aria2 it did not start. Someone
+	// else may then remove downloads, and such a removal is respected
+	// instead of re-added. Set it before Run.
+	Attach bool
 
 	now   func() time.Time
 	free  func(dir string) (uint64, error)
@@ -85,12 +89,18 @@ func (e *DuplicateError) Error() string {
 	return fmt.Sprintf("%q is already in the list (%s); add it with --force to download it again", e.Existing.Name, e.Existing.State)
 }
 
-// SkippedError means reliability.duplicates is "skip" and a finished file
-// already sits at the target path, so nothing was added. Callers treat it
-// as success.
-type SkippedError struct{ Path string }
+// SkippedError means reliability.duplicates is "skip" and nothing was
+// added: the link is already known (Existing), or a finished file already
+// sits at the target path (Path). Callers treat it as success.
+type SkippedError struct {
+	Existing *store.Job
+	Path     string
+}
 
 func (e *SkippedError) Error() string {
+	if e.Existing != nil {
+		return fmt.Sprintf("%q is already in the list (%s); skipped (reliability.duplicates = skip)", e.Existing.Name, e.Existing.State)
+	}
 	return fmt.Sprintf("%s already exists; skipped (reliability.duplicates = skip)", e.Path)
 }
 

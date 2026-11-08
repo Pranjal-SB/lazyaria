@@ -175,7 +175,7 @@ func (m *Manager) RefreshURI(ctx context.Context, id, uri string) (*store.Job, e
 		return j, err
 	}
 	j2, err := m.readd(ctx, j, false, "readded")
-	if err != nil && j.State == store.RetryWait {
+	if err != nil && !errors.Is(err, errDirMissing) && j.State == store.RetryWait {
 		m.armRetry(j) // the engine call failed; keep the scheduled retry
 	}
 	return j2, err

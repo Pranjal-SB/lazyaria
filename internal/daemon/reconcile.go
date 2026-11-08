@@ -2,7 +2,9 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/Pranjal-SB/lazyaria/internal/engine"
@@ -37,8 +39,10 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 			left++
 			continue
 		}
+		var st engine.EngineStatus // unknown unless the engine says otherwise
 		if j.EngineRef != nil {
-			st, ok := known[*j.EngineRef]
+			var ok bool
+			st, ok = known[*j.EngineRef]
 			if !ok {
 				// List pages through buckets a download can move between,
 				// so a miss is confirmed before anything is added twice.
@@ -57,7 +61,7 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 				continue
 			}
 		}
-		if err := m.recover(ctx, j); engineDown(err) {
+		if err := m.gone(ctx, j, st); engineDown(err) {
 			down, left = err, left+1
 		}
 	}
@@ -68,8 +72,30 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 }
 
 // lostStatus means the engine no longer has the download, or holds only its
-// removed result; either way it must be added again.
+// removed result.
 func lostStatus(st engine.EngineStatus) bool { return !st.Known || st.State == "removed" }
+
+// gone handles a job whose download the engine no longer runs. A removed
+// result in attach mode means someone else removed it, which is respected
+// (undoable like any remove). In supervised mode only lazyaria removes
+// downloads, so a removed result on a live row is re-added unless the row
+// is already removed (our own Remove that stopped half way).
+func (m *Manager) gone(ctx context.Context, j *store.Job, st engine.EngineStatus) error {
+	if st.Known && st.State == "removed" {
+		if m.Attach {
+			now := m.now()
+			m.prog.forget(j.ID)
+			_, err := m.changeAs(ctx, "job.removed", j.ID, "removed-externally", "", func(x *store.Job) {
+				x.State, x.RemovedAt, x.RetryAt = store.Removed, &now, nil
+			})
+			return err
+		}
+		if j.State == store.Removed {
+			return nil
+		}
+	}
+	return m.recover(ctx, j)
+}
 
 // recover re-adds a job the engine lost.
 func (m *Manager) recover(ctx context.Context, j *store.Job) error {
@@ -79,18 +105,19 @@ func (m *Manager) recover(ctx context.Context, j *store.Job) error {
 		m.to(ctx, j, store.Done, "seeding ended with the engine", func(x *store.Job) { x.FinishedAt = &now })
 		return nil
 	}
-	if m.dirMissing(j) {
-		kind := "dir-missing"
-		msg := fmt.Sprintf("%s is missing or on a different drive; mount it and retry", j.Dir)
-		m.to(ctx, j, store.Error, kind, func(x *store.Job) { x.ErrorKind, x.ErrorMsg = &kind, &msg })
-		return nil
-	}
 	_, err := m.readd(ctx, j, j.State == store.Paused, "readded")
+	if errors.Is(err, errDirMissing) {
+		return nil // recorded on the job
+	}
 	if err != nil {
 		m.log.Warn("re-add lost download", "job", j.ID, "err", err)
 	}
 	return err
 }
+
+// errDirMissing means readd refused because the job's directory is gone;
+// the job is already in error(dir-missing).
+var errDirMissing = errors.New("download directory is missing or on a different drive; mount it and retry")
 
 // dirMissing is the unmounted-drive guard (spec G6). st_dev is not stable
 // across reboots on btrfs, overlay or NFS, so a changed device counts only
@@ -120,6 +147,17 @@ func (m *Manager) dirMissing(j *store.Job) bool {
 // but an automatic retry also resets the retry count.
 func (m *Manager) readd(ctx context.Context, j *store.Job, paused bool, why string) (*store.Job, error) {
 	ctx = context.WithoutCancel(ctx) // see Add
+	// Every re-add path checks the drive: a retry into an unmounted mount
+	// point would fill the root filesystem.
+	if m.dirMissing(j) {
+		kind := "dir-missing"
+		msg := fmt.Sprintf("%s is missing or on a different drive; mount it and retry", j.Dir)
+		m.to(ctx, j, store.Error, kind, func(x *store.Job) { x.ErrorKind, x.ErrorMsg, x.RetryAt = &kind, &msg, nil })
+		return j, errDirMissing
+	}
+	if done, ok := m.completedOffline(ctx, j); ok {
+		return done, nil
+	}
 	req := m.request(j, paused)
 	if j.EngineRef != nil {
 		if err := m.e.Remove(ctx, refOf(j)); err != nil {
@@ -151,4 +189,25 @@ func (m *Manager) readd(ctx context.Context, j *store.Job, paused bool, why stri
 			x.RetryCount = 0
 		}
 	})
+}
+
+// completedOffline catches a download that finished while its completion
+// went unseen: the file has its full size and no control file. Re-adding it
+// with allow-overwrite would download it again over itself.
+func (m *Manager) completedOffline(ctx context.Context, j *store.Job) (*store.Job, bool) {
+	if j.Out == nil || j.TotalBytes == nil || *j.TotalBytes <= 0 {
+		return j, false
+	}
+	p := filepath.Join(j.Dir, *j.Out)
+	fi, err := os.Stat(p)
+	if err != nil || !fi.Mode().IsRegular() || fi.Size() != *j.TotalBytes || exists(p+".aria2") {
+		return j, false
+	}
+	now := m.now()
+	total := *j.TotalBytes
+	m.prog.forget(j.ID)
+	return m.set(ctx, j, "completed-offline", p, func(x *store.Job) {
+		x.State, x.FinishedAt, x.DoneBytes, x.RetryAt = store.Done, &now, &total, nil
+		x.ErrorKind, x.ErrorCode, x.ErrorMsg = nil, nil, nil
+	}), true
 }
