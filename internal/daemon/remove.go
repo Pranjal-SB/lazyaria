@@ -9,17 +9,23 @@ import (
 
 	"github.com/Pranjal-SB/lazyaria/internal/engine"
 	"github.com/Pranjal-SB/lazyaria/internal/store"
+	"github.com/Pranjal-SB/lazyaria/internal/trash"
 )
+
+// ErrUndoExpired means the undo window has passed or the token is unknown.
+var ErrUndoExpired = errors.New("nothing to undo: the undo window has passed")
 
 type undoRecord struct {
 	until time.Time
-	prev  map[string]store.State // job id -> state before removal
+	prev  map[string]store.State   // job id -> state before removal
+	files map[string][]trash.Entry // job id -> its trashed files
 }
 
 // Remove soft-deletes jobs: the engine forgets them, the rows stay as
 // removed until purged. The returned token undoes it for remove.undo_seconds.
 func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (string, error) {
 	prev := map[string]store.State{}
+	files := map[string][]trash.Entry{}
 	err := m.each(ctx, ids, func(ctx context.Context, j *store.Job) error {
 		if j.State == store.Removed {
 			return nil
@@ -31,18 +37,26 @@ func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (s
 			}
 		}
 		m.cancelRetry(j.ID)
+		var es []trash.Entry
+		if deleteFiles {
+			// Trash before touching the row: with no trash the remove does not happen.
+			var err error
+			if es, err = m.Files.RemoveFiles(ctx, j); err != nil {
+				return err
+			}
+		}
 		now := m.now()
-		j2, err := m.changeAs(ctx, "job.removed", j.ID, "removed", "", func(x *store.Job) {
+		_, err := m.changeAs(ctx, "job.removed", j.ID, "removed", "", func(x *store.Job) {
 			x.State, x.RemovedAt, x.RetryAt = store.Removed, &now, nil
 		})
 		if err != nil {
+			if rerr := m.Files.RestoreFiles(ctx, es); rerr != nil {
+				err = errors.Join(err, rerr)
+			}
 			return err
 		}
 		m.prog.forget(j.ID)
-		prev[j.ID] = j.State
-		if deleteFiles {
-			return m.Files.RemoveFiles(ctx, j2)
-		}
+		prev[j.ID], files[j.ID] = j.State, es
 		return nil
 	})
 	secs := m.s.Remove.UndoSeconds
@@ -58,7 +72,7 @@ func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (s
 		}
 	}
 	tok := rand.Text()
-	m.undo[tok] = undoRecord{until: now.Add(time.Duration(secs) * time.Second), prev: prev}
+	m.undo[tok] = undoRecord{until: now.Add(time.Duration(secs) * time.Second), prev: prev, files: files}
 	return tok, err
 }
 
@@ -71,9 +85,14 @@ func (m *Manager) Undo(ctx context.Context, token string) error {
 	rec, ok := m.undo[token]
 	delete(m.undo, token)
 	if !ok || m.now().After(rec.until) {
-		return errors.New("nothing to undo: the undo window has passed")
+		return ErrUndoExpired
 	}
 	var errs []error
+	for id, es := range rec.files {
+		if err := m.Files.RestoreFiles(ctx, es); err != nil {
+			errs = append(errs, fmt.Errorf("restore files of job %s: %w", id, err))
+		}
+	}
 	for id, was := range rec.prev {
 		to := was
 		switch was {

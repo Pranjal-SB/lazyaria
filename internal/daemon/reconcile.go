@@ -206,8 +206,10 @@ func (m *Manager) completedOffline(ctx context.Context, j *store.Job) (*store.Jo
 	now := m.now()
 	total := *j.TotalBytes
 	m.prog.forget(j.ID)
-	return m.set(ctx, j, "completed-offline", p, func(x *store.Job) {
+	j = m.set(ctx, j, "completed-offline", p, func(x *store.Job) {
 		x.State, x.FinishedAt, x.DoneBytes, x.RetryAt = store.Done, &now, &total, nil
 		x.ErrorKind, x.ErrorCode, x.ErrorMsg = nil, nil, nil
-	}), true
+	})
+	m.stampOrigin(j)
+	return j, true
 }

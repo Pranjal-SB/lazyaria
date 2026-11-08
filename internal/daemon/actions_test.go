@@ -9,14 +9,17 @@ import (
 
 	"github.com/Pranjal-SB/lazyaria/internal/engine"
 	"github.com/Pranjal-SB/lazyaria/internal/store"
+	"github.com/Pranjal-SB/lazyaria/internal/trash"
 )
 
 type recordFiles struct{ got []string }
 
-func (f *recordFiles) RemoveFiles(_ context.Context, j *store.Job) error {
+func (f *recordFiles) RemoveFiles(_ context.Context, j *store.Job) ([]trash.Entry, error) {
 	f.got = append(f.got, j.ID)
-	return nil
+	return nil, nil
 }
+
+func (f *recordFiles) RestoreFiles(context.Context, []trash.Entry) error { return nil }
 
 func TestRemoveAndUndo(t *testing.T) {
 	r := newRig(t)

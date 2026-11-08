@@ -45,8 +45,11 @@ func device(fi os.FileInfo) (uint64, bool) {
 	return uint64(st.Dev), true //nolint:unconvert // Dev width differs per OS
 }
 
-// mountTop walks up from dir while the device id stays the same.
+// mountTop resolves symlinks in dir, then walks up while the device id stays the same.
 func mountTop(dir string, dev uint64) string {
+	if r, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = r // a symlinked parent must not hide the real mount root
+	}
 	for {
 		parent := filepath.Dir(dir)
 		if parent == dir {
@@ -150,7 +153,7 @@ func Trash(path string) (Entry, error) {
 			werr = cerr
 		}
 		if werr == nil {
-			werr = os.Rename(abs, e.TrashedPath)
+			werr = renameFn(abs, e.TrashedPath)
 		}
 		if werr != nil {
 			os.Remove(e.InfoPath)
@@ -172,8 +175,15 @@ func Restore(e Entry) error {
 	} else if !os.IsNotExist(err) {
 		return err
 	}
-	if err := os.Rename(e.TrashedPath, e.Original); err != nil {
+	beforeMove()
+	if err := moveNoReplace(e.TrashedPath, e.Original); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return fmt.Errorf("restore: %s already exists; move it aside and retry", e.Original)
+		}
 		return err
 	}
-	return os.Remove(e.InfoPath)
+	if err := os.Remove(e.InfoPath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }

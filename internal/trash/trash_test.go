@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -137,5 +138,119 @@ func TestTrashMissingFile(t *testing.T) {
 func TestEncodePath(t *testing.T) {
 	if got := encodePath("/a b/ü/100%"); got != "/a%20b/%C3%BC/100%25" {
 		t.Fatal(got)
+	}
+}
+
+func TestRestoreNeverOverwritesRace(t *testing.T) {
+	work := setup(t)
+	p := filepath.Join(work, "f")
+	write(t, p, "old")
+	e, err := Trash(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A file appears after the existence check, before the move.
+	beforeMove = func() { write(t, p, "racer") }
+	t.Cleanup(func() { beforeMove = func() {} })
+	if err := Restore(e); err == nil {
+		t.Fatal("expected error")
+	}
+	if b, _ := os.ReadFile(p); string(b) != "racer" {
+		t.Fatalf("overwritten: %q", b)
+	}
+	if _, err := os.Stat(e.TrashedPath); err != nil {
+		t.Fatal("trashed copy lost")
+	}
+}
+
+func TestRestoreFallbacks(t *testing.T) {
+	work := setup(t)
+	for _, dir := range []bool{false, true} {
+		p := filepath.Join(work, "fb")
+		if dir {
+			p += "d"
+			os.Mkdir(p, 0o755)
+		} else {
+			write(t, p, "old")
+		}
+		e, err := Trash(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		linkMode = true
+		err = Restore(e)
+		linkMode = false
+		if err != nil {
+			t.Fatalf("dir=%v: %v", dir, err)
+		}
+		if _, err := os.Lstat(p); err != nil {
+			t.Fatal(err)
+		}
+		// restore again over an existing target must fail in fallback mode too
+		e2, err := Trash(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if dir {
+			os.Mkdir(p, 0o755)
+		} else {
+			write(t, p, "new")
+		}
+		linkMode = true
+		err = Restore(e2)
+		linkMode = false
+		if err == nil {
+			t.Fatalf("dir=%v: fallback overwrote", dir)
+		}
+		os.RemoveAll(p)
+	}
+}
+
+func TestRestoreInfoAlreadyGone(t *testing.T) {
+	work := setup(t)
+	p := filepath.Join(work, "f")
+	write(t, p, "x")
+	e, err := Trash(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Remove(e.InfoPath)
+	if err := Restore(e); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(p); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTrashCrossDeviceIsNoTrash(t *testing.T) {
+	work := setup(t)
+	p := filepath.Join(work, "f")
+	write(t, p, "x")
+	renameFn = func(string, string) error { return &os.LinkError{Op: "rename", Err: syscall.EXDEV} }
+	t.Cleanup(func() { renameFn = os.Rename })
+	if _, err := Trash(p); !errors.Is(err, ErrNoTrash) {
+		t.Fatalf("want ErrNoTrash, got %v", err)
+	}
+	if _, err := os.Stat(p); err != nil {
+		t.Fatal("original must stay")
+	}
+	infos, _ := filepath.Glob(filepath.Join(os.Getenv("XDG_DATA_HOME"), "Trash", "info", "*"))
+	if len(infos) != 0 {
+		t.Fatalf("stray trashinfo: %v", infos)
+	}
+}
+
+func TestMountTopResolvesSymlinks(t *testing.T) {
+	real := t.TempDir()
+	link := filepath.Join(t.TempDir(), "ln")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	fi, _ := os.Stat(real)
+	dev, _ := device(fi)
+	top := mountTop(link, dev)
+	if r, _ := filepath.EvalSymlinks(top); r != top {
+		t.Fatalf("top %q is not a real path", top)
 	}
 }

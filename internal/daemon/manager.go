@@ -28,7 +28,7 @@ type Manager struct {
 	bus *Bus
 	log *slog.Logger
 
-	// Files deletes a job's payload for Remove with deleteFiles set.
+	// Files trashes a job's payload for Remove with deleteFiles set.
 	Files FileRemover
 	// Attach is set when the daemon uses an aria2 it did not start. Someone
 	// else may then remove downloads, and such a removal is respected
@@ -53,19 +53,10 @@ type Manager struct {
 	prog      *progress
 }
 
-// FileRemover deletes the files of a removed job.
-type FileRemover interface {
-	RemoveFiles(ctx context.Context, j *store.Job) error
-}
-
-type keepFiles struct{}
-
-func (keepFiles) RemoveFiles(context.Context, *store.Job) error { return nil }
-
 func NewManager(e engine.Engine, st *store.Store, s *config.Settings, bus *Bus, log *slog.Logger) *Manager {
 	return &Manager{
 		e: e, st: st, s: s, bus: bus, log: log,
-		Files: keepFiles{},
+		Files: &TrashFiles{},
 		now:   time.Now, free: fsinfo.FreeBytes, dev: fsinfo.Dev, alloc: fsinfo.Allocation, rnd: mrand.Float64,
 		ctx:     context.Background(),
 		retries: map[string]*time.Timer{},
@@ -180,12 +171,16 @@ func (m *Manager) to(ctx context.Context, j *store.Job, s store.State, detail st
 	if s != store.Active && s != store.Queued && s != store.Seeding {
 		m.prog.forget(j.ID)
 	}
-	return m.set(ctx, j, string(s), detail, func(x *store.Job) {
+	j = m.set(ctx, j, string(s), detail, func(x *store.Job) {
 		x.State = s
 		if fn != nil {
 			fn(x)
 		}
 	})
+	if s == store.Done {
+		m.stampOrigin(j)
+	}
+	return j
 }
 
 func (m *Manager) wake() {
