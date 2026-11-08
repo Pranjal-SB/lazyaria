@@ -57,7 +57,7 @@ func TestWriteConf(t *testing.T) {
 	s, p := testSettings(t)
 	s.BT.SeedRatio = 1.5
 	s.BT.SeedMinutes = 0
-	s.Engine.Aria2ExtraArgs = []string{"--max-tries=3", "--rpc-listen-all=true", "--enable-rpc=false", "--rpc-secret=x", "--check-integrity"}
+	s.Engine.Aria2ExtraArgs = []string{"--max-tries=3", "--check-integrity"}
 	secret := "0123456789abcdef0123456789abcdef"
 	if err := WriteConf(p.AriaConf, s, p, 41234, secret); err != nil {
 		t.Fatal(err)
@@ -90,14 +90,6 @@ func TestWriteConf(t *testing.T) {
 		if got := m[k]; len(got) == 0 || got[len(got)-1] != v {
 			t.Errorf("%s = %v, want %q last", k, got, v)
 		}
-	}
-	for k, vs := range m {
-		if strings.HasPrefix(k, "rpc-") && len(vs) != 1 {
-			t.Errorf("%s written %d times; extra args must not add rpc-* lines", k, len(vs))
-		}
-	}
-	if len(m["enable-rpc"]) != 1 {
-		t.Errorf("enable-rpc overridden by extra args: %v", m["enable-rpc"])
 	}
 	if got := m["file-allocation"]; len(got) != 1 || got[0] == "" {
 		t.Errorf("file-allocation = %v", got)
@@ -135,11 +127,17 @@ func TestWriteConfRejectsNewlines(t *testing.T) {
 	}
 }
 
-func TestWriteConfRejectsShortOption(t *testing.T) {
-	s, p := testSettings(t)
-	s.Engine.Aria2ExtraArgs = []string{"-x16"}
-	if err := WriteConf(p.AriaConf, s, p, 1, "s"); err == nil {
-		t.Fatal("want error for a short option")
+// aria2 trims whitespace around conf keys, so " rpc-listen-all=true" would
+// open the RPC port to the network.
+func TestWriteConfRejectsReservedExtraArgs(t *testing.T) {
+	for _, a := range []string{"-x16", "--rpc-listen-all=true", "--enable-rpc=false", "-- rpc-listen-all=true",
+		"--\trpc-secret=x", " --rpc-secret=x", "--log-level=debug", "--conf-path=/x", "--log=/x",
+		"--stop-with-process=1", "--RPC-SECRET=x"} {
+		s, p := testSettings(t)
+		s.Engine.Aria2ExtraArgs = []string{a}
+		if err := WriteConf(p.AriaConf, s, p, 1, "s"); err == nil {
+			t.Errorf("%q accepted", a)
+		}
 	}
 }
 

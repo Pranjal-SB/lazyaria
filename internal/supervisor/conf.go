@@ -140,26 +140,20 @@ func (b *confBuilder) base(s *config.Settings, p config.Paths, port int, secret 
 }
 
 // extra appends engine.aria2_extra_args last so they override the defaults.
-// Both "--name=value" and "--name value" are accepted; a bare "--flag" is true.
+// A bare "--flag" is written as flag=true. Config validation runs the same
+// check; repeating it here guards the RPC endpoint against unvalidated input.
 func (b *confBuilder) extra(args []string) {
-	for i := 0; i < len(args) && b.err == nil; i++ {
-		name, ok := strings.CutPrefix(args[i], "--")
-		k, v, hasValue := strings.Cut(name, "=")
-		if !ok || k == "" {
-			b.err = fmt.Errorf("engine.aria2_extra_args: %q must use the long form --name=value", args[i])
+	for _, a := range args {
+		k, v, err := config.ParseExtraArg(a)
+		if b.err != nil {
 			return
 		}
-		if !hasValue {
-			v = "true"
-			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-				i++
-				v = args[i]
-			}
+		if err != nil {
+			b.err = fmt.Errorf("engine.aria2_extra_args: %w", err)
+			return
 		}
-		// Config validation already rejects these; this is the last line of
-		// defence for the loopback-only, secret-protected RPC endpoint.
-		if lk := strings.ToLower(k); strings.HasPrefix(lk, "rpc") || lk == "enable-rpc" {
-			continue
+		if !strings.Contains(a, "=") {
+			v = "true"
 		}
 		b.add(k, v)
 	}

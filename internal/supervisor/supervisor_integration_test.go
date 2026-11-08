@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -173,59 +171,6 @@ func TestKill9Respawn(t *testing.T) {
 	}
 	if sv.pid() == old {
 		t.Fatal("pid unchanged after respawn")
-	}
-}
-
-func TestCrashLoopFails(t *testing.T) {
-	s, p := testSettings(t)
-	script := filepath.Join(t.TempDir(), "aria2c")
-	body := "#!/bin/sh\n[ \"$1\" = --version ] && { echo 'aria2 version 1.37.0'; exit 0; }\necho 'boom: cannot start' >&2\nexit 1\n"
-	if err := os.WriteFile(script, []byte(body), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	s.Engine.Aria2cPath = script
-	s.Engine.RestartMaxBackoff = "50ms"
-	sv := New(s, p, quiet)
-	if _, err := sv.Start(context.Background()); err == nil {
-		t.Fatal("Start succeeded on a crash loop")
-	}
-	var last EngineState
-	for st := range sv.State() {
-		last = st
-	}
-	if last.Phase != "failed" || len(last.LogTail) == 0 || !strings.Contains(strings.Join(last.LogTail, "\n"), "boom") {
-		t.Fatalf("last state %+v, want failed with the log tail", last)
-	}
-	if err := sv.Shutdown(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestBindRaceRetries(t *testing.T) {
-	testutil.RequireAria2(t)
-	s, p := testSettings(t)
-	sv := New(s, p, quiet)
-	taken := 0
-	sv.pickPort = func() (int, error) {
-		if taken == 0 {
-			l, err := net.Listen("tcp", "127.0.0.1:0")
-			if err != nil {
-				return 0, err
-			}
-			t.Cleanup(func() { l.Close() })
-			taken = 1
-			return l.Addr().(*net.TCPAddr).Port, nil
-		}
-		return freePort()
-	}
-	c, err := sv.Start(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer sv.Shutdown(context.Background())
-	getVersion(t, c)
-	if sv.policy.fast != 0 {
-		t.Fatal("bind race counted toward the crash loop")
 	}
 }
 

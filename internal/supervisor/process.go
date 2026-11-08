@@ -22,7 +22,6 @@ import (
 
 const (
 	readyPoll      = 50 * time.Millisecond
-	readyTimeout   = 3 * time.Second
 	maxBindRetries = 5
 	tailLines      = 20
 )
@@ -140,20 +139,27 @@ func (sv *Supervisor) spawn(port int, secret string) (*proc, error) {
 // waitReady polls getVersion until aria2 answers, exits, or readyTimeout passes.
 func (sv *Supervisor) waitReady(pr *proc) (*aria2.Client, error) {
 	url := fmt.Sprintf("ws://127.0.0.1:%d/jsonrpc", pr.port)
-	deadline := time.Now().Add(readyTimeout)
+	deadline := time.Now().Add(sv.readyTimeout)
 	tick := time.NewTicker(readyPoll)
 	defer tick.Stop()
 	for {
-		if c := sv.tryReady(url, pr.secret); c != nil {
-			return c, nil
-		}
-		// aria2 keeps running when only the IPv4 bind fails, so check the
-		// log rather than waiting for an exit.
-		if sv.bindFailed(pr) {
+		// aria2 keeps running when only its IPv4 bind fails, and whoever
+		// holds the port would get our secret, so confirm the port is the
+		// child's before dialling and again once it answers.
+		switch sv.portState(pr) {
+		case portStolen:
 			return nil, errBindRace
+		case portOurs:
+			if c := sv.tryReady(url, pr.secret); c != nil {
+				if sv.portState(pr) != portOurs {
+					c.Close()
+					return nil, errBindRace
+				}
+				return c, nil
+			}
 		}
 		if time.Now().After(deadline) {
-			return nil, fmt.Errorf("aria2c did not answer on port %d within %s; see %s or run `lazyaria doctor`", pr.port, readyTimeout, sv.logPath())
+			return nil, fmt.Errorf("aria2c did not answer on port %d within %s; see %s or run `lazyaria doctor`", pr.port, sv.readyTimeout, sv.logPath())
 		}
 		select {
 		case <-pr.exited:
@@ -182,9 +188,18 @@ func (sv *Supervisor) tryReady(url, secret string) *aria2.Client {
 	return c
 }
 
+type portState int
+
+const (
+	portPending portState = iota // nothing listening yet
+	portOurs                     // the child holds the RPC port
+	portStolen                   // another process holds it
+)
+
+// bindFailed matches aria2 1.37's log line for a lost RPC port, e.g.
+// "IPv4 RPC: failed to bind TCP port 46123". BitTorrent bind errors differ.
 func (sv *Supervisor) bindFailed(pr *proc) bool {
-	b := readFrom(sv.logPath(), pr.logFrom)
-	return bytes.Contains(b, []byte("Address already in use")) || bytes.Contains(b, []byte("Failed to bind"))
+	return bytes.Contains(readFrom(sv.logPath(), pr.logFrom), []byte("IPv4 RPC: failed to bind"))
 }
 
 // stop asks aria2 to save and quit, escalating if it does not.

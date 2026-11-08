@@ -162,9 +162,7 @@ func (f *field) checkKind(s string) error {
 	case "duration":
 		_, err = ParseDuration(s)
 	case "extra_args":
-		if rpcOption(s) {
-			return fmt.Errorf("rpc-* options are not allowed (%s); the RPC endpoint is managed by lazyaria", s)
-		}
+		_, _, err = ParseExtraArg(s)
 	case "keys":
 		if s == "" {
 			err = fmt.Errorf("key names must not be empty")
@@ -177,14 +175,38 @@ func (f *field) checkKind(s string) error {
 	return err
 }
 
-// rpcOption reports whether an aria2 argument touches the RPC endpoint. It
-// also catches getopt_long abbreviations like --enable-rp.
-func rpcOption(arg string) bool {
-	name := strings.TrimLeft(strings.TrimSpace(arg), "-")
-	if i := strings.IndexAny(name, "= \t"); i >= 0 {
-		name = name[:i]
+var extraArgName = regexp.MustCompile(`^[a-z0-9-]+$`)
+
+// Options lazyaria sets itself: the log location and the process wiring.
+var ownedOptions = map[string]bool{"log": true, "log-level": true, "conf-path": true, "stop-with-process": true}
+
+// ParseExtraArg splits one engine.aria2_extra_args entry, "--name=value" or a
+// bare "--flag" (value ""), and rejects anything that could touch the RPC
+// endpoint or options lazyaria owns. aria2's conf parser trims whitespace
+// around names, so " rpc-secret" must count as rpc-secret.
+func ParseExtraArg(arg string) (name, value string, err error) {
+	if strings.ContainsAny(arg, "\r\n") {
+		return "", "", fmt.Errorf("aria2 option %q contains a line break; remove it", arg)
 	}
-	name = strings.ToLower(name)
+	rest, ok := strings.CutPrefix(strings.TrimSpace(arg), "--")
+	if !ok {
+		return "", "", fmt.Errorf("aria2 option %q must use the long form --name=value", arg)
+	}
+	name, value, _ = strings.Cut(rest, "=")
+	name = strings.TrimSpace(name)
+	switch {
+	case rpcName(strings.ToLower(name)):
+		return "", "", fmt.Errorf("rpc-* options are not allowed (%s); the RPC endpoint is managed by lazyaria", arg)
+	case !extraArgName.MatchString(name):
+		return "", "", fmt.Errorf("aria2 option %q has an invalid name (use lowercase letters, digits and -)", arg)
+	case ownedOptions[name]:
+		return "", "", fmt.Errorf("aria2 option %s is managed by lazyaria and cannot be overridden (%s)", name, arg)
+	}
+	return name, value, nil
+}
+
+// rpcName also catches getopt_long abbreviations like enable-rp.
+func rpcName(name string) bool {
 	return strings.HasPrefix(name, "rpc") ||
 		(len(name) >= 2 && strings.HasPrefix("rpc", name)) ||
 		(len(name) >= len("enable-r") && strings.HasPrefix("enable-rpc", name))

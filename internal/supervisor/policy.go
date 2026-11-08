@@ -36,3 +36,6 @@ func (p *Policy) OnExit(startedAt, exitedAt time.Time) (delay time.Duration, giv
 	p.attempt++
 	return delay, false
 }
+
+// reset forgets past exits, for a manual restart after a crash loop.
+func (p *Policy) reset() { p.attempt, p.fast = 0, 0 }

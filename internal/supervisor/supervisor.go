@@ -1,6 +1,6 @@
 // Package supervisor runs aria2c as a child process: it writes the conf file,
-// waits for the RPC endpoint, restarts aria2c with backoff and gives up on a
-// crash loop.
+// waits for the RPC endpoint, restarts aria2c with backoff and stops on a
+// crash loop until told to retry.
 package supervisor
 
 import (
@@ -22,6 +22,10 @@ const (
 	PhaseFailed     = "failed"
 )
 
+// ErrEngineFailed means aria2c kept dying right after start and the
+// supervisor stopped retrying. Restart tries again.
+var ErrEngineFailed = errors.New("aria2c keeps exiting right after start")
+
 // EngineState is published on every phase change. LogTail is set on failure.
 type EngineState struct {
 	Phase   string
@@ -38,14 +42,16 @@ type startResult struct {
 // Supervisor owns aria2c and every client it hands out: a client is closed
 // when its aria2c exits, and all are closed by Shutdown.
 type Supervisor struct {
-	s        *config.Settings
-	p        config.Paths
-	log      *slog.Logger
-	policy   Policy
-	pickPort func() (int, error)
+	s            *config.Settings
+	p            config.Paths
+	log          *slog.Logger
+	policy       Policy
+	pickPort     func() (int, error)
+	readyTimeout time.Duration
 
 	state   chan EngineState
 	clients chan *aria2.Client
+	restart chan struct{}
 	ctx     context.Context
 	cancel  context.CancelFunc
 	done    chan struct{}
@@ -53,39 +59,57 @@ type Supervisor struct {
 	mu      sync.Mutex
 	cur     *proc
 	started bool
+	failed  bool
 }
 
-// New prepares a supervisor. Settings must already be validated by config.Load.
-// The runtime and state dirs must exist.
+// New prepares a supervisor. The runtime and state dirs must exist.
 func New(s *config.Settings, p config.Paths, log *slog.Logger) *Supervisor {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	maxBackoff, _ := config.ParseDuration(s.Engine.RestartMaxBackoff)
-	window, _ := config.ParseDuration(s.Engine.CrashLoopWindow)
+	dur := func(key, v string, def time.Duration) time.Duration {
+		d, err := config.ParseDuration(v)
+		if err != nil || d <= 0 {
+			log.Warn("invalid engine setting, using the default", "key", key, "value", v, "default", def)
+			return def
+		}
+		return d
+	}
+	exits := s.Engine.CrashLoopExits
+	if exits < 1 {
+		exits = 5
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Supervisor{
 		s: s, p: p, log: log,
-		policy:   Policy{MaxBackoff: maxBackoff, LoopExits: s.Engine.CrashLoopExits, LoopWindow: window},
-		pickPort: freePort,
-		state:    make(chan EngineState, 16),
-		clients:  make(chan *aria2.Client, 1),
-		ctx:      ctx, cancel: cancel,
+		policy: Policy{
+			MaxBackoff: dur("engine.restart_max_backoff", s.Engine.RestartMaxBackoff, 30*time.Second),
+			LoopExits:  exits,
+			LoopWindow: dur("engine.crash_loop_window", s.Engine.CrashLoopWindow, 3*time.Second),
+		},
+		pickPort:     freePort,
+		readyTimeout: 3 * time.Second,
+		state:        make(chan EngineState, 16),
+		clients:      make(chan *aria2.Client, 1),
+		restart:      make(chan struct{}, 1),
+		ctx:          ctx, cancel: cancel,
 		done: make(chan struct{}),
 	}
 }
 
 // State reports phase changes. If the reader falls behind, the oldest
-// entries are dropped. It is closed once the supervisor stops for good.
+// entries are dropped. It is closed by Shutdown.
 func (sv *Supervisor) State() <-chan EngineState { return sv.state }
 
 // Clients delivers the new client after each restart. Only the latest is
-// kept. It is closed once the supervisor stops for good.
+// kept. It is closed by Shutdown.
 func (sv *Supervisor) Clients() <-chan *aria2.Client { return sv.clients }
 
 // Start launches aria2c and returns a client once it answers. A failing
-// aria2c is retried under the restart policy, so this returns an error only
-// on a crash loop, a setup problem, ctx expiry, or Shutdown.
+// aria2c is retried under the restart policy. On a crash loop Start returns
+// ErrEngineFailed but the supervisor stays alive in the failed state: the
+// caller must keep serving (State, Clients, Restart, Shutdown) rather than
+// treat the error as fatal.
 func (sv *Supervisor) Start(ctx context.Context) (*aria2.Client, error) {
 	sv.mu.Lock()
 	if sv.started {
@@ -103,6 +127,19 @@ func (sv *Supervisor) Start(ctx context.Context) (*aria2.Client, error) {
 		sv.Shutdown(context.Background())
 		return nil, ctx.Err()
 	}
+}
+
+// Restart leaves the failed state and launches aria2c again with a fresh
+// restart policy. The new client arrives on Clients.
+func (sv *Supervisor) Restart() error {
+	sv.mu.Lock()
+	defer sv.mu.Unlock()
+	if !sv.failed {
+		return errors.New("aria2c is not in the failed state; nothing to restart")
+	}
+	sv.failed = false
+	sv.restart <- struct{}{} // buffered, and failed guards against a second send
+	return nil
 }
 
 // Shutdown stops aria2c: aria2.shutdown, then aria2.forceShutdown after 3 s,
@@ -134,24 +171,47 @@ func (sv *Supervisor) run(first chan<- startResult) {
 	defer close(sv.done)
 	defer close(sv.clients)
 	defer close(sv.state)
-	fail := func(err error, tail []string) {
+	push(sv.state, EngineState{Phase: PhaseStarting})
+	for {
+		tail, err := sv.supervise(&first)
+		if sv.ctx.Err() != nil {
+			if first != nil {
+				first <- startResult{err: errShutdown}
+			}
+			return
+		}
+		sv.mu.Lock()
+		sv.failed = true
+		sv.mu.Unlock()
 		push(sv.state, EngineState{Phase: PhaseFailed, LogTail: tail})
+		sv.log.Error("aria2c failed; waiting for a manual restart", "err", err)
 		if first != nil {
 			first <- startResult{err: err}
+			first = nil
+		}
+		select {
+		case <-sv.restart:
+			sv.policy.reset()
+			push(sv.state, EngineState{Phase: PhaseStarting})
+		case <-sv.ctx.Done():
+			return
 		}
 	}
+}
 
-	push(sv.state, EngineState{Phase: PhaseStarting})
+// supervise keeps aria2c running until it fails for good or ctx ends. The
+// first ready client goes to *first; later ones go to Clients.
+func (sv *Supervisor) supervise(first *chan<- startResult) ([]string, error) {
 	if _, err := aria2.CheckVersion(sv.s.Engine.Aria2cPath); err != nil {
-		fail(err, []string{err.Error()})
-		return
+		return []string{err.Error()}, err
 	}
 	for {
 		pr, c, err := sv.launch()
-		if c != nil {
-			if first != nil {
-				first <- startResult{c: c}
-				first = nil
+		ready := c != nil
+		if ready {
+			if *first != nil {
+				*first <- startResult{c: c}
+				*first = nil
 			} else {
 				push(sv.clients, c)
 			}
@@ -164,25 +224,24 @@ func (sv *Supervisor) run(first chan<- startResult) {
 			c.Close()
 		}
 		if sv.ctx.Err() != nil {
-			if first != nil {
-				first <- startResult{err: errShutdown}
-			}
-			return
+			return nil, nil
 		}
 		if pr == nil { // nothing ran: a config or filesystem problem a retry won't fix
-			fail(err, []string{err.Error()})
-			return
+			return []string{err.Error()}, err
 		}
-		delay, giveUp := sv.policy.OnExit(pr.started, pr.exitedAt)
+		exitedAt := pr.exitedAt
+		if !ready { // a launch that never answered counts as a fast exit however long it hung
+			exitedAt = pr.started
+		}
+		delay, giveUp := sv.policy.OnExit(pr.started, exitedAt)
 		if giveUp {
 			tail := sv.logTail()
 			last := "no output"
 			if len(tail) > 0 {
 				last = tail[len(tail)-1]
 			}
-			fail(fmt.Errorf("aria2c keeps exiting right after start (%d times in a row; last log line: %s); see %s or run `lazyaria doctor`",
-				sv.policy.LoopExits, last, sv.logPath()), tail)
-			return
+			return tail, fmt.Errorf("%w (%d times in a row; last log line: %s); see %s and run 'lazyaria doctor'",
+				ErrEngineFailed, sv.policy.LoopExits, last, sv.logPath())
 		}
 		sv.log.Warn("aria2c exited, restarting", "exit", pr.err, "uptime", pr.exitedAt.Sub(pr.started), "delay", delay)
 		push(sv.state, EngineState{Phase: PhaseRestarting})

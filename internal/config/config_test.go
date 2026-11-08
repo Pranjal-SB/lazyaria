@@ -120,7 +120,9 @@ func TestRejectRPCExtraArgs(t *testing.T) {
 func TestRPCGuard(t *testing.T) {
 	f := lookup("engine.aria2_extra_args")
 	for _, a := range []string{"rpc-secret=x", "--rpc-secret", "--enable-rpc=false", "--enable-rpc",
-		"--enable-rp", " --rpc-secret=x", "-rpc-listen-port=1", "--RPC-SECRET=x"} {
+		"--enable-rp", " --rpc-secret=x", "-rpc-listen-port=1", "--RPC-SECRET=x",
+		"-- rpc-listen-all=true", "--\trpc-secret=x", "--log-level=debug", "--conf-path=/x",
+		"--log=/x", "--stop-with-process=1", "--dir=/x\nrpc-listen-all=true", "--Max-Tries=3", "-x16"} {
 		if err := f.check([]string{a}); err == nil {
 			t.Errorf("%q accepted", a)
 		}

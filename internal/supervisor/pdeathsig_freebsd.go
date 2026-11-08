@@ -4,7 +4,8 @@ package supervisor
 
 import "syscall"
 
-// The kernel sends SIGTERM to aria2c as soon as we die, even on SIGKILL.
+// FreeBSD's parent-death signal is per process, so it is safe here. Setpgid
+// keeps a terminal Ctrl-C away from aria2c.
 func sysProcAttr() *syscall.SysProcAttr {
-	return &syscall.SysProcAttr{Pdeathsig: syscall.SIGTERM}
+	return &syscall.SysProcAttr{Pdeathsig: syscall.SIGTERM, Setpgid: true}
 }
