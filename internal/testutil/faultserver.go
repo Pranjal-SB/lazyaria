@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -46,6 +47,7 @@ type FaultServer struct {
 	hits      map[string]int
 	served    map[string]int64
 	overrides map[string]Mode
+	ranges    map[string][]string
 }
 
 // NewFaultServer starts a server for files. The server is closed when t ends.
@@ -56,6 +58,7 @@ func NewFaultServer(t *testing.T, files map[string][]byte) *FaultServer {
 		hits:      make(map[string]int),
 		served:    make(map[string]int64),
 		overrides: make(map[string]Mode),
+		ranges:    make(map[string][]string),
 	}
 	f.srv = httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(f.srv.Close)
@@ -74,6 +77,10 @@ func (f *FaultServer) SetMode(name string, m Mode) {
 	f.overrides[name] = m
 }
 
+// DropConnections cuts every open client connection, as a network failure
+// or an expiring CDN link would.
+func (f *FaultServer) DropConnections() { f.srv.CloseClientConnections() }
+
 // Hits returns how many requests name has received, in any mode.
 func (f *FaultServer) Hits(name string) int {
 	f.mu.Lock()
@@ -90,6 +97,7 @@ func (f *FaultServer) serve(w http.ResponseWriter, r *http.Request) {
 
 	f.mu.Lock()
 	f.hits[name]++
+	f.ranges[name] = append(f.ranges[name], r.Header.Get("Range"))
 	if m, set := f.overrides[name]; set {
 		mode = m
 	}
@@ -217,6 +225,14 @@ func RandBytes(n int) []byte {
 	c := rand.NewChaCha8(randSeed)
 	_, _ = c.Read(buf)
 	return buf
+}
+
+// Ranges returns the Range header of every request for name, in order;
+// "" means the request had none.
+func (f *FaultServer) Ranges(name string) []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.ranges[name])
 }
 
 // Served returns how many body bytes name has sent, in any mode.
