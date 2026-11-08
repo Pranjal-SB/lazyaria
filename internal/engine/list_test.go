@@ -96,3 +96,33 @@ func aria2Pid(t *testing.T, conf string) int {
 	t.Skip("cannot find the aria2c process (needs /proc)")
 	return 0
 }
+
+// Not parallel: it changes listPage, and parallel tests only run after
+// the sequential ones have returned.
+func TestListPages(t *testing.T) {
+	defer func(n int) { listPage = n }(listPage)
+	listPage = 2
+	e, _ := startEngine(t)
+	fs := testutil.NewFaultServer(t, map[string][]byte{"p.bin": data, "x.bin": data})
+	want := map[EngineRef]string{}
+	for range 5 {
+		want[add(t, e, AddRequest{URIs: []string{fs.URL("p.bin", testutil.ModeOK)}, Paused: true})] = "paused"
+	}
+	for range 3 {
+		ref := add(t, e, AddRequest{URIs: []string{fs.URL("x.bin", testutil.Mode403)}})
+		waitEvent(t, e, ref, KindError, 10*time.Second)
+		want[ref] = "error"
+	}
+	list, err := e.List(ctxT(t, 5*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != len(want) {
+		t.Fatalf("listed %d downloads, want %d", len(list), len(want))
+	}
+	for _, s := range list {
+		if want[s.Ref] != s.State {
+			t.Fatalf("%s: state %s, want %s", s.Ref, s.State, want[s.Ref])
+		}
+	}
+}

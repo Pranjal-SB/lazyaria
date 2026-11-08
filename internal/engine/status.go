@@ -22,7 +22,12 @@ func (e *aria2Engine) Status(ctx context.Context, refs []EngineRef) ([]EngineSta
 	return e.finish(ctx, raw, refs)
 }
 
+// listPage is how many waiting or stopped downloads one List request reads.
+var listPage = 1000
+
 // List returns every download aria2 holds: active, waiting and stopped.
+// Waiting and stopped are paged until a short page, one multicall per page,
+// so nothing past aria2's per-call limit is mistaken for unknown.
 func (e *aria2Engine) List(ctx context.Context) ([]EngineStatus, error) {
 	c, err := e.client()
 	if err != nil {
@@ -30,28 +35,43 @@ func (e *aria2Engine) List(ctx context.Context) ([]EngineStatus, error) {
 	}
 	ctx, cancel := withDefault(ctx)
 	defer cancel()
-	res, err := c.Multicall(ctx, []aria2.Call{
-		{Method: "aria2.tellActive", Params: []any{aria2.StatusKeys}},
-		{Method: "aria2.tellWaiting", Params: []any{0, 1000, aria2.StatusKeys}},
-		{Method: "aria2.tellStopped", Params: []any{0, 1000, aria2.StatusKeys}},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("list downloads: %w", err)
-	}
 	var raw []*aria2.Status
 	var refs []EngineRef
-	for _, r := range res {
-		if r.Err != nil {
-			return nil, fmt.Errorf("list downloads: %w", r.Err)
+	seen := map[string]bool{} // a download can move buckets between pages
+	more := []string{"aria2.tellWaiting", "aria2.tellStopped"}
+	for off := 0; len(more) > 0; off += listPage {
+		var calls []aria2.Call
+		if off == 0 {
+			calls = append(calls, aria2.Call{Method: "aria2.tellActive", Params: []any{aria2.StatusKeys}})
 		}
-		var part []*aria2.Status
-		if err := json.Unmarshal(r.Raw, &part); err != nil {
+		for _, m := range more {
+			calls = append(calls, aria2.Call{Method: m, Params: []any{off, listPage, aria2.StatusKeys}})
+		}
+		res, err := c.Multicall(ctx, calls)
+		if err != nil {
 			return nil, fmt.Errorf("list downloads: %w", err)
 		}
-		for _, s := range part {
-			raw = append(raw, s)
-			refs = append(refs, EngineRef(s.GID))
+		var next []string
+		for i, r := range res {
+			if r.Err != nil {
+				return nil, fmt.Errorf("list downloads: %w", r.Err)
+			}
+			var part []*aria2.Status
+			if err := json.Unmarshal(r.Raw, &part); err != nil {
+				return nil, fmt.Errorf("list downloads: %w", err)
+			}
+			for _, s := range part {
+				if !seen[s.GID] {
+					seen[s.GID] = true
+					raw = append(raw, s)
+					refs = append(refs, EngineRef(s.GID))
+				}
+			}
+			if calls[i].Method != "aria2.tellActive" && len(part) == listPage {
+				next = append(next, calls[i].Method)
+			}
 		}
+		more = next
 	}
 	return e.finish(ctx, raw, refs)
 }

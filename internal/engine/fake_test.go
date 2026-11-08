@@ -115,6 +115,21 @@ func TestChangeURICompletesDuringPause(t *testing.T) {
 	}
 }
 
+func TestChangeURIUnpausesAfterWaitTimeout(t *testing.T) {
+	f, e := startFake(t, func(m string, n int) string {
+		if m == "aria2.tellStatus" {
+			return `"result":{"status":"active","dir":"/d","files":[]}` // the pause never lands
+		}
+		return `"result":"OK"`
+	})
+	if _, err := e.ChangeURI(ctxT(t, 500*time.Millisecond), "abc", "http://h/f"); err == nil {
+		t.Fatal("want a timeout")
+	}
+	if f.count("aria2.unpause") != 1 {
+		t.Fatal("a download we paused was left paused")
+	}
+}
+
 func readdFake(t *testing.T, add func(n int) string) (*fakeAria2, Engine) {
 	return startFake(t, func(m string, n int) string {
 		switch m {
@@ -175,8 +190,11 @@ func TestChangeURIOnTorrent(t *testing.T) {
 func TestAddRejectsUnparseableURI(t *testing.T) {
 	e := NewAria2Attach("ws://127.0.0.1:1/jsonrpc", "")
 	_, err := e.Add(ctxT(t, time.Second), AddRequest{URIs: []string{"http://u:secret@h/%zz"}})
-	if err == nil || strings.Contains(err.Error(), "secret") {
-		t.Fatalf("got %v", err)
+	if err == nil || errors.Is(err, ErrNotRunning) || !strings.Contains(err.Error(), "not a valid URL") {
+		t.Fatalf("want the URL check to reject it, got %v", err)
+	}
+	if strings.Contains(err.Error(), "secret") {
+		t.Fatalf("credentials in error: %v", err)
 	}
 }
 

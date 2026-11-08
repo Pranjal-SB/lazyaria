@@ -62,25 +62,32 @@ func (e *aria2Engine) swapURI(ctx context.Context, ref EngineRef, state, uri str
 		if err := e.call(ctx, "aria2.pause", nil, string(ref)); err != nil {
 			return err
 		}
-		// unpause only works once the pause has finished; the download may
-		// also finish or fail first.
-		st, err := e.waitState(ctx, ref, "paused", "complete", "error", "removed")
-		switch {
-		case err != nil:
-			return err
-		case st == "complete":
-			return ErrAlreadyComplete
-		case st == "error":
-			return errStopped
-		case st == "removed":
-			return errors.New("the download was removed while refreshing")
-		}
 		// Never leave a download we paused stuck paused, even on failure.
+		// Only a download that finished or failed meanwhile is left alone.
+		keepStopped := false
 		defer func() {
+			if keepStopped {
+				return
+			}
 			if uerr := e.call(context.WithoutCancel(ctx), "aria2.unpause", nil, string(ref)); err == nil {
 				err = uerr
 			}
 		}()
+		// unpause only works once the pause has finished; the download may
+		// also finish or fail first.
+		st, werr := e.waitState(ctx, ref, "paused", "complete", "error", "removed")
+		switch {
+		case werr != nil:
+			return werr
+		case st == "complete":
+			keepStopped = true
+			return ErrAlreadyComplete
+		case st == "error":
+			keepStopped = true
+			return errStopped
+		case st == "removed":
+			return errors.New("the download was removed while refreshing")
+		}
 	}
 	// Read the list only now: aria2 repeats a URI to fill split and returns
 	// in-use copies to the list on pause, so an earlier read misses some.
