@@ -19,6 +19,8 @@ func (f *recordFiles) RemoveFiles(_ context.Context, j *store.Job) ([]trash.Entr
 	return nil, nil
 }
 
+func (f *recordFiles) Check(context.Context, *store.Job) error { return nil }
+
 func (f *recordFiles) RestoreFiles(context.Context, []trash.Entry) error { return nil }
 
 func TestRemoveAndUndo(t *testing.T) {

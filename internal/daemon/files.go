@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -15,12 +16,15 @@ import (
 // FileRemover takes a removed job's files out of the download directory and
 // can bring them back for Undo.
 type FileRemover interface {
+	// Check reports (as *NeedsConfirmError) whether the files could be
+	// trashed, without moving anything.
+	Check(ctx context.Context, j *store.Job) error
 	RemoveFiles(ctx context.Context, j *store.Job) ([]trash.Entry, error)
 	RestoreFiles(ctx context.Context, es []trash.Entry) error
 }
 
 // NeedsConfirmError means the files cannot go to a trash. Nothing was
-// deleted and the row is unchanged; deleting for real needs the user's say-so.
+// deleted and the job is as it was; deleting for real needs the user's say-so.
 type NeedsConfirmError struct{ Path string }
 
 func (e *NeedsConfirmError) Error() string {
@@ -31,6 +35,7 @@ func (e *NeedsConfirmError) Error() string {
 // .aria2 control file to the freedesktop trash and never deletes anything.
 type TrashFiles struct {
 	trash func(string) (trash.Entry, error) // tests inject failures
+	check func(string) error
 }
 
 func (t *TrashFiles) move(p string) (trash.Entry, error) {
@@ -40,30 +45,79 @@ func (t *TrashFiles) move(p string) (trash.Entry, error) {
 	return trash.Trash(p)
 }
 
-func (t *TrashFiles) RemoveFiles(_ context.Context, j *store.Job) ([]trash.Entry, error) {
+func (t *TrashFiles) probe(p string) error {
+	if t.check != nil {
+		return t.check(p)
+	}
+	return trash.Check(p)
+}
+
+// targets lists what removing j may trash. The payload counts only when the
+// job provably owns it, so a duplicate "download anyway" or a magnet still
+// named "download" never takes a file that was already there.
+func targets(j *store.Job) []string {
 	p, ok := payloadPath(j)
 	if !ok {
-		return nil, nil
+		return nil
 	}
+	var out []string
+	owned := j.StartedAt != nil || j.State == store.Done || j.State == store.Seeding || lexists(p+".aria2")
+	if owned && lexists(p) {
+		out = append(out, p)
+	}
+	if lexists(p + ".aria2") {
+		out = append(out, p+".aria2")
+	}
+	return out
+}
+
+func lexists(p string) bool { _, err := os.Lstat(p); return err == nil }
+
+func (t *TrashFiles) Check(_ context.Context, j *store.Job) error {
+	for _, f := range targets(j) {
+		if err := t.probe(f); errors.Is(err, trash.ErrNoTrash) {
+			return &NeedsConfirmError{Path: f}
+		} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+	}
+	return nil
+}
+
+func (t *TrashFiles) RemoveFiles(_ context.Context, j *store.Job) ([]trash.Entry, error) {
 	var done []trash.Entry
-	for _, f := range []string{p, p + ".aria2"} {
+	for _, f := range targets(j) {
 		e, err := t.move(f)
 		if errors.Is(err, fs.ErrNotExist) {
 			continue
 		}
 		if err != nil {
-			rerr := t.RestoreFiles(context.Background(), done)
+			if rerr := t.RestoreFiles(context.Background(), done); rerr != nil {
+				var where []string
+				for _, d := range done {
+					where = append(where, d.TrashedPath)
+				}
+				return nil, fmt.Errorf("trashing %s failed (%v) and putting back the files already trashed failed too; they are in the trash at %s: %w",
+					f, err, strings.Join(where, ", "), rerr)
+			}
 			if errors.Is(err, trash.ErrNoTrash) {
 				err = &NeedsConfirmError{Path: f}
 			}
-			return nil, errors.Join(err, rerr)
+			return nil, err
 		}
 		done = append(done, e)
 	}
 	return done, nil
 }
 
+// RestoreFiles puts es back. It first checks that every original path is
+// free, so a blocked entry fails the whole set before anything moves.
 func (t *TrashFiles) RestoreFiles(_ context.Context, es []trash.Entry) error {
+	for _, e := range es {
+		if lexists(e.Original) {
+			return fmt.Errorf("%s already exists; move it aside and retry (the trashed copy is %s)", e.Original, e.TrashedPath)
+		}
+	}
 	var errs []error
 	for _, e := range es {
 		if err := trash.Restore(e); err != nil {
@@ -74,13 +128,16 @@ func (t *TrashFiles) RestoreFiles(_ context.Context, es []trash.Entry) error {
 }
 
 // payloadPath is where a job's download lands: dir/out, or dir/name for a
-// torrent's file or top-level directory. It refuses anything outside dir.
+// torrent's file or top-level directory. It refuses anything outside dir,
+// dir itself, and the placeholder name of a torrent whose metadata is missing.
 func payloadPath(j *store.Job) (string, bool) {
 	name := j.Name
 	if j.Out != nil && *j.Out != "" {
 		name = *j.Out
+	} else if name == "download" {
+		return "", false
 	}
-	if j.Dir == "" || name == "" || !filepath.IsLocal(name) {
+	if j.Dir == "" || name == "" || filepath.Clean(name) == "." || !filepath.IsLocal(name) {
 		return "", false
 	}
 	return filepath.Join(j.Dir, name), true

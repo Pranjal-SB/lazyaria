@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -69,8 +70,12 @@ func TestRemoveUndo(t *testing.T) {
 
 func TestRemoveNoTrashNeedsConfirm(t *testing.T) {
 	r := newRig(t)
-	r.m.Files = &TrashFiles{trash: func(string) (trash.Entry, error) { return trash.Entry{}, trash.ErrNoTrash }}
+	r.m.Files = &TrashFiles{check: func(string) error { return trash.ErrNoTrash }}
 	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}, Out: "a.iso"})
+	ref := r.ref(t, j.ID)
+	r.e.setState(ref, "active")
+	r.event(ref, engine.KindStart)
+	before := r.get(t, j.ID)
 	payload := filepath.Join(r.dir, "a.iso")
 	wfile(t, payload, "data")
 	tok, err := r.m.Remove(bg, []string{j.ID}, true)
@@ -84,8 +89,103 @@ func TestRemoveNoTrashNeedsConfirm(t *testing.T) {
 	if !exists1(payload) {
 		t.Fatal("file was deleted")
 	}
-	if got := r.get(t, j.ID); got.State == store.Removed {
-		t.Fatal("row removed")
+	if len(r.e.removed) != 0 || len(r.e.paused) != 0 {
+		t.Fatalf("engine touched: removed %v paused %v", r.e.removed, r.e.paused)
+	}
+	if _, ok := r.e.dl[ref]; !ok {
+		t.Fatal("engine lost the download")
+	}
+	if got := r.get(t, j.ID); got.State != before.State || *got.EngineRef != *before.EngineRef {
+		t.Fatalf("row changed: %s", got.State)
+	}
+}
+
+func TestRemoveRenameFailureReaddsPaused(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
+	r := newRig(t)
+	r.m.Files = &TrashFiles{trash: func(string) (trash.Entry, error) { return trash.Entry{}, trash.ErrNoTrash }}
+	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}, Out: "a.iso"})
+	ref := r.ref(t, j.ID)
+	r.e.setState(ref, "active")
+	r.event(ref, engine.KindStart)
+	payload := filepath.Join(r.dir, "a.iso")
+	wfile(t, payload, "data")
+	_, err := r.m.Remove(bg, []string{j.ID}, true)
+	var nc *NeedsConfirmError
+	if !errors.As(err, &nc) {
+		t.Fatalf("want NeedsConfirmError, got %v", err)
+	}
+	got := r.get(t, j.ID)
+	if got.State != store.Paused || got.EngineRef == nil {
+		t.Fatalf("state %s ref %v", got.State, got.EngineRef)
+	}
+	if st, ok := r.e.dl[engine.EngineRef(*got.EngineRef)]; !ok || st.State != "paused" {
+		t.Fatalf("engine has %v %v", ok, st.State)
+	}
+	if !exists1(payload) {
+		t.Fatal("payload missing")
+	}
+}
+
+func TestRemoveNeverTrashesFilesTheJobDoesNotOwn(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
+	r := newRig(t)
+	// duplicate "download anyway": the user's original sits at the target.
+	orig := filepath.Join(r.dir, "a.iso")
+	wfile(t, orig, "mine")
+	dup := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}, Out: "a.iso", Force: true})
+	// magnet whose metadata has not arrived.
+	magnet := r.insert(t, store.Queued, "", func(j *store.Job) { j.Name = "download" })
+	wfile(t, filepath.Join(r.dir, "download"), "other")
+	// a name that cleans to ".".
+	dot := r.insert(t, store.Queued, "", func(j *store.Job) { o := "sub/.."; j.Out = &o })
+	if _, err := r.m.Remove(bg, []string{dup.ID, magnet.ID, dot.ID}, true); err != nil {
+		t.Fatal(err)
+	}
+	if !exists1(orig) || !exists1(filepath.Join(r.dir, "download")) {
+		t.Fatal("trashed a file the job does not own")
+	}
+	if !exists1(r.dir) {
+		t.Fatal("dir gone")
+	}
+	if _, ok := payloadPath(&store.Job{Dir: r.dir, Name: "x", Out: func() *string { s := "../x"; return &s }()}); ok {
+		t.Fatal("escaping name accepted")
+	}
+}
+
+func TestUndoStaysRemovedWhenFilesCannotReturn(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
+	r := newRig(t)
+	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}, Out: "a.iso"})
+	ref := r.ref(t, j.ID)
+	r.e.setState(ref, "active")
+	r.event(ref, engine.KindStart)
+	payload := filepath.Join(r.dir, "a.iso")
+	wfile(t, payload, "data")
+	tok, err := r.m.Remove(bg, []string{j.ID}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wfile(t, payload, "newcomer")
+	err = r.m.Undo(bg, tok)
+	if err == nil || !strings.Contains(err.Error(), j.ID) {
+		t.Fatalf("want error naming the job, got %v", err)
+	}
+	if got := r.get(t, j.ID); got.State != store.Removed {
+		t.Fatalf("state %s", got.State)
+	}
+	if b, _ := os.ReadFile(payload); string(b) != "newcomer" {
+		t.Fatal("newcomer overwritten")
+	}
+	os.Remove(payload)
+	if err := r.m.Undo(bg, tok); err != nil {
+		t.Fatalf("retry: %v", err)
+	}
+	if b, _ := os.ReadFile(payload); string(b) != "data" {
+		t.Fatal("not restored on retry")
+	}
+	if got := r.get(t, j.ID); got.State != store.Paused {
+		t.Fatalf("state %s", got.State)
 	}
 }
 
@@ -162,5 +262,31 @@ func TestDoneStampFailureIsNotFatal(t *testing.T) {
 	j := finish(t, r, AddParams{URIs: []string{"http://example.com/gone.iso"}, Out: "gone.iso"}, "")
 	if j.State != store.Done {
 		t.Fatalf("state %s", j.State)
+	}
+}
+
+func TestDoneStampsReferrerWithoutUserinfo(t *testing.T) {
+	r := newRig(t)
+	r.m.s.Privacy.StampOriginXattr = true
+	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}, Out: "a.iso"})
+	ref := "https://me:secret@ref.example/page"
+	if _, err := r.st.UpdateJob(bg, j.ID, func(x *store.Job) error { x.Referrer = &ref; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	payload := filepath.Join(r.dir, "a.iso")
+	wfile(t, payload, "data")
+	eref := r.ref(t, j.ID)
+	r.e.set(eref, func(s *engine.EngineStatus) { s.State = "complete" })
+	r.event(eref, engine.KindComplete)
+	buf := make([]byte, 256)
+	n, err := unix.Getxattr(payload, "user.xdg.referrer.url", buf)
+	if err != nil {
+		t.Skipf("no user xattrs here: %v", err)
+	}
+	if got := string(buf[:n]); got != "https://ref.example/page" {
+		t.Fatalf("referrer %q", got)
+	}
+	if origin(payload) != "http://example.com/a.iso" {
+		t.Fatalf("origin %q", origin(payload))
 	}
 }

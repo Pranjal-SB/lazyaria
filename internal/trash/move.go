@@ -16,10 +16,11 @@ var (
 var errNoAtomic = errors.New("no atomic no-replace rename")
 
 // moveNoReplace renames src to dst and fails if dst exists. Linux does this
-// atomically with renameat2(RENAME_NOREPLACE). Elsewhere regular files use
+// atomically with renameat2(RENAME_NOREPLACE), macOS with renamex_np(RENAME_EXCL). Elsewhere regular files use
 // link+unlink, which also fails if dst exists. Directories have no atomic
-// option there, so they get Lstat then Rename; a directory created in that
-// window would be merged over or replaced if empty. That race is accepted.
+// option there (FreeBSD), so they get Lstat then Rename; rename(2) replaces an
+// empty directory created in that window and fails with ENOTEMPTY otherwise.
+// It never merges. That race is accepted.
 func moveNoReplace(src, dst string) error {
 	if !linkMode {
 		err := renameNoReplace(src, dst)

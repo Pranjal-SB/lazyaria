@@ -100,19 +100,43 @@ func encodePath(p string) string {
 	return strings.Join(parts, "/")
 }
 
-// Trash moves path into the trash. It never copies across devices.
-func Trash(path string) (Entry, error) {
+// locate returns the absolute path with the parent's symlinks resolved (the
+// last element is kept: it may itself be a symlink to trash), and its device.
+func locate(path string) (string, uint64, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
-		return Entry{}, err
+		return "", 0, err
 	}
 	fi, err := os.Lstat(abs)
 	if err != nil {
-		return Entry{}, err
+		return "", 0, err
 	}
 	dev, ok := device(fi)
 	if !ok {
-		return Entry{}, ErrNoTrash
+		return "", 0, ErrNoTrash
+	}
+	if parent, err := filepath.EvalSymlinks(filepath.Dir(abs)); err == nil {
+		abs = filepath.Join(parent, filepath.Base(abs))
+	}
+	return abs, dev, nil
+}
+
+// Check reports whether Trash(path) could find a trash directory. It moves
+// nothing. A missing path returns the Lstat error.
+func Check(path string) error {
+	abs, dev, err := locate(path)
+	if err != nil {
+		return err
+	}
+	_, _, err = pick(abs, dev)
+	return err
+}
+
+// Trash moves path into the trash. It never copies across devices.
+func Trash(path string) (Entry, error) {
+	abs, dev, err := locate(path)
+	if err != nil {
+		return Entry{}, err
 	}
 	dir, top, err := pick(abs, dev)
 	if err != nil {
@@ -120,8 +144,12 @@ func Trash(path string) (Entry, error) {
 	}
 	recorded := abs
 	if top != "" {
-		if recorded, err = filepath.Rel(top, abs); err != nil {
+		rel, err := filepath.Rel(top, abs)
+		if err != nil {
 			return Entry{}, err
+		}
+		if rel != ".." && !strings.HasPrefix(rel, "../") {
+			recorded = rel
 		}
 	}
 	body := fmt.Sprintf("[Trash Info]\nPath=%s\nDeletionDate=%s\n",

@@ -254,3 +254,43 @@ func TestMountTopResolvesSymlinks(t *testing.T) {
 		t.Fatalf("top %q is not a real path", top)
 	}
 }
+
+func TestTrashInfoPathStaysInsideTop(t *testing.T) {
+	work := setup(t)
+	real := filepath.Join(work, "real")
+	os.Mkdir(real, 0o755)
+	link := filepath.Join(work, "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(real, "f"), "x")
+	e, err := Trash(filepath.Join(link, "f"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.Original != filepath.Join(real, "f") {
+		t.Fatalf("original %q", e.Original)
+	}
+	info, _ := os.ReadFile(e.InfoPath)
+	if !strings.Contains(string(info), "Path="+filepath.ToSlash(real)+"/f") {
+		t.Fatalf("path not resolved:\n%s", info)
+	}
+	if err := Restore(e); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCheck(t *testing.T) {
+	work := setup(t)
+	p := filepath.Join(work, "f")
+	write(t, p, "x")
+	if err := Check(p); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(p); err != nil {
+		t.Fatal("Check moved the file")
+	}
+	if err := Check(filepath.Join(work, "nope")); !os.IsNotExist(err) {
+		t.Fatalf("want not-exist, got %v", err)
+	}
+}
