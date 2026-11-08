@@ -25,9 +25,13 @@ type aria2Engine struct {
 	done   chan struct{}
 	once   sync.Once
 
+	// pendingResync is only touched by the follow goroutine.
+	pendingResync bool
+
 	mu      sync.Mutex
 	c       *aria2.Client
 	started bool
+	closed  bool
 }
 
 // NewAria2 drives an aria2c owned by sv, following it across restarts.
@@ -50,6 +54,10 @@ func newAria2(sv *supervisor.Supervisor, url, secret string) *aria2Engine {
 // still follows the supervisor, so a later Restart brings the engine back.
 func (e *aria2Engine) Start(ctx context.Context) error {
 	e.mu.Lock()
+	if e.closed {
+		e.mu.Unlock()
+		return errors.New("engine: already shut down; create a new one")
+	}
 	if e.started {
 		e.mu.Unlock()
 		return errors.New("engine: Start called twice")
@@ -78,6 +86,9 @@ func (e *aria2Engine) Events() <-chan EngineEvent { return e.events }
 
 // Shutdown stops a supervised aria2c; an attached one is only disconnected.
 func (e *aria2Engine) Shutdown(ctx context.Context) error {
+	e.mu.Lock()
+	e.closed = true
+	e.mu.Unlock()
 	var err error
 	if e.sv != nil {
 		err = e.sv.Shutdown(ctx)
@@ -121,7 +132,13 @@ func (e *aria2Engine) follow(c *aria2.Client) {
 		if notes == nil && swaps == nil {
 			return
 		}
+		var flush chan<- EngineEvent
+		if e.pendingResync {
+			flush = e.events
+		}
 		select {
+		case flush <- EngineEvent{Kind: KindResync}:
+			e.pendingResync = false
 		case n, ok := <-notes:
 			if !ok {
 				notes, resync = nil, nil
@@ -151,12 +168,25 @@ func (e *aria2Engine) follow(c *aria2.Client) {
 	}
 }
 
-// emit blocks rather than drop: a stalled reader backs up into the aria2
-// client, which then signals a resync instead of losing state silently.
+// emit never blocks, so a slow reader cannot hold up a client swap. When
+// the channel is full the event is dropped and one resync goes out as soon
+// as there is room, telling the reader to refetch.
 func (e *aria2Engine) emit(ev EngineEvent) {
+	if e.pendingResync {
+		select {
+		case e.events <- EngineEvent{Kind: KindResync}:
+			e.pendingResync = false
+		default:
+			return
+		}
+		if ev.Kind == KindResync {
+			return
+		}
+	}
 	select {
 	case e.events <- ev:
-	case <-e.ctx.Done():
+	default:
+		e.pendingResync = true
 	}
 }
 
@@ -174,11 +204,8 @@ func (e *aria2Engine) call(ctx context.Context, method string, out any, params .
 	if err != nil {
 		return err
 	}
-	if _, ok := ctx.Deadline(); !ok {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, callTimeout)
-		defer cancel()
-	}
+	ctx, cancel := withDefault(ctx)
+	defer cancel()
 	if err := c.Call(ctx, method, params, out); err != nil {
 		if errors.Is(err, aria2.ErrDisconnected) {
 			return ErrNotRunning

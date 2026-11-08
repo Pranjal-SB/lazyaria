@@ -55,7 +55,7 @@ func TestPauseResume(t *testing.T) {
 	if err := e.Remove(ctxT(t, 10*time.Second), ref); err != nil {
 		t.Fatal(err)
 	}
-	if st := status(t, e, ref); st.State != "removed" {
+	if st := status(t, e, ref); st.State != "removed" || st.Known {
 		t.Fatalf("after remove: %+v", st)
 	}
 }

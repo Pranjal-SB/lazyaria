@@ -12,14 +12,54 @@ import (
 	"github.com/Pranjal-SB/lazyaria/internal/aria2"
 )
 
-// Status reads refs in one multicall. Files are heavy for torrents, so they
-// are fetched in a second call, and only for non-torrent downloads, which
-// need them for a name. A ref aria2 does not know reads as "removed".
+// Status reads refs in one multicall. A ref aria2 does not know comes back
+// with Known false and State "removed".
 func (e *aria2Engine) Status(ctx context.Context, refs []EngineRef) ([]EngineStatus, error) {
 	raw, err := e.tell(ctx, refs, aria2.StatusKeys)
 	if err != nil {
 		return nil, err
 	}
+	return e.finish(ctx, raw, refs)
+}
+
+// List returns every download aria2 holds: active, waiting and stopped.
+func (e *aria2Engine) List(ctx context.Context) ([]EngineStatus, error) {
+	c, err := e.client()
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := withDefault(ctx)
+	defer cancel()
+	res, err := c.Multicall(ctx, []aria2.Call{
+		{Method: "aria2.tellActive", Params: []any{aria2.StatusKeys}},
+		{Method: "aria2.tellWaiting", Params: []any{0, 1000, aria2.StatusKeys}},
+		{Method: "aria2.tellStopped", Params: []any{0, 1000, aria2.StatusKeys}},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list downloads: %w", err)
+	}
+	var raw []*aria2.Status
+	var refs []EngineRef
+	for _, r := range res {
+		if r.Err != nil {
+			return nil, fmt.Errorf("list downloads: %w", r.Err)
+		}
+		var part []*aria2.Status
+		if err := json.Unmarshal(r.Raw, &part); err != nil {
+			return nil, fmt.Errorf("list downloads: %w", err)
+		}
+		for _, s := range part {
+			raw = append(raw, s)
+			refs = append(refs, EngineRef(s.GID))
+		}
+	}
+	return e.finish(ctx, raw, refs)
+}
+
+// finish maps raw statuses. Files are heavy for torrents, so they are
+// fetched in a second call, and only for non-torrent downloads, which need
+// them for a name.
+func (e *aria2Engine) finish(ctx context.Context, raw []*aria2.Status, refs []EngineRef) ([]EngineStatus, error) {
 	var need []EngineRef
 	var at []int
 	for i, s := range raw {
@@ -39,15 +79,22 @@ func (e *aria2Engine) Status(ctx context.Context, refs []EngineRef) ([]EngineSta
 			}
 		}
 	}
-	out := make([]EngineStatus, len(refs))
+	out := make([]EngineStatus, len(raw))
 	for i, s := range raw {
 		if s == nil {
-			out[i] = EngineStatus{Ref: refs[i], State: "removed", ErrorMsg: "not known to aria2"}
+			out[i] = EngineStatus{Ref: refs[i], State: "removed"}
 			continue
 		}
 		out[i] = toStatus(s)
 	}
 	return out, nil
+}
+
+func withDefault(ctx context.Context) (context.Context, context.CancelFunc) {
+	if _, ok := ctx.Deadline(); ok {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, callTimeout)
 }
 
 // tell runs tellStatus for each ref; an unknown ref gives a nil entry.
@@ -56,11 +103,8 @@ func (e *aria2Engine) tell(ctx context.Context, refs []EngineRef, keys []string)
 	if err != nil {
 		return nil, err
 	}
-	if _, ok := ctx.Deadline(); !ok {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, callTimeout)
-		defer cancel()
-	}
+	ctx, cancel := withDefault(ctx)
+	defer cancel()
 	calls := make([]aria2.Call, len(refs))
 	for i, r := range refs {
 		calls[i] = aria2.Call{Method: "aria2.tellStatus", Params: []any{string(r), keys}}
@@ -94,6 +138,8 @@ func toStatus(s *aria2.Status) EngineStatus {
 		ErrorMsg:   s.ErrorMessage,
 		HTTPStatus: aria2.HTTPStatus(s.ErrorMessage),
 		IsBT:       s.Bittorrent != nil,
+		Known:      true,
+		Seeder:     s.Seeder == "true",
 	}
 	st.ErrorCode, _ = strconv.Atoi(s.ErrorCode)
 	if len(s.FollowedBy) > 0 {
@@ -110,6 +156,9 @@ func toStatus(s *aria2.Status) EngineStatus {
 		if u, err := url.Parse(s.Files[0].URIs[0].URI); err == nil {
 			st.Name = path.Base(u.Path)
 		}
+	}
+	if st.Name == "" || st.Name == "." || st.Name == "/" {
+		st.Name = "download"
 	}
 	return st
 }

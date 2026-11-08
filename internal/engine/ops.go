@@ -5,8 +5,10 @@ import (
 	"encoding/base64"
 	"fmt"
 	"maps"
+	"net/url"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -16,6 +18,16 @@ func (e *aria2Engine) Add(ctx context.Context, req AddRequest) (EngineRef, error
 	}
 	if len(req.URIs) == 0 && len(req.Torrent) == 0 {
 		return "", fmt.Errorf("nothing to download: give a link or a torrent file")
+	}
+	// An unparseable link would keep its userinfo, so it never reaches aria2.
+	// The link itself stays out of the message: it may hold credentials.
+	for i, u := range req.URIs {
+		if strings.HasPrefix(strings.ToLower(u), "magnet:") {
+			continue
+		}
+		if _, err := url.Parse(u); err != nil {
+			return "", fmt.Errorf("link %d is not a valid URL; check its %%-escapes and spaces, then add it again", i+1)
+		}
 	}
 	opts := maps.Clone(req.Options)
 	if opts == nil {
@@ -71,8 +83,11 @@ func (e *aria2Engine) state(ctx context.Context, ref EngineRef) (string, error) 
 	return s.Status, err
 }
 
-// waitState polls until ref reaches one of states.
+// waitState polls until ref reaches one of states, for at most callTimeout
+// when ctx has no deadline of its own.
 func (e *aria2Engine) waitState(ctx context.Context, ref EngineRef, states ...string) (string, error) {
+	ctx, cancel := withDefault(ctx)
+	defer cancel()
 	for {
 		st, err := e.state(ctx, ref)
 		if err != nil || slices.Contains(states, st) {
@@ -99,12 +114,7 @@ func (e *aria2Engine) Remove(ctx context.Context, ref EngineRef) error {
 		return fmt.Errorf("remove %s: %w", ref, err)
 	}
 	if !slices.Contains(stopped, st) {
-		if err := e.call(ctx, "aria2.remove", nil, string(ref)); err != nil {
-			if err := e.call(ctx, "aria2.forceRemove", nil, string(ref)); err != nil && !isNotFound(err) {
-				return fmt.Errorf("remove %s: %w", ref, err)
-			}
-		}
-		if _, err := e.waitState(ctx, ref, stopped...); err != nil {
+		if err := e.stop(ctx, ref); err != nil {
 			if isNotFound(err) {
 				return nil
 			}
@@ -115,6 +125,25 @@ func (e *aria2Engine) Remove(ctx context.Context, ref EngineRef) error {
 		return fmt.Errorf("remove %s: %w", ref, err)
 	}
 	return nil
+}
+
+// stop removes a live download and waits until aria2 has stopped it. A
+// remove that fails because the download stopped on its own is fine.
+func (e *aria2Engine) stop(ctx context.Context, ref EngineRef) error {
+	if err := e.call(ctx, "aria2.remove", nil, string(ref)); err != nil {
+		if ferr := e.call(ctx, "aria2.forceRemove", nil, string(ref)); ferr != nil {
+			st, serr := e.state(ctx, ref)
+			if serr != nil {
+				return serr
+			}
+			if !slices.Contains(stopped, st) {
+				return ferr
+			}
+			return nil
+		}
+	}
+	_, err := e.waitState(ctx, ref, stopped...)
+	return err
 }
 
 func (e *aria2Engine) SetGlobalLimit(ctx context.Context, down, up int64) error {

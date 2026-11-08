@@ -52,6 +52,7 @@ type Status struct {
 	UploadSpeed     Int64    `json:"uploadSpeed"`
 	Connections     Int64    `json:"connections"`
 	NumSeeders      Int64    `json:"numSeeders"`
+	Seeder          string   `json:"seeder"` // "true" while a torrent seeds
 	ErrorCode       string   `json:"errorCode"`
 	ErrorMessage    string   `json:"errorMessage"`
 	Dir             string   `json:"dir"`
@@ -63,7 +64,7 @@ type Status struct {
 }
 
 // StatusKeys keeps tellStatus light: no bitfield, and files only on demand.
-var StatusKeys = []string{"gid", "status", "totalLength", "completedLength", "uploadLength", "downloadSpeed", "uploadSpeed", "connections", "errorCode", "errorMessage", "dir", "followedBy", "following", "belongsTo", "numSeeders", "bittorrent"}
+var StatusKeys = []string{"gid", "status", "totalLength", "completedLength", "uploadLength", "downloadSpeed", "uploadSpeed", "connections", "errorCode", "errorMessage", "dir", "followedBy", "following", "belongsTo", "numSeeders", "seeder", "bittorrent"}
 
 type File struct {
 	Index           Int64  `json:"index"`

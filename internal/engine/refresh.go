@@ -2,13 +2,19 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 
 	"github.com/Pranjal-SB/lazyaria/internal/aria2"
 )
+
+// errStopped means the download stopped with an error while we waited for
+// the pause; it is refreshed by re-adding instead.
+var errStopped = errors.New("download stopped during refresh")
 
 // ChangeURI points ref at a fresh link. A live download keeps its ref and
 // switches URI in place; a stopped one is re-added under the same gid, and
@@ -18,22 +24,36 @@ func (e *aria2Engine) ChangeURI(ctx context.Context, ref EngineRef, uri string) 
 	if err := checkRefreshURI(uri); err != nil {
 		return "", err
 	}
-	var s aria2.Status
-	if err := e.call(ctx, "aria2.tellStatus", &s, string(ref), []string{"status", "dir", "files"}); err != nil {
-		return "", fmt.Errorf("refresh %s: %w", ref, err)
-	}
 	auth := map[string]string{}
 	clean := splitAuth([]string{uri}, "", "", auth)[0]
-	switch s.Status {
-	case "active", "waiting", "paused":
-		if err := e.swapURI(ctx, ref, s.Status, clean, auth); err != nil {
+	for {
+		var s aria2.Status
+		if err := e.call(ctx, "aria2.tellStatus", &s, string(ref), []string{"status", "dir", "files", "bittorrent"}); err != nil {
 			return "", fmt.Errorf("refresh %s: %w", ref, err)
 		}
-		return ref, nil
-	case "error", "removed":
-		return e.readd(ctx, ref, &s, clean, auth)
+		if s.Bittorrent != nil {
+			return "", ErrNotSupported
+		}
+		switch s.Status {
+		case "active", "waiting", "paused":
+			err := e.swapURI(ctx, ref, s.Status, clean, auth)
+			if errors.Is(err, errStopped) {
+				continue // reread dir and files, then take the re-add path
+			}
+			if err != nil && !errors.Is(err, ErrAlreadyComplete) {
+				err = fmt.Errorf("refresh %s: %w", ref, err)
+			}
+			if err != nil {
+				return "", err
+			}
+			return ref, nil
+		case "error":
+			return e.readd(ctx, ref, &s, clean, auth)
+		case "removed":
+			return "", fmt.Errorf("refresh %s: the download was removed; add the link again", ref)
+		}
+		return "", ErrAlreadyComplete
 	}
-	return "", fmt.Errorf("download %s is already complete; there is nothing to refresh", ref)
 }
 
 // swapURI does pause, changeUri, unpause. A user-paused download stays paused.
@@ -42,16 +62,25 @@ func (e *aria2Engine) swapURI(ctx context.Context, ref EngineRef, state, uri str
 		if err := e.call(ctx, "aria2.pause", nil, string(ref)); err != nil {
 			return err
 		}
+		// unpause only works once the pause has finished; the download may
+		// also finish or fail first.
+		st, err := e.waitState(ctx, ref, "paused", "complete", "error", "removed")
+		switch {
+		case err != nil:
+			return err
+		case st == "complete":
+			return ErrAlreadyComplete
+		case st == "error":
+			return errStopped
+		case st == "removed":
+			return errors.New("the download was removed while refreshing")
+		}
 		// Never leave a download we paused stuck paused, even on failure.
 		defer func() {
 			if uerr := e.call(context.WithoutCancel(ctx), "aria2.unpause", nil, string(ref)); err == nil {
 				err = uerr
 			}
 		}()
-		// unpause only works once the pause has finished
-		if _, err := e.waitState(ctx, ref, "paused"); err != nil {
-			return err
-		}
 	}
 	// Read the list only now: aria2 repeats a URI to fill split and returns
 	// in-use copies to the list on pause, so an earlier read misses some.
@@ -72,14 +101,23 @@ func (e *aria2Engine) swapURI(ctx context.Context, ref EngineRef, state, uri str
 	return nil
 }
 
+// alwaysCopy are kept on re-add even when they equal the global value.
+var alwaysCopy = []string{"header", "http-user", "http-passwd", "ftp-user", "ftp-passwd"}
+
 func (e *aria2Engine) readd(ctx context.Context, ref EngineRef, s *aria2.Status, uri string, auth map[string]string) (EngineRef, error) {
 	opts := map[string]any{}
-	// Keep the job's own options (limits, headers, auth); aria2 returns
-	// list-valued ones like header as arrays, which addUri accepts as is.
-	var cur map[string]any
+	// Keep only what this job set itself: a value equal to the global one
+	// came from aria2's defaults and must keep following them. aria2 returns
+	// list-valued options like header as arrays, which addUri accepts as is.
+	var cur, global map[string]any
+	// Without the globals every allowed option is kept, which is still correct.
+	_ = e.call(ctx, "aria2.getGlobalOption", &global)
 	if e.call(ctx, "aria2.getOption", &cur, string(ref)) == nil {
 		for k, v := range cur {
-			if slices.Contains(AllowedOptions, k) && k != "pause" {
+			if !slices.Contains(AllowedOptions, k) || k == "pause" {
+				continue
+			}
+			if slices.Contains(alwaysCopy, k) || !reflect.DeepEqual(v, global[k]) {
 				opts[k] = v
 			}
 		}
@@ -97,11 +135,15 @@ func (e *aria2Engine) readd(ctx context.Context, ref EngineRef, s *aria2.Status,
 	_ = e.call(ctx, "aria2.removeDownloadResult", nil, string(ref))
 	opts["gid"] = string(ref)
 	var gid string
-	if err := e.call(ctx, "aria2.addUri", &gid, []string{uri}, opts); err == nil {
-		return EngineRef(gid), nil
+	err := e.call(ctx, "aria2.addUri", &gid, []string{uri}, opts)
+	// Only a refusal from aria2 is safe to retry: after a timeout or a drop
+	// the first add may have gone through, and a second would duplicate it.
+	var rpcErr *aria2.RPCError
+	if err != nil && errors.As(err, &rpcErr) {
+		delete(opts, "gid")
+		err = e.call(ctx, "aria2.addUri", &gid, []string{uri}, opts)
 	}
-	delete(opts, "gid")
-	if err := e.call(ctx, "aria2.addUri", &gid, []string{uri}, opts); err != nil {
+	if err != nil {
 		return "", fmt.Errorf("refresh %s: re-add: %w", ref, err)
 	}
 	return EngineRef(gid), nil

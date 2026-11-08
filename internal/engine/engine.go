@@ -17,6 +17,7 @@ type Engine interface {
 	Remove(ctx context.Context, ref EngineRef) error
 	ChangeURI(ctx context.Context, ref EngineRef, uri string) (EngineRef, error) // may return a new ref
 	Status(ctx context.Context, refs []EngineRef) ([]EngineStatus, error)
+	List(ctx context.Context) ([]EngineStatus, error)                  // everything the engine knows, for reconcile
 	Details(ctx context.Context, ref EngineRef) (EngineDetails, error) // files, servers/peers
 	SetGlobalLimit(ctx context.Context, down, up int64) error
 	SetLimit(ctx context.Context, ref EngineRef, down, up int64) error
@@ -48,6 +49,8 @@ type EngineStatus struct {
 	FollowedBy                            EngineRef
 	IsBT                                  bool
 	Name                                  string
+	Known                                 bool // false: the engine has no such download
+	Seeder                                bool // a torrent whose payload is done and is now seeding
 }
 
 // Event kinds.
@@ -100,6 +103,12 @@ type ErrInvalidOption struct{ Name string }
 func (e ErrInvalidOption) Error() string {
 	return fmt.Sprintf("option %q cannot be set per download; allowed: %s", e.Name, strings.Join(AllowedOptions, ", "))
 }
+
+// ErrAlreadyComplete is returned by ChangeURI for a finished download.
+var ErrAlreadyComplete = errors.New("the download is already complete; there is nothing to refresh")
+
+// ErrNotSupported is returned by ChangeURI for a torrent: refresh is for HTTP and FTP links.
+var ErrNotSupported = errors.New("refreshing the link works for HTTP and FTP downloads only, not torrents")
 
 // ErrNotRunning means there is no live connection to aria2 right now.
 var ErrNotRunning = errors.New("aria2 engine is not running; run `lazyaria doctor`")
