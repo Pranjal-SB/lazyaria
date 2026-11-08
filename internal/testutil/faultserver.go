@@ -218,3 +218,10 @@ func RandBytes(n int) []byte {
 	_, _ = c.Read(buf)
 	return buf
 }
+
+// Served returns how many body bytes name has sent, in any mode.
+func (f *FaultServer) Served(name string) int64 {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.served[name]
+}

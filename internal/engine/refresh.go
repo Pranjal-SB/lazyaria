@@ -1,0 +1,108 @@
+package engine
+
+import (
+	"context"
+	"fmt"
+	"path/filepath"
+	"slices"
+	"strings"
+
+	"github.com/Pranjal-SB/lazyaria/internal/aria2"
+)
+
+// ChangeURI points ref at a fresh link. A live download keeps its ref and
+// switches URI in place; a stopped one is re-added under the same gid, and
+// its .aria2 control file makes it resume. Only if aria2 refuses the old gid
+// does the download come back under a new ref.
+func (e *aria2Engine) ChangeURI(ctx context.Context, ref EngineRef, uri string) (EngineRef, error) {
+	if err := checkRefreshURI(uri); err != nil {
+		return "", err
+	}
+	var s aria2.Status
+	if err := e.call(ctx, "aria2.tellStatus", &s, string(ref), []string{"status", "dir", "files"}); err != nil {
+		return "", fmt.Errorf("refresh %s: %w", ref, err)
+	}
+	auth := map[string]string{}
+	clean := splitAuth([]string{uri}, "", "", auth)[0]
+	switch s.Status {
+	case "active", "waiting", "paused":
+		if err := e.swapURI(ctx, ref, s.Status, clean, auth); err != nil {
+			return "", fmt.Errorf("refresh %s: %w", ref, err)
+		}
+		return ref, nil
+	case "error", "removed":
+		return e.readd(ctx, ref, &s, clean, auth)
+	}
+	return "", fmt.Errorf("download %s is already complete; there is nothing to refresh", ref)
+}
+
+// swapURI does pause, changeUri, unpause. A user-paused download stays paused.
+func (e *aria2Engine) swapURI(ctx context.Context, ref EngineRef, state, uri string, auth map[string]string) (err error) {
+	if state != "paused" {
+		if err := e.call(ctx, "aria2.pause", nil, string(ref)); err != nil {
+			return err
+		}
+		// Never leave a download we paused stuck paused, even on failure.
+		defer func() {
+			if uerr := e.call(context.WithoutCancel(ctx), "aria2.unpause", nil, string(ref)); err == nil {
+				err = uerr
+			}
+		}()
+		// unpause only works once the pause has finished
+		if _, err := e.waitState(ctx, ref, "paused"); err != nil {
+			return err
+		}
+	}
+	// Read the list only now: aria2 repeats a URI to fill split and returns
+	// in-use copies to the list on pause, so an earlier read misses some.
+	var cur []aria2.URI
+	if err := e.call(ctx, "aria2.getUris", &cur, string(ref)); err != nil {
+		return err
+	}
+	old := make([]string, len(cur))
+	for i, u := range cur {
+		old[i] = u.URI
+	}
+	if err := e.call(ctx, "aria2.changeUri", nil, string(ref), 1, old, []string{uri}, 0); err != nil {
+		return err
+	}
+	if len(auth) > 0 {
+		return e.call(ctx, "aria2.changeOption", nil, string(ref), auth)
+	}
+	return nil
+}
+
+func (e *aria2Engine) readd(ctx context.Context, ref EngineRef, s *aria2.Status, uri string, auth map[string]string) (EngineRef, error) {
+	opts := map[string]any{}
+	// Keep the job's own options (limits, headers, auth); aria2 returns
+	// list-valued ones like header as arrays, which addUri accepts as is.
+	var cur map[string]any
+	if e.call(ctx, "aria2.getOption", &cur, string(ref)) == nil {
+		for k, v := range cur {
+			if slices.Contains(AllowedOptions, k) && k != "pause" {
+				opts[k] = v
+			}
+		}
+	}
+	for k, v := range auth {
+		opts[k] = v
+	}
+	opts["dir"] = s.Dir
+	if len(s.Files) > 0 && s.Files[0].Path != "" {
+		if rel, err := filepath.Rel(s.Dir, s.Files[0].Path); err == nil && !strings.HasPrefix(rel, "..") {
+			opts["out"] = rel
+		}
+	}
+	// A failure here only means the gid is still taken; the add below says so.
+	_ = e.call(ctx, "aria2.removeDownloadResult", nil, string(ref))
+	opts["gid"] = string(ref)
+	var gid string
+	if err := e.call(ctx, "aria2.addUri", &gid, []string{uri}, opts); err == nil {
+		return EngineRef(gid), nil
+	}
+	delete(opts, "gid")
+	if err := e.call(ctx, "aria2.addUri", &gid, []string{uri}, opts); err != nil {
+		return "", fmt.Errorf("refresh %s: re-add: %w", ref, err)
+	}
+	return EngineRef(gid), nil
+}
