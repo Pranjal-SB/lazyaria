@@ -175,10 +175,15 @@ func (f *field) checkKind(s string) error {
 	return err
 }
 
-var extraArgName = regexp.MustCompile(`^[a-z0-9-]+$`)
+var extraArgName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
-// Options lazyaria sets itself: the log location and the process wiring.
-var ownedOptions = map[string]bool{"log": true, "log-level": true, "conf-path": true, "stop-with-process": true}
+// Options lazyaria sets itself: the log, the process wiring, and session
+// files (the DB is the source of truth). daemon=true would fork away an
+// aria2c that holds our secret where the supervisor cannot reap it.
+var ownedOptions = map[string]bool{
+	"log": true, "log-level": true, "conf-path": true, "stop-with-process": true,
+	"daemon": true, "input-file": true, "save-session": true,
+}
 
 // ParseExtraArg splits one engine.aria2_extra_args entry, "--name=value" or a
 // bare "--flag" (value ""), and rejects anything that could touch the RPC
@@ -198,7 +203,7 @@ func ParseExtraArg(arg string) (name, value string, err error) {
 	case rpcName(strings.ToLower(name)):
 		return "", "", fmt.Errorf("rpc-* options are not allowed (%s); the RPC endpoint is managed by lazyaria", arg)
 	case !extraArgName.MatchString(name):
-		return "", "", fmt.Errorf("aria2 option %q has an invalid name (use lowercase letters, digits and -)", arg)
+		return "", "", fmt.Errorf("aria2 option %q has an invalid name (use --name=value with exactly two dashes; the name is lowercase letters, digits and -)", arg)
 	case ownedOptions[name]:
 		return "", "", fmt.Errorf("aria2 option %s is managed by lazyaria and cannot be overridden (%s)", name, arg)
 	}

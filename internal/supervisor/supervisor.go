@@ -22,9 +22,10 @@ const (
 	PhaseFailed     = "failed"
 )
 
-// ErrEngineFailed means aria2c kept dying right after start and the
-// supervisor stopped retrying. Restart tries again.
-var ErrEngineFailed = errors.New("aria2c keeps exiting right after start")
+// ErrEngineFailed means the supervisor gave up: aria2c is missing or too old,
+// its config could not be written, or it kept dying right after start. The
+// supervisor stays alive in the failed state; Restart tries again.
+var ErrEngineFailed = errors.New("aria2 engine failed")
 
 // EngineState is published on every phase change. LogTail is set on failure.
 type EngineState struct {
@@ -134,6 +135,9 @@ func (sv *Supervisor) Start(ctx context.Context) (*aria2.Client, error) {
 func (sv *Supervisor) Restart() error {
 	sv.mu.Lock()
 	defer sv.mu.Unlock()
+	if sv.ctx.Err() != nil {
+		return errors.New("supervisor is shut down; start a new one")
+	}
 	if !sv.failed {
 		return errors.New("aria2c is not in the failed state; nothing to restart")
 	}
@@ -179,6 +183,11 @@ func (sv *Supervisor) run(first chan<- startResult) {
 				first <- startResult{err: errShutdown}
 			}
 			return
+		}
+		// Every non-shutdown Start error must read as "alive and failed, call
+		// Restart", including a wrong aria2c_path the user can fix.
+		if !errors.Is(err, ErrEngineFailed) {
+			err = fmt.Errorf("%w: %w", ErrEngineFailed, err)
 		}
 		sv.mu.Lock()
 		sv.failed = true
@@ -240,10 +249,13 @@ func (sv *Supervisor) supervise(first *chan<- startResult) ([]string, error) {
 			if len(tail) > 0 {
 				last = tail[len(tail)-1]
 			}
-			return tail, fmt.Errorf("%w (%d times in a row; last log line: %s); see %s and run 'lazyaria doctor'",
-				ErrEngineFailed, sv.policy.LoopExits, last, sv.logPath())
+			if err == nil {
+				err = pr.err
+			}
+			return tail, fmt.Errorf("%w: aria2c failed %d times in a row right after start (last error: %v; last log line: %s); see %s and run 'lazyaria doctor'",
+				ErrEngineFailed, sv.policy.LoopExits, err, last, sv.logPath())
 		}
-		sv.log.Warn("aria2c exited, restarting", "exit", pr.err, "uptime", pr.exitedAt.Sub(pr.started), "delay", delay)
+		sv.log.Warn("aria2c exited, restarting", "err", err, "exit", pr.err, "uptime", pr.exitedAt.Sub(pr.started), "delay", delay)
 		push(sv.state, EngineState{Phase: PhaseRestarting})
 		t := time.NewTimer(delay)
 		select {

@@ -2,11 +2,12 @@
 
 package supervisor
 
-// portState has no socket table to ask here, so it relies on aria2 logging
-// a failed IPv4 RPC bind. waitReady checks again after getVersion succeeds.
-func (sv *Supervisor) portState(pr *proc) portState {
-	if sv.bindFailed(pr) {
-		return portStolen
-	}
-	return portOurs
+// portState needs the NOTICE "listening" line from aria2's log.
+const logLevel = "notice"
+
+// portState has no socket table to ask here, so it trusts the port only
+// after this run's log says aria2 bound it, and never after a failed bind.
+// waitReady checks again after getVersion succeeds.
+func (sv *Supervisor) portState(pr *proc) (portState, error) {
+	return logPortState(readFrom(sv.logPath(), pr.logFrom), pr.port), nil
 }

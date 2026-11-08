@@ -2,6 +2,7 @@ package supervisor
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -146,14 +147,18 @@ func (sv *Supervisor) waitReady(pr *proc) (*aria2.Client, error) {
 		// aria2 keeps running when only its IPv4 bind fails, and whoever
 		// holds the port would get our secret, so confirm the port is the
 		// child's before dialling and again once it answers.
-		switch sv.portState(pr) {
+		st, err := sv.portState(pr)
+		if err != nil {
+			return nil, err
+		}
+		switch st {
 		case portStolen:
 			return nil, errBindRace
 		case portOurs:
 			if c := sv.tryReady(url, pr.secret); c != nil {
-				if sv.portState(pr) != portOurs {
+				if st, err = sv.portState(pr); err != nil || st != portOurs {
 					c.Close()
-					return nil, errBindRace
+					return nil, cmp.Or(err, errBindRace)
 				}
 				return c, nil
 			}
@@ -199,7 +204,19 @@ const (
 // bindFailed matches aria2 1.37's log line for a lost RPC port, e.g.
 // "IPv4 RPC: failed to bind TCP port 46123". BitTorrent bind errors differ.
 func (sv *Supervisor) bindFailed(pr *proc) bool {
-	return bytes.Contains(readFrom(sv.logPath(), pr.logFrom), []byte("IPv4 RPC: failed to bind"))
+	return logPortState(readFrom(sv.logPath(), pr.logFrom), pr.port) == portStolen
+}
+
+// logPortState reads this run's aria2 log. "listening" is a NOTICE line
+// (HttpListenCommand.cc:108 in 1.37), so it only shows at log-level=notice.
+func logPortState(log []byte, port int) portState {
+	switch {
+	case bytes.Contains(log, []byte("IPv4 RPC: failed to bind")):
+		return portStolen
+	case bytes.Contains(log, fmt.Appendf(nil, "IPv4 RPC: listening on TCP port %d\n", port)):
+		return portOurs
+	}
+	return portPending
 }
 
 // stop asks aria2 to save and quit, escalating if it does not.

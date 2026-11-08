@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Pranjal-SB/lazyaria/internal/aria2"
 	"github.com/Pranjal-SB/lazyaria/internal/testutil"
 )
 
@@ -176,5 +177,42 @@ func TestBindRaceNoSecretLeak(t *testing.T) {
 	defer mu.Unlock()
 	if len(got) != 0 {
 		t.Fatalf("squatter on the port received %d bytes: %q", len(got), got)
+	}
+}
+
+// A wrong aria2c_path is the common fixable failure: Start must report it as
+// ErrEngineFailed and leave the supervisor waiting for Restart.
+func TestBadPathThenRestart(t *testing.T) {
+	aria2Path := testutil.RequireAria2(t)
+	s, p := testSettings(t)
+	s.Engine.Aria2cPath = filepath.Join(t.TempDir(), "no-such-aria2c")
+	sv := New(s, p, quiet)
+	shutdownOnCleanup(t, sv)
+	_, err := sv.Start(context.Background())
+	if !errors.Is(err, ErrEngineFailed) || !errors.Is(err, aria2.ErrNotFound) {
+		t.Fatalf("Start err = %v, want ErrEngineFailed wrapping aria2.ErrNotFound", err)
+	}
+	waitPhase(t, sv, "failed", time.Second)
+	s.Engine.Aria2cPath = aria2Path
+	if err := sv.Restart(); err != nil {
+		t.Fatal(err)
+	}
+	waitPhase(t, sv, "ready", 5*time.Second)
+	getVersion(t, <-sv.Clients())
+}
+
+func TestRestartAfterShutdown(t *testing.T) {
+	s, p := testSettings(t)
+	s.Engine.Aria2cPath = fakeAria2(t, "exit 1\n")
+	s.Engine.RestartMaxBackoff = "50ms"
+	sv := New(s, p, quiet)
+	if _, err := sv.Start(context.Background()); !errors.Is(err, ErrEngineFailed) {
+		t.Fatalf("Start err = %v", err)
+	}
+	if err := sv.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := sv.Restart(); err == nil {
+		t.Fatal("Restart accepted after Shutdown")
 	}
 }

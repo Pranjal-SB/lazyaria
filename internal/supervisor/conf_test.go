@@ -132,7 +132,8 @@ func TestWriteConfRejectsNewlines(t *testing.T) {
 func TestWriteConfRejectsReservedExtraArgs(t *testing.T) {
 	for _, a := range []string{"-x16", "--rpc-listen-all=true", "--enable-rpc=false", "-- rpc-listen-all=true",
 		"--\trpc-secret=x", " --rpc-secret=x", "--log-level=debug", "--conf-path=/x", "--log=/x",
-		"--stop-with-process=1", "--RPC-SECRET=x"} {
+		"--stop-with-process=1", "--RPC-SECRET=x", "---rpc-secret=x", "--daemon=true", "--input-file=/x",
+		"--save-session=/x"} {
 		s, p := testSettings(t)
 		s.Engine.Aria2ExtraArgs = []string{a}
 		if err := WriteConf(p.AriaConf, s, p, 1, "s"); err == nil {

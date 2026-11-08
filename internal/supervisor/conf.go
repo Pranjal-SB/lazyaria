@@ -91,7 +91,7 @@ func (b *confBuilder) base(s *config.Settings, p config.Paths, port int, secret 
 	b.add("daemon", "false")
 	b.add("quiet", "true")
 	b.add("log", filepath.Join(p.StateDir, "aria2.log"))
-	b.add("log-level", "warn")
+	b.add("log-level", logLevel)
 	b.add("continue", "true")
 	b.secs("auto-save-interval", s.Engine.AutoSaveInterval)
 	b.size("disk-cache", s.Engine.DiskCache)
