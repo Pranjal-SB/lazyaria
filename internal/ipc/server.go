@@ -1,0 +1,134 @@
+package ipc
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"net"
+	"os"
+	"sync"
+
+	"github.com/creachadair/jrpc2"
+
+	"github.com/Pranjal-SB/lazyaria/internal/daemon"
+)
+
+type server struct {
+	h Handler
+
+	mu        sync.Mutex
+	observers int // clients subscribed with progress
+}
+
+// Serve accepts clients on l until ctx ends. Only processes running as the
+// daemon's own user are served; anyone else is hung up on.
+func Serve(ctx context.Context, l net.Listener, h Handler) error {
+	s := &server{h: h}
+	var wg sync.WaitGroup
+	defer wg.Wait()
+	// Cancelling on return hangs up on every client before the wait above.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	context.AfterFunc(ctx, func() { l.Close() })
+
+	for {
+		c, err := l.Accept()
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return err
+		}
+		uid, err := peerUID(c)
+		if err != nil || uid != os.Geteuid() {
+			slog.Warn("ipc: rejected connection from another user", "uid", uid, "err", err)
+			c.Close()
+			continue
+		}
+		wg.Go(func() { s.serveConn(ctx, c) })
+	}
+}
+
+func (s *server) serveConn(ctx context.Context, c net.Conn) {
+	cc := &conn{s: s}
+	srv := jrpc2.NewServer(cc.methods(), &jrpc2.ServerOptions{AllowPush: true})
+	cc.srv = srv
+	srv.Start(lineChannel(c))
+	stop := context.AfterFunc(ctx, srv.Stop)
+	srv.Wait()
+	stop()
+	cc.unsubscribe()
+}
+
+func (s *server) observe(delta int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.observers += delta
+	s.h.SetObservers(s.observers)
+}
+
+// conn is one client's session.
+type conn struct {
+	s   *server
+	srv *jrpc2.Server
+
+	mu       sync.Mutex // held across (un)subscribe so they never interleave
+	sub      *daemon.Sub
+	progress bool
+	pushed   chan struct{} // closed when the pusher for sub exits
+}
+
+func (c *conn) subscribe(progress bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.unsubscribeLocked()
+	sub := c.s.h.Subscribe(progress)
+	c.sub, c.progress, c.pushed = sub, progress, make(chan struct{})
+	if progress {
+		c.s.observe(1)
+	}
+	go c.push(sub, c.pushed)
+}
+
+// push forwards sub to the client until sub is closed or the client goes.
+func (c *conn) push(sub *daemon.Sub, done chan struct{}) {
+	defer close(done)
+	evs, prog := sub.Events(), sub.Progress()
+	for {
+		var err error
+		select {
+		case ev, ok := <-evs:
+			if !ok {
+				return
+			}
+			ev.Job = redact(ev.Job)
+			err = c.srv.Notify(context.Background(), PushEvent, ev)
+		case items, ok := <-prog:
+			if !ok {
+				return
+			}
+			err = c.srv.Notify(context.Background(), PushProgress, items)
+		}
+		if errors.Is(err, jrpc2.ErrConnClosed) {
+			return
+		}
+	}
+}
+
+func (c *conn) unsubscribe() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.unsubscribeLocked()
+}
+
+func (c *conn) unsubscribeLocked() {
+	if c.sub == nil {
+		return
+	}
+	c.sub.Close()
+	<-c.pushed
+	c.sub = nil
+	if c.progress {
+		c.s.observe(-1)
+	}
+}
