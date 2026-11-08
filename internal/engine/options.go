@@ -22,9 +22,9 @@ func checkOptions(opts map[string]string) error {
 	return nil
 }
 
-// splitAuth strips userinfo from uris and moves it, or the explicit
+// SplitAuth strips userinfo from uris and moves it, or the explicit
 // user/pass, into aria2's auth options so credentials never sit in a URI.
-func splitAuth(uris []string, user, pass string, opts map[string]string) []string {
+func SplitAuth(uris []string, user, pass string, opts map[string]string) []string {
 	clean := make([]string, len(uris))
 	var uu, up string
 	for i, u := range uris {

@@ -362,3 +362,20 @@ func TestFailedMigrationRollsBack(t *testing.T) {
 		t.Fatal("partial table left behind")
 	}
 }
+
+func TestPurgeDone(t *testing.T) {
+	s := open(t)
+	old, fresh, active := job("old", Done), job("fresh", Done), job("active", Active)
+	o, f := time.UnixMilli(1000), time.UnixMilli(9000)
+	old.FinishedAt, fresh.FinishedAt, active.FinishedAt = &o, &f, &o
+	for _, j := range []*Job{old, fresh, active} {
+		s.InsertJob(ctx, j)
+	}
+	n, err := s.PurgeDone(ctx, time.UnixMilli(5000))
+	if err != nil || n != 1 {
+		t.Fatalf("n=%d err=%v", n, err)
+	}
+	if _, err := s.GetJob(ctx, old.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatal("old still there")
+	}
+}

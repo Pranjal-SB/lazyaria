@@ -2,9 +2,12 @@ package daemon
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
-	"math/rand/v2"
+	mrand "math/rand/v2"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -59,7 +62,7 @@ func NewManager(e engine.Engine, st *store.Store, s *config.Settings, bus *Bus, 
 	return &Manager{
 		e: e, st: st, s: s, bus: bus, log: log,
 		Files: keepFiles{},
-		now:   time.Now, free: fsinfo.FreeBytes, dev: fsinfo.Dev, alloc: fsinfo.Allocation, rnd: rand.Float64,
+		now:   time.Now, free: fsinfo.FreeBytes, dev: fsinfo.Dev, alloc: fsinfo.Allocation, rnd: mrand.Float64,
 		ctx:     context.Background(),
 		retries: map[string]*time.Timer{},
 		undo:    map[string]undoRecord{},
@@ -68,11 +71,27 @@ func NewManager(e engine.Engine, st *store.Store, s *config.Settings, bus *Bus, 
 	}
 }
 
-// DuplicateError means the link is already in the list or in history.
-type DuplicateError struct{ Existing *store.Job }
+// DuplicateError means the link is already in the list or in history
+// (Existing), or a finished file already sits at the target path (Path).
+type DuplicateError struct {
+	Existing *store.Job
+	Path     string
+}
 
 func (e *DuplicateError) Error() string {
+	if e.Existing == nil {
+		return fmt.Sprintf("%s already exists; add it with --force to download it again, or choose another name", e.Path)
+	}
 	return fmt.Sprintf("%q is already in the list (%s); add it with --force to download it again", e.Existing.Name, e.Existing.State)
+}
+
+// SkippedError means reliability.duplicates is "skip" and a finished file
+// already sits at the target path, so nothing was added. Callers treat it
+// as success.
+type SkippedError struct{ Path string }
+
+func (e *SkippedError) Error() string {
+	return fmt.Sprintf("%s already exists; skipped (reliability.duplicates = skip)", e.Path)
 }
 
 // NoSpaceError means the target filesystem cannot hold the download.
@@ -97,6 +116,21 @@ func running(s store.State) bool {
 }
 
 func refOf(j *store.Job) engine.EngineRef { return engine.EngineRef(*j.EngineRef) }
+
+// newGID makes an aria2 gid: 16 hex digits. Jobs get theirs before the
+// engine sees them, so a download whose add was never confirmed can still
+// be found by ref.
+func newGID() string {
+	var b [8]byte
+	rand.Read(b[:])
+	return hex.EncodeToString(b[:])
+}
+
+// engineDown reports errors after which further engine calls in the same
+// batch would only wait out the same failure.
+func engineDown(err error) bool {
+	return errors.Is(err, engine.ErrNotRunning) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)
+}
 
 // change updates a job in one transaction, records kind in its audit trail
 // when set, and publishes the new row. fn runs inside the transaction, so it

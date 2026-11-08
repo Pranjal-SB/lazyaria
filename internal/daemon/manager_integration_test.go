@@ -126,7 +126,12 @@ func TestUnknownSize_NoPrecheck_RestartFromZero(t *testing.T) {
 	if n := srv.Served("norange.bin"); n <= int64(len(data)) {
 		t.Fatalf("served %d bytes; the download did not start over", n)
 	}
-	t.Logf("finished as %s", *got.Out)
+	if *got.Out != "norange.bin" {
+		t.Fatalf("finished as %s, want norange.bin restarted in place", *got.Out)
+	}
+	if _, err := os.Stat(filepath.Join(got.Dir, "norange.1.bin")); err == nil {
+		t.Fatal("restart wrote norange.1.bin beside the partial file")
+	}
 	path := filepath.Join(got.Dir, *got.Out)
 	want := testutil.SHA256File(t, writeFile(t, data))
 	if testutil.SHA256File(t, path) != want {

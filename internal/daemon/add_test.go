@@ -1,7 +1,11 @@
 package daemon
 
 import (
+	"context"
 	"errors"
+	"os"
+	"path/filepath"
+	"regexp"
 	"testing"
 	"time"
 
@@ -26,13 +30,14 @@ func TestAddIntentFirst(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(js) != 1 || js[0].State != store.Queued || js[0].EngineRef != nil {
-		t.Fatalf("before engine add: %+v", js)
+	if len(js) != 1 || js[0].State != store.Queued || js[0].EngineRef == nil || !gidRe.MatchString(*js[0].EngineRef) {
+		t.Fatalf("before engine add, want a queued row with a gid: %+v", js)
 	}
+	gid := *js[0].EngineRef
 	close(r.e.addBlock)
 	j := <-done
-	if j.EngineRef == nil || *j.EngineRef != "g1" {
-		t.Fatalf("ref not stored: %+v", j.EngineRef)
+	if j.EngineRef == nil || *j.EngineRef != gid || r.e.adds[0].GID != gid {
+		t.Fatalf("ref %v, want the pre-assigned gid %s", j.EngineRef, gid)
 	}
 	if got := r.get(t, j.ID); got.EngineRef == nil {
 		t.Fatal("ref not in db")
@@ -117,4 +122,74 @@ func TestPrecheckWhenSizeKnown(t *testing.T) {
 			t.Fatal("no no_space banner")
 		}
 	}
+}
+
+var gidRe = regexp.MustCompile(`^[0-9a-f]{16}$`)
+
+func TestAddSurvivesCallerCancel(t *testing.T) {
+	r := newRig(t)
+	ctx, cancel := context.WithCancel(bg)
+	r.e.onAdd = func(ref engine.EngineRef) {
+		cancel() // the client hung up right after the engine took the add
+		r.e.setState(ref, "active")
+	}
+	j, err := r.m.Add(ctx, AddParams{URIs: []string{"http://example.com/a.iso"}, Dir: r.dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := r.get(t, j.ID)
+	if got.EngineRef == nil || *got.EngineRef != r.e.adds[0].GID || got.State != store.Active {
+		t.Fatalf("after cancel: ref %v state %s", got.EngineRef, got.State)
+	}
+}
+
+func TestAddDuplicateModes(t *testing.T) {
+	for _, mode := range []string{"ask", "allow", "skip"} {
+		t.Run(mode, func(t *testing.T) {
+			r := newRig(t)
+			r.m.s.Reliability.Duplicates = mode
+			first := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}})
+			j, err := r.m.Add(bg, AddParams{URIs: []string{"http://example.com/a.iso"}, Dir: r.dir})
+			var dup *DuplicateError
+			switch mode {
+			case "ask":
+				if !errors.As(err, &dup) || dup.Existing == nil {
+					t.Fatalf("url: want DuplicateError, got %v", err)
+				}
+			case "allow":
+				if err != nil || j.ID == first.ID {
+					t.Fatalf("url: %v", err)
+				}
+			case "skip":
+				if err != nil || j.ID != first.ID {
+					t.Fatalf("url: want the existing job, got %v %v", j, err)
+				}
+			}
+
+			os.WriteFile(filepath.Join(r.dir, "done.bin"), []byte("x"), 0o600)
+			_, err = r.m.Add(bg, AddParams{URIs: []string{"http://other.example.com/done.bin"}, Dir: r.dir})
+			var skip *SkippedError
+			switch mode {
+			case "ask":
+				if !errors.As(err, &dup) || dup.Existing != nil || dup.Path != filepath.Join(r.dir, "done.bin") || dup.Error() == "" {
+					t.Fatalf("path: want DuplicateError with Path, got %v", err)
+				}
+			case "allow":
+				if err != nil {
+					t.Fatalf("path: %v", err)
+				}
+			case "skip":
+				if !errors.As(err, &skip) {
+					t.Fatalf("path: want SkippedError, got %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestAddPartialTargetIsNotDuplicate(t *testing.T) {
+	r := newRig(t)
+	os.WriteFile(filepath.Join(r.dir, "part.bin"), []byte("x"), 0o600)
+	os.WriteFile(filepath.Join(r.dir, "part.bin.aria2"), []byte("x"), 0o600)
+	r.add(t, AddParams{URIs: []string{"http://example.com/part.bin"}})
 }

@@ -24,13 +24,13 @@ func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (s
 		if j.State == store.Removed {
 			return nil
 		}
-		m.cancelRetry(j.ID)
 		if j.EngineRef != nil {
 			// Without an engine there is nothing to stop; a fresh one starts empty.
 			if err := m.e.Remove(ctx, refOf(j)); err != nil && !errors.Is(err, engine.ErrNotRunning) {
 				return err
 			}
 		}
+		m.cancelRetry(j.ID)
 		now := m.now()
 		j2, err := m.changeAs(ctx, "job.removed", j.ID, "removed", "", func(x *store.Job) {
 			x.State, x.RemovedAt, x.RetryAt = store.Removed, &now, nil
@@ -65,6 +65,7 @@ func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (s
 // Undo restores the rows of a recent Remove. Jobs that were running come
 // back paused, and the engine gets them again on Resume.
 func (m *Manager) Undo(ctx context.Context, token string) error {
+	ctx = context.WithoutCancel(ctx) // see Add
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	rec, ok := m.undo[token]

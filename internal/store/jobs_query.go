@@ -76,3 +76,13 @@ func (s *Store) PurgeRemoved(ctx context.Context, before time.Time) (int, error)
 	n, err := r.RowsAffected()
 	return int(n), err
 }
+
+// PurgeDone hard-deletes finished jobs that finished before the cutoff.
+func (s *Store) PurgeDone(ctx context.Context, before time.Time) (int, error) {
+	r, err := s.db.ExecContext(ctx, `DELETE FROM jobs WHERE state='done' AND finished_at < ?`, before.UnixMilli())
+	if err != nil {
+		return 0, err
+	}
+	n, err := r.RowsAffected()
+	return int(n), err
+}

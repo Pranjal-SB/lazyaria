@@ -3,6 +3,8 @@ package daemon
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -19,7 +21,7 @@ func TestReconcile_IntentRowWithoutGID(t *testing.T) {
 	if adds, _ := r.e.count(); adds != 1 {
 		t.Fatalf("adds %d, want 1", adds)
 	}
-	if got := r.get(t, j.ID); got.EngineRef == nil || *got.EngineRef != "g1" {
+	if got := r.get(t, j.ID); got.EngineRef == nil || *got.EngineRef != r.e.adds[0].GID || !gidRe.MatchString(*got.EngineRef) {
 		t.Fatalf("ref %v", got.EngineRef)
 	}
 	if err := r.m.Reconcile(bg); err != nil {
@@ -57,8 +59,8 @@ func TestReconcile_ReaddUnknownGID(t *testing.T) {
 	if !r.e.adds[byURI["http://example.com/g.bin"]].Paused {
 		t.Fatal("paused job re-added running")
 	}
-	if got := r.get(t, act.ID); *got.EngineRef == "old1" {
-		t.Fatal("new ref not stored")
+	if got := r.get(t, act.ID); *got.EngineRef != "old1" || a.GID != "old1" {
+		t.Fatalf("ref %s, gid asked %s: want the stable old1", *got.EngineRef, a.GID)
 	}
 	if got := r.get(t, pau.ID); got.State != store.Paused {
 		t.Fatalf("paused job became %s", got.State)
@@ -83,7 +85,13 @@ func TestReconcile_ConfirmsBeforeReadd(t *testing.T) {
 
 func TestReconcile_DirMissing(t *testing.T) {
 	r := newRig(t)
-	moved := r.insert(t, store.Active, "old1", func(j *store.Job) { d := uint64(99); j.DirDev = &d })
+	started := r.clk.now()
+	out := "f.bin"
+	// Started, device changed and its files are gone: the drive is not mounted.
+	moved := r.insert(t, store.Active, "old1", func(j *store.Job) {
+		d := uint64(99)
+		j.DirDev, j.StartedAt, j.Out = &d, &started, &out
+	})
 	gone := r.insert(t, store.Queued, "", func(j *store.Job) { j.Dir = "/nonexistent/x" })
 	r.m.dev = func(dir string) (uint64, error) {
 		if dir == "/nonexistent/x" {
@@ -103,6 +111,87 @@ func TestReconcile_DirMissing(t *testing.T) {
 			t.Fatalf("%s: %s %v", j.Dir, got.State, got.ErrorKind)
 		}
 	}
+}
+
+func TestReconcile_DevChangeAloneIsNotMissing(t *testing.T) {
+	r := newRig(t)
+	started := r.clk.now()
+	out := "f.bin"
+	os.WriteFile(filepath.Join(r.dir, "f.bin.aria2"), []byte("x"), 0o600)
+	withFile := r.insert(t, store.Active, "old1", func(j *store.Job) {
+		d := uint64(99)
+		j.DirDev, j.StartedAt, j.Out = &d, &started, &out
+	})
+	notStarted := r.insert(t, store.Queued, "old2", func(j *store.Job) {
+		d := uint64(99)
+		j.DirDev = &d
+		j.URIs = []string{"http://example.com/g.bin"}
+	})
+	if err := r.m.Reconcile(bg); err != nil {
+		t.Fatal(err)
+	}
+	if adds, _ := r.e.count(); adds != 2 {
+		t.Fatalf("adds %d, want 2", adds)
+	}
+	for _, j := range []*store.Job{withFile, notStarted} {
+		got := r.get(t, j.ID)
+		if got.State == store.Error || got.DirDev == nil || *got.DirDev != 7 {
+			t.Fatalf("%s: state %s dev %v", j.ID, got.State, got.DirDev)
+		}
+	}
+}
+
+func TestReconcile_AdoptsRunningGID(t *testing.T) {
+	r := newRig(t)
+	// A crash or timeout right after the engine accepted the add.
+	j := r.insert(t, store.Queued, "00000000000000aa", nil)
+	r.e.setState("00000000000000aa", "active")
+	r.m.e = listMisses{r.e}
+	if err := r.m.Reconcile(bg); err != nil {
+		t.Fatal(err)
+	}
+	if adds, _ := r.e.count(); adds != 0 {
+		t.Fatalf("adds %d, want 0", adds)
+	}
+	if got := r.get(t, j.ID); got.State != store.Active || *got.EngineRef != "00000000000000aa" {
+		t.Fatalf("state %s ref %s", got.State, *got.EngineRef)
+	}
+}
+
+func TestReconcile_RemovedResultIsLost(t *testing.T) {
+	r := newRig(t)
+	j := r.insert(t, store.Active, "old1", nil)
+	r.e.setState("old1", "removed")
+	if err := r.m.Reconcile(bg); err != nil {
+		t.Fatal(err)
+	}
+	if adds, _ := r.e.count(); adds != 1 || r.get(t, j.ID).State != store.Queued {
+		t.Fatalf("adds %d, state %s", adds, r.get(t, j.ID).State)
+	}
+}
+
+func TestReconcile_StopsWhenEngineDown(t *testing.T) {
+	r := newRig(t)
+	for range 3 {
+		r.insert(t, store.Active, "", nil)
+	}
+	down := &downEngine{fakeEngine: r.e}
+	r.m.e = down
+	err := r.m.Reconcile(bg)
+	if !errors.Is(err, engine.ErrNotRunning) || down.adds != 1 {
+		t.Fatalf("err %v, adds tried %d", err, down.adds)
+	}
+}
+
+// downEngine lists fine but fails every add as if aria2 just went away.
+type downEngine struct {
+	*fakeEngine
+	adds int
+}
+
+func (d *downEngine) Add(context.Context, engine.AddRequest) (engine.EngineRef, error) {
+	d.adds++
+	return "", engine.ErrNotRunning
 }
 
 func TestReconcile_RearmsRetry(t *testing.T) {

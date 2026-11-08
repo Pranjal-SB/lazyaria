@@ -25,7 +25,7 @@ func (e *aria2Engine) ChangeURI(ctx context.Context, ref EngineRef, uri string) 
 		return "", err
 	}
 	auth := map[string]string{}
-	clean := splitAuth([]string{uri}, "", "", auth)[0]
+	clean := SplitAuth([]string{uri}, "", "", auth)[0]
 	for {
 		var s aria2.Status
 		if err := e.call(ctx, "aria2.tellStatus", &s, string(ref), []string{"status", "dir", "files", "bittorrent"}); err != nil {

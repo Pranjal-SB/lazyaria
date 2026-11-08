@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"net/url"
+	"os"
 	"path"
 	"path/filepath"
 	"slices"
@@ -28,8 +29,10 @@ type AddParams struct {
 	Total       int64 // size when the caller already knows it; 0 = unknown
 }
 
-// Add stores the job first and only then hands it to the engine, so a crash
-// in between leaves a row that Reconcile adds again.
+// Add stores the job, with its gid, first and only then hands it to the
+// engine, so a crash in between leaves a row Reconcile can match or re-add.
+// With reliability.duplicates = "skip" a known link returns the existing
+// job and a finished target file returns *SkippedError; nothing is added.
 func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 	if len(p.URIs) == 0 && len(p.Torrent) == 0 {
 		return nil, errors.New("nothing to download: give a link or a torrent file")
@@ -46,11 +49,23 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 	if !filepath.IsAbs(dir) {
 		return nil, fmt.Errorf("download directory %q is not an absolute path; pass a full path or set downloads.dir", dir)
 	}
+	// The engine bounds its own calls; a caller giving up must not stop the
+	// database from recording what the engine already did.
+	ctx = context.WithoutCancel(ctx)
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if !p.Force && m.s.Reliability.Duplicates != "allow" {
+	if mode := m.s.Reliability.Duplicates; !p.Force && mode != "allow" {
 		if j := m.findDuplicate(ctx, p.URIs); j != nil {
+			if mode == "skip" {
+				return j, nil
+			}
 			return nil, &DuplicateError{Existing: j}
+		}
+		if path := existingTarget(dir, p); path != "" {
+			if mode == "skip" {
+				return nil, &SkippedError{Path: path}
+			}
+			return nil, &DuplicateError{Path: path}
 		}
 	}
 	if ns := m.noSpace(dir, p.Total, 0); ns != nil {
@@ -66,8 +81,11 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 	m.bus.Publish(Event{Type: "job.added", Job: j})
 	paused := p.StartPaused || m.s.Downloads.StartPaused
 	ref, err := m.e.Add(ctx, m.request(j, paused))
-	if errors.Is(err, engine.ErrNotRunning) {
-		return j, nil // stays queued; Reconcile adds it once the engine is back
+	if engineDown(err) {
+		// The add may or may not have landed under the job's gid; the poll
+		// or Reconcile finds out and re-adds only if it did not.
+		m.log.Warn("add not confirmed by the engine; the job stays queued", "job", j.ID, "err", err)
+		return j, nil
 	}
 	if err != nil {
 		kind := "add-failed"
@@ -135,10 +153,7 @@ func (m *Manager) newJob(dir string, p AddParams) *store.Job {
 	if opts == nil {
 		opts = map[string]string{}
 	}
-	uris := make([]string, len(p.URIs))
-	for i, u := range p.URIs {
-		uris[i] = moveAuth(u, opts)
-	}
+	uris := engine.SplitAuth(p.URIs, "", "", opts)
 	if _, set := opts["file-allocation"]; !set {
 		alloc := m.s.Downloads.FileAllocation
 		if alloc == "auto" {
@@ -162,6 +177,8 @@ func (m *Manager) newJob(dir string, p AddParams) *store.Job {
 		out := textutil.SanitizeName(p.Out, fat)
 		j.Out = &out
 	}
+	gid := newGID()
+	j.EngineRef = &gid
 	if d, err := m.dev(dir); err == nil {
 		j.DirDev = &d
 	}
@@ -176,6 +193,9 @@ func (m *Manager) request(j *store.Job, paused bool) engine.AddRequest {
 	if j.Out != nil {
 		req.Out = *j.Out
 	}
+	if j.EngineRef != nil {
+		req.GID = *j.EngineRef
+	}
 	return req
 }
 
@@ -183,21 +203,6 @@ func setDefault(m map[string]string, k, v string) {
 	if _, ok := m[k]; !ok {
 		m[k] = v
 	}
-}
-
-// moveAuth strips userinfo from u into aria2's auth options, so stored and
-// displayed links never carry credentials.
-func moveAuth(u string, opts map[string]string) string {
-	clean, user, pass := textutil.SplitUserinfo(u)
-	if user == "" && pass == "" {
-		return clean
-	}
-	prefix := "http-"
-	if s := strings.ToLower(strings.SplitN(clean, ":", 2)[0]); s == "ftp" || s == "sftp" {
-		prefix = "ftp-" // aria2 reads ftp-user/ftp-passwd for sftp too
-	}
-	opts[prefix+"user"], opts[prefix+"passwd"] = user, pass
-	return clean
 }
 
 func jobKind(uris []string, torrent []byte) string {
@@ -227,4 +232,31 @@ func displayName(out string, uris []string) string {
 		return b
 	}
 	return ""
+}
+
+// existingTarget returns dir/out when a finished file already sits there:
+// the file exists and has no .aria2 control file, which would mean an
+// unfinished download that aria2 resumes (spec §8.4).
+func existingTarget(dir string, p AddParams) string {
+	clean := make([]string, len(p.URIs))
+	for i, u := range p.URIs {
+		clean[i], _, _ = textutil.SplitUserinfo(u)
+	}
+	name := p.Out
+	if name == "" && len(p.Torrent) == 0 && len(clean) > 0 && jobKind(clean, nil) != "magnet" {
+		name = displayName("", clean)
+	}
+	if name == "" {
+		return ""
+	}
+	path := filepath.Join(dir, textutil.SanitizeName(name, fsinfo.IsFAT(dir)))
+	if exists(path) && !exists(path+".aria2") {
+		return path
+	}
+	return ""
+}
+
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }

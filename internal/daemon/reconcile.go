@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 
 	"github.com/Pranjal-SB/lazyaria/internal/engine"
 	"github.com/Pranjal-SB/lazyaria/internal/store"
@@ -25,9 +26,15 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("reconcile: %w", err)
 	}
+	var down error
+	left := 0
 	for _, j := range js {
 		if j.State == store.RetryWait {
 			m.armRetry(j)
+			continue
+		}
+		if down != nil {
+			left++
 			continue
 		}
 		if j.EngineRef != nil {
@@ -38,62 +45,97 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 				sts, err := m.e.Status(ctx, []engine.EngineRef{refOf(j)})
 				if err != nil {
 					m.log.Warn("reconcile: confirm missing download", "job", j.ID, "err", err)
+					if engineDown(err) {
+						down, left = err, left+1
+					}
 					continue
 				}
 				st = sts[0]
 			}
-			if st.Known {
+			if !lostStatus(st) {
 				m.apply(ctx, j, st, "")
 				continue
 			}
 		}
-		m.recover(ctx, j)
+		if err := m.recover(ctx, j); engineDown(err) {
+			down, left = err, left+1
+		}
+	}
+	if down != nil {
+		return fmt.Errorf("reconcile: engine unavailable, %d jobs left for the next pass: %w", left, down)
 	}
 	return nil
 }
 
-// recover re-adds a job the engine does not have.
-func (m *Manager) recover(ctx context.Context, j *store.Job) {
+// lostStatus means the engine no longer has the download, or holds only its
+// removed result; either way it must be added again.
+func lostStatus(st engine.EngineStatus) bool { return !st.Known || st.State == "removed" }
+
+// recover re-adds a job the engine lost.
+func (m *Manager) recover(ctx context.Context, j *store.Job) error {
 	if j.State == store.Seeding {
 		// The payload is complete; seeding does not outlive the engine.
 		now := m.now()
 		m.to(ctx, j, store.Done, "seeding ended with the engine", func(x *store.Job) { x.FinishedAt = &now })
-		return
+		return nil
 	}
 	if m.dirMissing(j) {
 		kind := "dir-missing"
 		msg := fmt.Sprintf("%s is missing or on a different drive; mount it and retry", j.Dir)
 		m.to(ctx, j, store.Error, kind, func(x *store.Job) { x.ErrorKind, x.ErrorMsg = &kind, &msg })
-		return
+		return nil
 	}
-	if _, err := m.readd(ctx, j, j.State == store.Paused, "readded"); err != nil {
-		m.log.Warn("reconcile: re-add", "job", j.ID, "err", err)
+	_, err := m.readd(ctx, j, j.State == store.Paused, "readded")
+	if err != nil {
+		m.log.Warn("re-add lost download", "job", j.ID, "err", err)
 	}
+	return err
 }
 
-// dirMissing is the unmounted-drive guard (spec G6): the directory is gone
-// or now lives on another device, so writing there would fill the wrong disk.
+// dirMissing is the unmounted-drive guard (spec G6). st_dev is not stable
+// across reboots on btrfs, overlay or NFS, so a changed device counts only
+// when the job had started and neither its file nor its control file is
+// there any more.
 func (m *Manager) dirMissing(j *store.Job) bool {
 	if !m.s.Reliability.UnmountedGuard {
 		return false
 	}
 	d, err := m.dev(j.Dir)
-	return err != nil || (j.DirDev != nil && d != *j.DirDev)
+	if err != nil {
+		return true
+	}
+	if j.DirDev == nil || d == *j.DirDev || j.StartedAt == nil {
+		return false
+	}
+	name := j.Name
+	if j.Out != nil {
+		name = *j.Out
+	}
+	p := filepath.Join(j.Dir, name)
+	return !exists(p) && !exists(p+".aria2")
 }
 
 // readd hands j to the engine again from its stored row, dropping the old
 // download's result first. why is recorded in the job's events; anything
 // but an automatic retry also resets the retry count.
 func (m *Manager) readd(ctx context.Context, j *store.Job, paused bool, why string) (*store.Job, error) {
+	ctx = context.WithoutCancel(ctx) // see Add
+	req := m.request(j, paused)
 	if j.EngineRef != nil {
 		if err := m.e.Remove(ctx, refOf(j)); err != nil {
 			m.log.Warn("drop old download", "job", j.ID, "err", err)
 		}
+	} else {
+		req.GID = newGID()
 	}
-	ref, err := m.e.Add(ctx, m.request(j, paused))
+	// A started download whose control file is gone (a server without
+	// ranges, or an unknown size) restarts in place instead of beside it.
+	req.AllowOverwrite = j.StartedAt != nil && j.Out != nil
+	ref, err := m.e.Add(ctx, req)
 	if err != nil {
 		return j, err
 	}
+	dev, derr := m.dev(j.Dir)
 	state := store.Queued
 	if paused {
 		state = store.Paused
@@ -101,6 +143,9 @@ func (m *Manager) readd(ctx context.Context, j *store.Job, paused bool, why stri
 	return m.change(ctx, j.ID, why, string(ref), func(x *store.Job) {
 		r := string(ref)
 		x.EngineRef, x.State, x.RetryAt = &r, state, nil
+		if derr == nil {
+			x.DirDev = &dev
+		}
 		x.ErrorKind, x.ErrorCode, x.ErrorMsg = nil, nil, nil
 		if why != "retry" {
 			x.RetryCount = 0

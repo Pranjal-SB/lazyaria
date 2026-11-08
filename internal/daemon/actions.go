@@ -14,17 +14,28 @@ import (
 )
 
 // each runs fn for every id under the manager lock and joins the errors.
+// Once the engine is down or stops answering, the remaining jobs are
+// skipped rather than each waiting out the same failure.
 func (m *Manager) each(ctx context.Context, ids []string, fn func(context.Context, *store.Job) error) error {
+	ctx = context.WithoutCancel(ctx) // see Add
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var errs []error
+	var down error
 	for _, id := range ids {
+		if down != nil {
+			errs = append(errs, fmt.Errorf("job %s: skipped: %w", id, down))
+			continue
+		}
 		j, err := m.st.GetJob(ctx, id)
 		if err == nil {
 			err = fn(ctx, j)
 		}
 		if err != nil {
 			errs = append(errs, fmt.Errorf("job %s: %w", id, err))
+			if engineDown(err) {
+				down = err
+			}
 		}
 	}
 	return errors.Join(errs...)
@@ -107,12 +118,14 @@ func (m *Manager) resume(ctx context.Context, j *store.Job) error {
 			return nil
 		}
 	case store.Error, store.RetryWait:
-		m.cancelRetry(j.ID)
 	default:
 		return nil
 	}
-	_, err := m.readd(ctx, j, false, "resumed")
-	return err
+	if _, err := m.readd(ctx, j, false, "resumed"); err != nil {
+		return err // a pending retry timer stays armed
+	}
+	m.cancelRetry(j.ID)
+	return nil
 }
 
 // RefreshURI points a job at a new link (spec §4.7) and clears its error.
@@ -120,6 +133,7 @@ func (m *Manager) RefreshURI(ctx context.Context, id, uri string) (*store.Job, e
 	if err := checkLink(uri); err != nil {
 		return nil, err
 	}
+	ctx = context.WithoutCancel(ctx) // see Add
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	j, err := m.st.GetJob(ctx, id)
@@ -135,7 +149,7 @@ func (m *Manager) RefreshURI(ctx context.Context, id, uri string) (*store.Job, e
 		return nil, engine.ErrNotSupported
 	}
 	opts := maps.Clone(j.Options)
-	clean := moveAuth(uri, opts)
+	clean := engine.SplitAuth([]string{uri}, "", "", opts)[0]
 	newRef := ""
 	if j.EngineRef != nil {
 		r, err := m.e.ChangeURI(ctx, refOf(j), uri)
@@ -160,7 +174,11 @@ func (m *Manager) RefreshURI(ctx context.Context, id, uri string) (*store.Job, e
 	if err != nil || newRef != "" || j.State == store.Paused {
 		return j, err
 	}
-	return m.readd(ctx, j, false, "readded")
+	j2, err := m.readd(ctx, j, false, "readded")
+	if err != nil && j.State == store.RetryWait {
+		m.armRetry(j) // the engine call failed; keep the scheduled retry
+	}
+	return j2, err
 }
 
 // checkLink accepts the links a refresh may use: http(s), ftp or sftp,
@@ -184,7 +202,7 @@ func (m *Manager) SetLimit(ctx context.Context, id string, down, up int64) error
 		return errors.New("speed limits cannot be negative; use 0 for unlimited")
 	}
 	if id == "" {
-		return m.e.SetGlobalLimit(ctx, down, up)
+		return m.e.SetGlobalLimit(context.WithoutCancel(ctx), down, up)
 	}
 	return m.each(ctx, []string{id}, func(ctx context.Context, j *store.Job) error {
 		if j.EngineRef != nil && running(j.State) {

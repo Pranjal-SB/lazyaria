@@ -2,6 +2,8 @@ package daemon
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -100,4 +102,93 @@ func TestPauseHoldsWhileEngineSettles(t *testing.T) {
 	if got := r.get(t, j.ID); got.State != store.Paused {
 		t.Fatalf("state %s, want paused", got.State)
 	}
+}
+
+func TestRefreshNewRef(t *testing.T) {
+	r := newRig(t)
+	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}})
+	r.e.changeRef = "00000000000000cc" // aria2 refused the old gid on re-add
+	got, err := r.m.RefreshURI(bg, j.ID, "http://mirror.example.com/a.iso")
+	if err != nil || *got.EngineRef != "00000000000000cc" {
+		t.Fatalf("ref %v err %v", got.EngineRef, err)
+	}
+	if adds, _ := r.e.count(); adds != 1 {
+		t.Fatalf("adds %d, want 1", adds)
+	}
+}
+
+func TestRefreshLostDownloadReadds(t *testing.T) {
+	r := newRig(t)
+	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}})
+	ref := r.ref(t, j.ID)
+	r.e.Remove(bg, ref) // the engine lost it
+	r.e.changeErr = errors.New("is not found")
+	got, err := r.m.RefreshURI(bg, j.ID, "http://mirror.example.com/a.iso")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if adds, _ := r.e.count(); adds != 2 || r.e.adds[1].URIs[0] != "http://mirror.example.com/a.iso" {
+		t.Fatalf("adds %d %+v", adds, r.e.adds)
+	}
+	if *got.EngineRef != string(ref) || got.State != store.Queued {
+		t.Fatalf("ref %s state %s", *got.EngineRef, got.State)
+	}
+}
+
+func TestRemoveCancelsRetry(t *testing.T) {
+	r := newRig(t)
+	r.m.s.Retry.BackoffBase = "50ms"
+	r.m.now = time.Now
+	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}})
+	r.fail429(t, j.ID)
+	if _, err := r.m.Remove(bg, []string{j.ID}, false); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(200 * time.Millisecond)
+	if adds, _ := r.e.count(); adds != 1 {
+		t.Fatalf("re-added after remove: %d adds", adds)
+	}
+	r.m.mu.Lock()
+	n := len(r.m.retries)
+	r.m.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("%d retry timers left", n)
+	}
+}
+
+func TestPausedRowNeverAutoRetries(t *testing.T) {
+	r := newRig(t)
+	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}, StartPaused: true})
+	ref := r.ref(t, j.ID)
+	r.e.set(ref, func(s *engine.EngineStatus) { s.State, s.ErrorCode, s.HTTPStatus = "error", 22, 429 })
+	r.event(ref, engine.KindError)
+	if got := r.get(t, j.ID); got.State != store.Error {
+		t.Fatalf("state %s, want error", got.State)
+	}
+}
+
+func TestBatchSkipsAfterEngineDown(t *testing.T) {
+	r := newRig(t)
+	var ids []string
+	for _, u := range []string{"a", "b", "c"} {
+		j := r.add(t, AddParams{URIs: []string{"http://example.com/" + u}})
+		ids = append(ids, j.ID)
+	}
+	down := &pauseDown{fakeEngine: r.e}
+	r.m.e = down
+	err := r.m.Pause(bg, ids)
+	if !errors.Is(err, engine.ErrNotRunning) || down.pauses != 1 || !strings.Contains(err.Error(), "skipped") {
+		t.Fatalf("err %v, pauses tried %d", err, down.pauses)
+	}
+}
+
+// pauseDown fails pauses as if aria2 went away; status reads still work.
+type pauseDown struct {
+	*fakeEngine
+	pauses int
+}
+
+func (p *pauseDown) Pause(context.Context, engine.EngineRef) error {
+	p.pauses++
+	return engine.ErrNotRunning
 }

@@ -28,6 +28,9 @@ type fakeEngine struct {
 	statusCalls int
 	addEntered  chan struct{} // receives once per Add when set
 	addBlock    chan struct{} // Add waits on it when set
+	onAdd       func(ref engine.EngineRef)
+	changeRef   engine.EngineRef // ChangeURI result when set
+	changeErr   error
 	events      chan engine.EngineEvent
 }
 
@@ -53,15 +56,21 @@ func (f *fakeEngine) Add(ctx context.Context, req engine.AddRequest) (engine.Eng
 		}
 	}
 	f.mu.Lock()
-	defer f.mu.Unlock()
 	f.next++
-	ref := engine.EngineRef(fmt.Sprintf("g%d", f.next))
+	ref := engine.EngineRef(req.GID)
+	if _, taken := f.dl[ref]; taken || ref == "" {
+		ref = engine.EngineRef(fmt.Sprintf("g%d", f.next)) // like aria2 refusing the gid
+	}
 	f.adds = append(f.adds, req)
 	st := "waiting"
 	if req.Paused {
 		st = "paused"
 	}
 	f.dl[ref] = engine.EngineStatus{Ref: ref, State: st, Known: true, IsBT: len(req.Torrent) > 0}
+	f.mu.Unlock()
+	if f.onAdd != nil {
+		f.onAdd(ref)
+	}
 	return ref, nil
 }
 
@@ -111,6 +120,16 @@ func (f *fakeEngine) Remove(_ context.Context, ref engine.EngineRef) error {
 }
 
 func (f *fakeEngine) ChangeURI(_ context.Context, ref engine.EngineRef, _ string) (engine.EngineRef, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.changeErr != nil {
+		return "", f.changeErr
+	}
+	if f.changeRef != "" {
+		f.dl[f.changeRef] = engine.EngineStatus{Ref: f.changeRef, State: "waiting", Known: true}
+		delete(f.dl, ref)
+		return f.changeRef, nil
+	}
 	return ref, nil
 }
 

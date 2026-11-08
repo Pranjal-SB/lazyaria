@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"maps"
 	"net/url"
@@ -10,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Pranjal-SB/lazyaria/internal/aria2"
 )
 
 func (e *aria2Engine) Add(ctx context.Context, req AddRequest) (EngineRef, error) {
@@ -42,13 +45,28 @@ func (e *aria2Engine) Add(ctx context.Context, req AddRequest) (EngineRef, error
 	if req.Paused {
 		opts["pause"] = "true"
 	}
-	uris := splitAuth(req.URIs, req.User, req.Pass, opts)
-	var gid string
-	var err error
-	if len(req.Torrent) > 0 {
-		err = e.call(ctx, "aria2.addTorrent", &gid, base64.StdEncoding.EncodeToString(req.Torrent), uris, opts)
-	} else {
-		err = e.call(ctx, "aria2.addUri", &gid, uris, opts)
+	if req.AllowOverwrite {
+		opts["allow-overwrite"] = "true"
+	}
+	if req.GID != "" {
+		opts["gid"] = req.GID
+	}
+	uris := SplitAuth(req.URIs, req.User, req.Pass, opts)
+	add := func() (gid string, err error) {
+		if len(req.Torrent) > 0 {
+			err = e.call(ctx, "aria2.addTorrent", &gid, base64.StdEncoding.EncodeToString(req.Torrent), uris, opts)
+		} else {
+			err = e.call(ctx, "aria2.addUri", &gid, uris, opts)
+		}
+		return gid, err
+	}
+	gid, err := add()
+	// Only a refusal is safe to retry: after a timeout the first add may
+	// have gone through. A refused gid is usually still taken.
+	var rpcErr *aria2.RPCError
+	if err != nil && req.GID != "" && errors.As(err, &rpcErr) {
+		delete(opts, "gid")
+		gid, err = add()
 	}
 	if err != nil {
 		return "", fmt.Errorf("add download: %w", err)

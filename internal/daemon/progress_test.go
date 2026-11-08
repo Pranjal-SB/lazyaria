@@ -104,11 +104,18 @@ func TestPurgeOnStart(t *testing.T) {
 	recent := r.clk.now().Add(-24 * time.Hour)
 	a := r.insert(t, store.Removed, "", func(j *store.Job) { j.RemovedAt = &old })
 	b := r.insert(t, store.Removed, "", func(j *store.Job) { j.RemovedAt = &recent })
+	r.m.s.History.KeepDays = 7
+	oldDone := r.insert(t, store.Done, "", func(j *store.Job) { j.FinishedAt = &old })
+	newDone := r.insert(t, store.Done, "", func(j *store.Job) { j.FinishedAt = &recent })
 	ctx, cancel := context.WithTimeout(bg, 200*time.Millisecond)
 	defer cancel()
 	r.m.Run(ctx)
 	if _, err := r.st.GetJob(bg, a.ID); err == nil {
 		t.Fatal("old removed job not purged")
 	}
+	if _, err := r.st.GetJob(bg, oldDone.ID); err == nil {
+		t.Fatal("finished job past history.keep_days not purged")
+	}
 	r.get(t, b.ID)
+	r.get(t, newDone.ID)
 }

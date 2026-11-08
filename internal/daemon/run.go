@@ -103,8 +103,11 @@ func (m *Manager) poll(ctx context.Context) {
 	var items []ProgressItem
 	var down, up int64
 	for i, st := range sts {
-		if !st.Known {
-			continue // Reconcile deals with downloads the engine lost
+		if lostStatus(st) {
+			if err := m.recover(ctx, polled[i]); engineDown(err) {
+				return
+			}
+			continue
 		}
 		j := m.apply(ctx, polled[i], st, "")
 		if j.State == store.Active || j.State == store.Queued || j.State == store.Seeding {
@@ -119,17 +122,25 @@ func (m *Manager) poll(ctx context.Context) {
 	}
 }
 
-// purge drops removed rows older than history.purge_removed_after_days;
-// 0 keeps them.
+// purge drops removed rows older than history.purge_removed_after_days
+// and finished ones older than history.keep_days; 0 keeps them.
 func (m *Manager) purge(ctx context.Context) {
-	days := m.s.History.PurgeRemovedAfterDays
-	if days <= 0 {
-		return
-	}
-	n, err := m.st.PurgeRemoved(ctx, m.now().Add(-time.Duration(days)*24*time.Hour))
-	if err != nil {
-		m.log.Warn("purge removed jobs", "err", err)
-	} else if n > 0 {
-		m.log.Info("purged removed jobs", "count", n)
+	for _, p := range []struct {
+		what string
+		days int
+		fn   func(context.Context, time.Time) (int, error)
+	}{
+		{"removed", m.s.History.PurgeRemovedAfterDays, m.st.PurgeRemoved},
+		{"finished", m.s.History.KeepDays, m.st.PurgeDone},
+	} {
+		if p.days <= 0 {
+			continue
+		}
+		n, err := p.fn(ctx, m.now().Add(-time.Duration(p.days)*24*time.Hour))
+		if err != nil {
+			m.log.Warn("purge "+p.what+" jobs", "err", err)
+		} else if n > 0 {
+			m.log.Info("purged "+p.what+" jobs", "count", n)
+		}
 	}
 }

@@ -36,6 +36,12 @@ type AddRequest struct {
 	Options    map[string]string
 	Paused     bool
 	User, Pass string
+	// GID asks aria2 to use this gid, so the caller can store the ref before
+	// the add. If aria2 refuses it, the download gets a new gid.
+	GID string
+	// AllowOverwrite lets a re-add restart a partial file that has no
+	// control file instead of writing name.1.ext next to it.
+	AllowOverwrite bool
 }
 
 type EngineStatus struct {
