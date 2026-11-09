@@ -171,6 +171,10 @@ func (e *aria2Engine) SetGlobalLimit(ctx context.Context, down, up int64) error 
 	})
 }
 
+func (e *aria2Engine) SetGlobalOptions(ctx context.Context, opts map[string]string) error {
+	return e.call(ctx, "aria2.changeGlobalOption", nil, opts)
+}
+
 func (e *aria2Engine) SetLimit(ctx context.Context, ref EngineRef, down, up int64) error {
 	return e.call(ctx, "aria2.changeOption", nil, string(ref), map[string]string{
 		"max-download-limit": strconv.FormatInt(down, 10),

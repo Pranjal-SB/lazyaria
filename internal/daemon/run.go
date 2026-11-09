@@ -62,9 +62,9 @@ func (m *Manager) pollEvery(ctx context.Context) time.Duration {
 	if err != nil || len(js) == 0 {
 		return 0
 	}
-	v := m.s.Advanced.SentinelInterval
+	v := m.s.Load().Advanced.SentinelInterval
 	if m.observers.Load() > 0 {
-		v = m.s.Advanced.PollInterval
+		v = m.s.Load().Advanced.PollInterval
 	}
 	d, err := config.ParseDuration(v)
 	if err != nil || d <= 0 {
@@ -117,7 +117,7 @@ func (m *Manager) poll(ctx context.Context) {
 		}
 	}
 	m.prog.sample(now, down, up)
-	if m.prog.due(now, m.s.Advanced.ProgressHz) {
+	if m.prog.due(now, m.s.Load().Advanced.ProgressHz) {
 		m.bus.PublishProgress(items)
 	}
 }
@@ -130,8 +130,8 @@ func (m *Manager) purge(ctx context.Context) {
 		days int
 		fn   func(context.Context, time.Time) (int, error)
 	}{
-		{"removed", m.s.History.PurgeRemovedAfterDays, m.st.PurgeRemoved},
-		{"finished", m.s.History.KeepDays, m.st.PurgeDone},
+		{"removed", m.s.Load().History.PurgeRemovedAfterDays, m.st.PurgeRemoved},
+		{"finished", m.s.Load().History.KeepDays, m.st.PurgeDone},
 	} {
 		if p.days <= 0 {
 			continue

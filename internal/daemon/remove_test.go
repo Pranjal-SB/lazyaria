@@ -235,7 +235,7 @@ func origin(p string) string {
 func TestDoneStampsXattr(t *testing.T) {
 	for _, on := range []bool{true, false} {
 		r := newRig(t)
-		r.m.s.Privacy.StampOriginXattr = on
+		r.m.s.Load().Privacy.StampOriginXattr = on
 		payload := filepath.Join(r.dir, "a.iso")
 		ref := "http://u:pw@example.com/a.iso"
 		j := finish(t, r, AddParams{URIs: []string{ref}, Out: "a.iso"}, "a.iso")
@@ -257,7 +257,7 @@ func TestDoneStampsXattr(t *testing.T) {
 
 func TestDoneStampFailureIsNotFatal(t *testing.T) {
 	r := newRig(t)
-	r.m.s.Privacy.StampOriginXattr = true
+	r.m.s.Load().Privacy.StampOriginXattr = true
 	// payload missing: stamping fails, the job still ends Done.
 	j := finish(t, r, AddParams{URIs: []string{"http://example.com/gone.iso"}, Out: "gone.iso"}, "")
 	if j.State != store.Done {
@@ -267,7 +267,7 @@ func TestDoneStampFailureIsNotFatal(t *testing.T) {
 
 func TestDoneStampsReferrerWithoutUserinfo(t *testing.T) {
 	r := newRig(t)
-	r.m.s.Privacy.StampOriginXattr = true
+	r.m.s.Load().Privacy.StampOriginXattr = true
 	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}, Out: "a.iso"})
 	ref := "https://me:secret@ref.example/page"
 	if _, err := r.st.UpdateJob(bg, j.ID, func(x *store.Job) error { x.Referrer = &ref; return nil }); err != nil {

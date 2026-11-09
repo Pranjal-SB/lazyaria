@@ -55,7 +55,7 @@ func TestBackoffSchedule(t *testing.T) {
 
 func TestRetryRespectsUserPause(t *testing.T) {
 	r := newRig(t)
-	r.m.s.Retry.BackoffBase = "50ms"
+	r.m.s.Load().Retry.BackoffBase = "50ms"
 	r.m.now = time.Now
 	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}})
 	r.fail429(t, j.ID)
@@ -80,7 +80,7 @@ func TestRetryRespectsUserPause(t *testing.T) {
 
 func TestRetryTimerFires(t *testing.T) {
 	r := newRig(t)
-	r.m.s.Retry.BackoffBase = "20ms"
+	r.m.s.Load().Retry.BackoffBase = "20ms"
 	r.m.now = time.Now
 	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}})
 	r.fail429(t, j.ID)

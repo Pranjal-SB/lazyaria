@@ -189,6 +189,28 @@ func TestObserversCounted(t *testing.T) {
 	}
 }
 
+func TestClientsCounted(t *testing.T) {
+	f := newFake()
+	c, _ := serve(t, f)
+	if _, err := c.Status(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	c.Close()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		f.mu.Lock()
+		got := append([]int(nil), f.clients...)
+		f.mu.Unlock()
+		if len(got) == 2 && got[0] == 1 && got[1] == 0 {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("SetClients calls = %v, want [1 0]", got)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func TestDuplicateErrorMapsToCode(t *testing.T) {
 	f := newFake()
 	f.addErr = &daemon.DuplicateError{Existing: &store.Job{ID: "old", Name: "a.iso"}}

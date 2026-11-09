@@ -78,7 +78,7 @@ func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (s
 		prev[j.ID], files[j.ID] = j.State, es
 		return nil
 	})
-	secs := m.s.Remove.UndoSeconds
+	secs := m.s.Load().Remove.UndoSeconds
 	if secs <= 0 || len(prev) == 0 {
 		return "", err
 	}

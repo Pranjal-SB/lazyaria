@@ -44,6 +44,9 @@ type Handler interface {
 	// that asked for progress.
 	Subscribe(progress bool) *daemon.Sub
 	SetObservers(n int)
+	// SetClients reports how many clients are connected; the daemon stays
+	// up while any are.
+	SetClients(n int)
 
 	ConfigList(ctx context.Context) ([]config.Entry, error)
 	ConfigSet(ctx context.Context, key, value string) error

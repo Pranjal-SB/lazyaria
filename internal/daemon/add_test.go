@@ -147,7 +147,7 @@ func TestAddDuplicateModes(t *testing.T) {
 	for _, mode := range []string{"ask", "allow", "skip"} {
 		t.Run(mode, func(t *testing.T) {
 			r := newRig(t)
-			r.m.s.Reliability.Duplicates = mode
+			r.m.s.Load().Reliability.Duplicates = mode
 			first := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}})
 			j, err := r.m.Add(bg, AddParams{URIs: []string{"http://example.com/a.iso"}, Dir: r.dir})
 			var dup *DuplicateError

@@ -31,11 +31,11 @@ func (b Backoff) Delay(attempt int, rnd func() float64) time.Duration {
 }
 
 func (m *Manager) backoff() Backoff {
-	base, err := config.ParseDuration(m.s.Retry.BackoffBase)
+	base, err := config.ParseDuration(m.s.Load().Retry.BackoffBase)
 	if err != nil {
 		base = 30 * time.Second
 	}
-	return Backoff{Base: base, Factor: m.s.Retry.BackoffFactor, Max: m.s.Retry.BackoffMaxAttempts, Jitter: 0.2}
+	return Backoff{Base: base, Factor: m.s.Load().Retry.BackoffFactor, Max: m.s.Load().Retry.BackoffMaxAttempts, Jitter: 0.2}
 }
 
 // retryLater parks j in retry-wait with a persisted retry_at, or gives up

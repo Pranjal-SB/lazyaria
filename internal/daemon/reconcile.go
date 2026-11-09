@@ -124,7 +124,7 @@ var errDirMissing = errors.New("download directory is missing or on a different 
 // when the job had started and neither its file nor its control file is
 // there any more.
 func (m *Manager) dirMissing(j *store.Job) bool {
-	if !m.s.Reliability.UnmountedGuard {
+	if !m.s.Load().Reliability.UnmountedGuard {
 		return false
 	}
 	d, err := m.dev(j.Dir)

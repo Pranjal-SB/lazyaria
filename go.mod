@@ -9,6 +9,7 @@ require (
 	github.com/godbus/dbus/v5 v5.2.4
 	github.com/oklog/ulid/v2 v2.1.2
 	golang.org/x/sys v0.49.0
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	modernc.org/sqlite v1.62.0
 )
 

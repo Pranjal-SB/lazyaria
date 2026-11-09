@@ -104,7 +104,7 @@ func TestPurgeOnStart(t *testing.T) {
 	recent := r.clk.now().Add(-24 * time.Hour)
 	a := r.insert(t, store.Removed, "", func(j *store.Job) { j.RemovedAt = &old })
 	b := r.insert(t, store.Removed, "", func(j *store.Job) { j.RemovedAt = &recent })
-	r.m.s.History.KeepDays = 7
+	r.m.s.Load().History.KeepDays = 7
 	oldDone := r.insert(t, store.Done, "", func(j *store.Job) { j.FinishedAt = &old })
 	newDone := r.insert(t, store.Done, "", func(j *store.Job) { j.FinishedAt = &recent })
 	ctx, cancel := context.WithTimeout(bg, 200*time.Millisecond)

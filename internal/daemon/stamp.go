@@ -11,7 +11,7 @@ import (
 // shortcut: a torrent added from a file has no link, so it is not stamped
 // (spec §8.6 "comment URL" deferred); a magnet's URI is stamped.
 func (m *Manager) stampOrigin(j *store.Job) {
-	if !m.s.Privacy.StampOriginXattr || len(j.URIs) == 0 {
+	if !m.s.Load().Privacy.StampOriginXattr || len(j.URIs) == 0 {
 		return
 	}
 	ref := ""

@@ -19,6 +19,7 @@ type server struct {
 
 	mu        sync.Mutex
 	observers int // clients subscribed with progress
+	clients   int
 }
 
 // Serve accepts clients on l until ctx ends. Only processes running as the
@@ -65,6 +66,8 @@ func Serve(ctx context.Context, l net.Listener, h Handler) error {
 }
 
 func (s *server) serveConn(ctx context.Context, c net.Conn) {
+	s.connected(1)
+	defer s.connected(-1)
 	cc := &conn{s: s}
 	srv := jrpc2.NewServer(cc.methods(), &jrpc2.ServerOptions{AllowPush: true})
 	cc.srv = srv
@@ -78,6 +81,13 @@ func (s *server) serveConn(ctx context.Context, c net.Conn) {
 	srv.Wait()
 	stop()
 	cc.unsubscribe()
+}
+
+func (s *server) connected(delta int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.clients += delta
+	s.h.SetClients(s.clients)
 }
 
 func (s *server) observe(delta int) {

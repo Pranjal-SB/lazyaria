@@ -19,10 +19,11 @@ var (
 
 var versionTimeout = 5 * time.Second
 
-const (
-	minVersion = "1.35.0"
-	fixHint    = "install aria2 (e.g. `sudo pacman -S aria2`) or set engine.aria2c_path; run `lazyaria doctor`"
-)
+const minVersion = "1.35.0"
+
+func fixHint() string {
+	return "install aria2 (`" + InstallHint() + "`) or set engine.aria2c_path; run `lazyaria doctor`"
+}
 
 type tooOldError struct{ have string }
 
@@ -43,17 +44,17 @@ func CheckVersion(path string) (string, error) {
 	if err != nil {
 		switch {
 		case ctx.Err() != nil:
-			return "", fmt.Errorf("aria2: %q --version timed out after %s: %s", path, versionTimeout, fixHint)
+			return "", fmt.Errorf("aria2: %q --version timed out after %s: %s", path, versionTimeout, fixHint())
 		case errors.Is(err, fs.ErrNotExist) || errors.Is(err, exec.ErrNotFound):
-			return "", fmt.Errorf("%w at %q: %s", ErrNotFound, path, fixHint)
+			return "", fmt.Errorf("%w at %q: %s", ErrNotFound, path, fixHint())
 		case errors.Is(err, fs.ErrPermission):
 			return "", fmt.Errorf("%w at %q: check file permissions or set engine.aria2c_path; run `lazyaria doctor`", ErrNotExecutable, path)
 		}
-		return "", fmt.Errorf("aria2: %q --version failed: %v: %s", path, err, fixHint)
+		return "", fmt.Errorf("aria2: %q --version failed: %v: %s", path, err, fixHint())
 	}
 	m := versionRe.FindStringSubmatch(string(out))
 	if m == nil {
-		return "", fmt.Errorf("aria2: no `aria2 version X.Y.Z` line in output of %q: %s", path, fixHint)
+		return "", fmt.Errorf("aria2: no `aria2 version X.Y.Z` line in output of %q: %s", path, fixHint())
 	}
 	v := [3]int{}
 	for i := range v {

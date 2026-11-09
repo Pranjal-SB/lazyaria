@@ -24,7 +24,7 @@ import (
 type Manager struct {
 	e   engine.Engine
 	st  *store.Store
-	s   *config.Settings
+	s   atomic.Pointer[config.Settings] // swapped whole on a live reload
 	bus *Bus
 	log *slog.Logger
 
@@ -54,8 +54,8 @@ type Manager struct {
 }
 
 func NewManager(e engine.Engine, st *store.Store, s *config.Settings, bus *Bus, log *slog.Logger) *Manager {
-	return &Manager{
-		e: e, st: st, s: s, bus: bus, log: log,
+	m := &Manager{
+		e: e, st: st, bus: bus, log: log,
 		Files: &TrashFiles{},
 		now:   time.Now, free: fsinfo.FreeBytes, dev: fsinfo.Dev, alloc: fsinfo.Allocation, rnd: mrand.Float64,
 		ctx:     context.Background(),
@@ -64,7 +64,12 @@ func NewManager(e engine.Engine, st *store.Store, s *config.Settings, bus *Bus, 
 		kick:    make(chan struct{}, 1),
 		prog:    newProgress(),
 	}
+	m.s.Store(s)
+	return m
 }
+
+// SetSettings swaps in new settings; jobs read them from their next step on.
+func (m *Manager) SetSettings(s *config.Settings) { m.s.Store(s) }
 
 // DuplicateError means the link is already in the list or in history
 // (Existing), or a finished file already sits at the target path (Path).

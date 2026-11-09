@@ -20,6 +20,7 @@ type Engine interface {
 	List(ctx context.Context) ([]EngineStatus, error)                  // everything the engine knows, for reconcile
 	Details(ctx context.Context, ref EngineRef) (EngineDetails, error) // files, servers/peers
 	SetGlobalLimit(ctx context.Context, down, up int64) error
+	SetGlobalOptions(ctx context.Context, opts map[string]string) error // aria2 option names, for live settings
 	SetLimit(ctx context.Context, ref EngineRef, down, up int64) error
 	Events() <-chan EngineEvent // start/pause/stop/complete/error/bt-complete
 	Shutdown(ctx context.Context) error

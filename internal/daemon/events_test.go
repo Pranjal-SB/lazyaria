@@ -69,7 +69,7 @@ func TestErrorMapping(t *testing.T) {
 
 func TestNetworkAutoRetry(t *testing.T) {
 	r := newRig(t)
-	r.m.s.Retry.AutoRetry = []string{"429", "network"}
+	r.m.s.Load().Retry.AutoRetry = []string{"429", "network"}
 	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}})
 	ref := r.ref(t, j.ID)
 	r.e.set(ref, func(s *engine.EngineStatus) { s.State, s.ErrorCode, s.ErrorMsg = "error", 1, "No URI available." })

@@ -2,13 +2,14 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"strings"
 	"testing"
 )
 
 func TestRunVersion(t *testing.T) {
 	var out, errb bytes.Buffer
-	code := run([]string{"lazyaria", "version"}, &out, &errb)
+	code := run(context.Background(), []string{"lazyaria", "version"}, &out, &errb)
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0 (stderr: %q)", code, errb.String())
 	}
@@ -19,7 +20,7 @@ func TestRunVersion(t *testing.T) {
 
 func TestRunUnknown(t *testing.T) {
 	var out, errb bytes.Buffer
-	code := run([]string{"lazyaria", "nope"}, &out, &errb)
+	code := run(context.Background(), []string{"lazyaria", "nope"}, &out, &errb)
 	if code != 2 {
 		t.Fatalf("exit code = %d, want 2", code)
 	}

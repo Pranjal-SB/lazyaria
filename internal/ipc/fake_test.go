@@ -105,6 +105,7 @@ type fakeHandler struct {
 	addErr    error
 	upgrades  int
 	observers []int
+	clients   []int
 }
 
 func newFake() *fakeHandler {
@@ -171,6 +172,12 @@ func (f *fakeHandler) SetObservers(n int) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.observers = append(f.observers, n)
+}
+
+func (f *fakeHandler) SetClients(n int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.clients = append(f.clients, n)
 }
 
 func (f *fakeHandler) ConfigList(context.Context) ([]config.Entry, error) {

@@ -144,3 +144,16 @@ func TestLimits(t *testing.T) {
 		t.Fatalf("per-job limit %q", opt["max-download-limit"])
 	}
 }
+
+func TestSetGlobalOptions(t *testing.T) {
+	t.Parallel()
+	e, _ := startEngine(t)
+	if err := e.SetGlobalOptions(ctxT(t, 5*time.Second), map[string]string{"max-concurrent-downloads": "3", "split": "4"}); err != nil {
+		t.Fatal(err)
+	}
+	var opt map[string]string
+	rawCall(t, e, "aria2.getGlobalOption", &opt)
+	if opt["max-concurrent-downloads"] != "3" || opt["split"] != "4" {
+		t.Fatalf("global options max-concurrent-downloads=%q split=%q, want 3 and 4", opt["max-concurrent-downloads"], opt["split"])
+	}
+}

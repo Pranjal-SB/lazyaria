@@ -72,7 +72,7 @@ func (m *Manager) failed(ctx context.Context, j *store.Job, st engine.EngineStat
 	if f.ignore {
 		return j
 	}
-	if f.retry != "" && j.State != store.Paused && slices.Contains(m.s.Retry.AutoRetry, f.retry) {
+	if f.retry != "" && j.State != store.Paused && slices.Contains(m.s.Load().Retry.AutoRetry, f.retry) {
 		return m.retryLater(ctx, j, st, f.kind)
 	}
 	j = m.to(ctx, j, store.Error, f.kind, func(x *store.Job) { setErr(x, f.kind, st) })

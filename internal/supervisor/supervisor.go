@@ -59,6 +59,7 @@ type Supervisor struct {
 
 	mu      sync.Mutex
 	cur     *proc
+	adopt   *Endpoint
 	started bool
 	failed  bool
 }
@@ -211,11 +212,25 @@ func (sv *Supervisor) run(first chan<- startResult) {
 // supervise keeps aria2c running until it fails for good or ctx ends. The
 // first ready client goes to *first; later ones go to Clients.
 func (sv *Supervisor) supervise(first *chan<- startResult) ([]string, error) {
-	if _, err := aria2.CheckVersion(sv.s.Engine.Aria2cPath); err != nil {
+	if _, err := aria2.CheckVersion(sv.settings().Engine.Aria2cPath); err != nil {
 		return []string{err.Error()}, err
 	}
 	for {
-		pr, c, err := sv.launch()
+		var pr *proc
+		var c *aria2.Client
+		var err error
+		sv.mu.Lock()
+		ep := sv.adopt
+		sv.adopt = nil
+		sv.mu.Unlock()
+		if ep != nil {
+			if pr, c, err = sv.takeOver(*ep); err != nil {
+				sv.log.Warn("could not take over the running aria2c; starting a new one", "err", err)
+			}
+		}
+		if c == nil {
+			pr, c, err = sv.launch()
+		}
 		ready := c != nil
 		if ready {
 			if *first != nil {

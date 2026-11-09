@@ -165,6 +165,7 @@ func (f *fakeEngine) Details(_ context.Context, ref engine.EngineRef) (engine.En
 }
 
 func (f *fakeEngine) SetGlobalLimit(context.Context, int64, int64) error             { return nil }
+func (f *fakeEngine) SetGlobalOptions(context.Context, map[string]string) error      { return nil }
 func (f *fakeEngine) SetLimit(context.Context, engine.EngineRef, int64, int64) error { return nil }
 func (f *fakeEngine) Events() <-chan engine.EngineEvent                              { return f.events }
 func (f *fakeEngine) Shutdown(context.Context) error                                 { return nil }

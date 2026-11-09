@@ -45,7 +45,7 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 	}
 	dir := p.Dir
 	if dir == "" {
-		dir = m.s.Downloads.Dir
+		dir = m.s.Load().Downloads.Dir
 	}
 	if !filepath.IsAbs(dir) {
 		return nil, fmt.Errorf("download directory %q is not an absolute path; pass a full path or set downloads.dir", dir)
@@ -55,7 +55,7 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 	ctx = context.WithoutCancel(ctx)
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if mode := m.s.Reliability.Duplicates; !p.Force && mode != "allow" {
+	if mode := m.s.Load().Reliability.Duplicates; !p.Force && mode != "allow" {
 		if j := m.findDuplicate(ctx, p.URIs); j != nil {
 			if mode == "skip" {
 				return j, &SkippedError{Existing: j}
@@ -72,7 +72,7 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 	if ns := m.noSpace(dir, p.Total, 0); ns != nil {
 		return nil, ns
 	}
-	paused := p.StartPaused || m.s.Downloads.StartPaused
+	paused := p.StartPaused || m.s.Load().Downloads.StartPaused
 	j := m.newJob(dir, p, paused)
 	if err := m.st.InsertJob(ctx, j); err != nil {
 		return nil, fmt.Errorf("save the new job: %w", err)
@@ -134,7 +134,7 @@ func (m *Manager) findDuplicate(ctx context.Context, uris []string) *store.Job {
 // noSpace checks free space against the remaining bytes plus the margin.
 // An unknown size or an unreadable filesystem skips the check.
 func (m *Manager) noSpace(dir string, total, done int64) *NoSpaceError {
-	if !m.s.Reliability.DiskPrecheck || total <= 0 || done >= total {
+	if !m.s.Load().Reliability.DiskPrecheck || total <= 0 || done >= total {
 		return nil
 	}
 	free, err := m.free(dir)
@@ -142,7 +142,7 @@ func (m *Manager) noSpace(dir string, total, done int64) *NoSpaceError {
 		return nil
 	}
 	left := uint64(total - done)
-	need := left + left/100*uint64(m.s.Reliability.DiskMarginPercent)
+	need := left + left/100*uint64(m.s.Load().Reliability.DiskMarginPercent)
 	if free >= need {
 		return nil
 	}
@@ -158,7 +158,7 @@ func (m *Manager) newJob(dir string, p AddParams, paused bool) *store.Job {
 	}
 	uris := engine.SplitAuth(p.URIs, "", "", opts)
 	if _, set := opts["file-allocation"]; !set {
-		alloc := m.s.Downloads.FileAllocation
+		alloc := m.s.Load().Downloads.FileAllocation
 		if alloc == "auto" {
 			alloc = m.alloc(dir)
 		}
@@ -167,8 +167,8 @@ func (m *Manager) newJob(dir string, p AddParams, paused bool) *store.Job {
 	kind := jobKind(uris, p.Torrent)
 	if kind == "torrent" || kind == "magnet" {
 		// Per job, so a live change to the bt settings applies to new torrents.
-		setDefault(opts, "seed-time", strconv.Itoa(m.s.BT.SeedMinutes))
-		setDefault(opts, "seed-ratio", strconv.FormatFloat(m.s.BT.SeedRatio, 'f', -1, 64))
+		setDefault(opts, "seed-time", strconv.Itoa(m.s.Load().BT.SeedMinutes))
+		setDefault(opts, "seed-ratio", strconv.FormatFloat(m.s.Load().BT.SeedRatio, 'f', -1, 64))
 	}
 	fat := fsinfo.IsFAT(dir)
 	j := &store.Job{
