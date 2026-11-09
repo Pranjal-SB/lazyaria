@@ -25,34 +25,37 @@ const (
 	Removed   State = "removed"
 )
 
+// The json tags are the IPC wire format; the torrent blob never leaves the daemon.
 type Job struct {
-	ID, Kind, Engine string
-	EngineRef        *string
-	State            State
-	ErrorKind        *string
-	ErrorCode        *int
-	ErrorMsg         *string
-	Name             string
-	URIs             []string
-	Torrent          []byte
-	Dir              string
-	Out              *string
-	DirDev           *uint64
-	TotalBytes       *int64
-	DoneBytes        *int64
-	Options          map[string]string
-	LimitDown        int64
-	LimitUp          int64
-	Category         *string
-	Queue            string
-	Priority         int
-	RetryCount       int
-	RetryAt          *time.Time
-	Referrer         *string
-	CreatedAt        time.Time
-	StartedAt        *time.Time
-	FinishedAt       *time.Time
-	RemovedAt        *time.Time
+	ID         string            `json:"id"`
+	Kind       string            `json:"kind"`
+	Engine     string            `json:"engine"`
+	EngineRef  *string           `json:"engine_ref"`
+	State      State             `json:"state"`
+	ErrorKind  *string           `json:"error_kind"`
+	ErrorCode  *int              `json:"error_code"`
+	ErrorMsg   *string           `json:"error_msg"`
+	Name       string            `json:"name"`
+	URIs       []string          `json:"uris"`
+	Torrent    []byte            `json:"-"`
+	Dir        string            `json:"dir"`
+	Out        *string           `json:"out"`
+	DirDev     *uint64           `json:"dir_dev"`
+	TotalBytes *int64            `json:"total_bytes"`
+	DoneBytes  *int64            `json:"done_bytes"`
+	Options    map[string]string `json:"options"`
+	LimitDown  int64             `json:"limit_down"`
+	LimitUp    int64             `json:"limit_up"`
+	Category   *string           `json:"category"`
+	Queue      string            `json:"queue"`
+	Priority   int               `json:"priority"`
+	RetryCount int               `json:"retry_count"`
+	RetryAt    *time.Time        `json:"retry_at"`
+	Referrer   *string           `json:"referrer"`
+	CreatedAt  time.Time         `json:"created_at"`
+	StartedAt  *time.Time        `json:"started_at"`
+	FinishedAt *time.Time        `json:"finished_at"`
+	RemovedAt  *time.Time        `json:"removed_at"`
 }
 
 // Filter narrows ListJobs. Without IncludeHistory, done and removed jobs are hidden.

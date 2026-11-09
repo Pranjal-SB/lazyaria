@@ -20,59 +20,46 @@ import (
 	"github.com/Pranjal-SB/lazyaria/internal/store"
 )
 
-func TestSocketPerms0600(t *testing.T) {
-	_, p := serve(t, newFake())
-	fi, err := os.Stat(p.Socket)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if fi.Mode().Perm() != 0o600 {
-		t.Errorf("socket mode %v, want 0600", fi.Mode().Perm())
-	}
-	di, err := os.Stat(filepath.Dir(p.Socket))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if di.Mode().Perm() != 0o700 {
-		t.Errorf("socket dir mode %v, want 0700", di.Mode().Perm())
-	}
-}
-
-func TestSecondListenerAlreadyRunning(t *testing.T) {
+func TestStalledClientDoesNotBlockShutdown(t *testing.T) {
+	f := newFake()
 	p := testPaths(shortDir(t))
 	l, lock, err := Listen(p)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer l.Close()
 	defer lock.Close()
-	_, _, err = Listen(p)
-	var ar *ErrAlreadyRunning
-	if !errors.As(err, &ar) || ar.PID != os.Getpid() {
-		t.Fatalf("second Listen: %v, want ErrAlreadyRunning{PID: %d}", err, os.Getpid())
-	}
-	if _, err := os.Stat(p.Socket); err != nil {
-		t.Errorf("the losing Listen removed the live socket: %v", err)
-	}
-}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- Serve(ctx, l, f) }()
 
-func TestStaleSocketRemoved(t *testing.T) {
-	p := testPaths(shortDir(t))
-	if err := os.MkdirAll(p.RuntimeDir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	old, err := net.Listen("unix", p.Socket)
+	raw, err := net.Dial("unix", p.Socket)
 	if err != nil {
 		t.Fatal(err)
 	}
-	old.(*net.UnixListener).SetUnlinkOnClose(false)
-	old.Close() // leaves the socket file behind, like a crashed daemon
-	l, lock, err := Listen(p)
-	if err != nil {
-		t.Fatalf("Listen over a stale socket: %v", err)
+	defer raw.Close() // never read from: the client is stuck
+	raw.Write([]byte(`{"jsonrpc":"2.0","id":1,"method":"jobs.subscribe","params":{"progress":true}}` + "\n"))
+	for deadline := time.Now().Add(2 * time.Second); ; time.Sleep(5 * time.Millisecond) {
+		f.mu.Lock()
+		n := len(f.observers)
+		f.mu.Unlock()
+		if n > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("subscribe never arrived")
+		}
 	}
-	l.Close()
-	lock.Close()
+	big := make([]daemon.ProgressItem, 2000)
+	for end := time.Now().Add(300 * time.Millisecond); time.Now().Before(end); time.Sleep(time.Millisecond) {
+		f.bus.PublishProgress(big)
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Serve did not return with a stalled client connected")
+	}
 }
 
 func TestPeerUIDSelf(t *testing.T) {

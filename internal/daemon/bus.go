@@ -10,13 +10,14 @@ import (
 
 // Event is a reliable lifecycle event pushed to subscribers.
 type Event struct {
-	Seq  uint64
-	Type string // job.added|job.updated|job.removed|engine.state|banner|resync_required
-	Job  *store.Job
-	Data map[string]any
+	Seq  uint64         `json:"seq"`
+	Type string         `json:"type"` // job.added|job.updated|job.removed|engine.state|banner|resync_required
+	Job  *store.Job     `json:"job,omitempty"`
+	Data map[string]any `json:"data,omitempty"`
 }
 
 // ProgressItem is one job's lossy progress sample.
+// On the wire ETA is whole seconds, see json.go.
 type ProgressItem struct {
 	ID                           string
 	Done, Total, Down, Up, Conns int64

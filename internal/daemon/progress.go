@@ -16,8 +16,9 @@ const (
 
 // SpeedSample is the total transfer rate at one moment.
 type SpeedSample struct {
-	At       time.Time
-	Down, Up int64
+	At   time.Time `json:"at"`
+	Down int64     `json:"speed_down"`
+	Up   int64     `json:"speed_up"`
 }
 
 type jobSpeed struct {

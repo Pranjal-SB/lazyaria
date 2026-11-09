@@ -82,6 +82,9 @@ type SnapshotResult struct {
 	Speed []daemon.SpeedSample `json:"speed"`
 }
 
+// SubscribeParams is for jobs.subscribe, which returns {}. To see every
+// change exactly once a client subscribes first, then takes jobs.snapshot,
+// then drops pushed events whose seq is <= the snapshot's seq.
 type SubscribeParams struct {
 	Progress bool `json:"progress"`
 }

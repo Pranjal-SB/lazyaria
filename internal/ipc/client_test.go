@@ -35,18 +35,26 @@ func TestHelloSameVersionNoUpgrade(t *testing.T) {
 }
 
 func TestHelloProtocolMismatch(t *testing.T) {
-	f := newFake()
-	f.version, f.protocol = "0.0.1", 99
-	c, _ := serve(t, f)
-	_, _, err := c.Hello(context.Background())
-	var pm *ErrProtocolMismatch
-	if !errors.As(err, &pm) || !strings.Contains(err.Error(), "it will upgrade when idle") {
-		t.Fatalf("err = %v, want ErrProtocolMismatch banner", err)
-	}
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.upgrades != 0 {
-		t.Fatal("daemon.upgrade called despite a protocol mismatch")
+	for _, tc := range []struct {
+		protocol int
+		banner   string
+	}{
+		{0, "it will upgrade when idle"},      // daemon is older
+		{99, "older than the running daemon"}, // this binary is older
+	} {
+		f := newFake()
+		f.version, f.protocol = "0.0.1", tc.protocol
+		c, _ := serve(t, f)
+		_, _, err := c.Hello(context.Background())
+		var pm *ErrProtocolMismatch
+		if !errors.As(err, &pm) || !strings.Contains(err.Error(), tc.banner) {
+			t.Fatalf("protocol %d: err = %v, want banner %q", tc.protocol, err, tc.banner)
+		}
+		f.mu.Lock()
+		if f.upgrades != 0 {
+			t.Fatal("daemon.upgrade called despite a protocol mismatch")
+		}
+		f.mu.Unlock()
 	}
 }
 

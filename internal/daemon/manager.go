@@ -69,8 +69,8 @@ func NewManager(e engine.Engine, st *store.Store, s *config.Settings, bus *Bus, 
 // DuplicateError means the link is already in the list or in history
 // (Existing), or a finished file already sits at the target path (Path).
 type DuplicateError struct {
-	Existing *store.Job
-	Path     string
+	Existing *store.Job `json:"existing_job,omitempty"`
+	Path     string     `json:"path,omitempty"`
 }
 
 func (e *DuplicateError) Error() string {
@@ -84,8 +84,8 @@ func (e *DuplicateError) Error() string {
 // added: the link is already known (Existing), or a finished file already
 // sits at the target path (Path). Callers treat it as success.
 type SkippedError struct {
-	Existing *store.Job
-	Path     string
+	Existing *store.Job `json:"existing_job,omitempty"`
+	Path     string     `json:"path,omitempty"`
 }
 
 func (e *SkippedError) Error() string {
@@ -97,8 +97,9 @@ func (e *SkippedError) Error() string {
 
 // NoSpaceError means the target filesystem cannot hold the download.
 type NoSpaceError struct {
-	Dir        string
-	Need, Free uint64
+	Dir  string `json:"dir"`
+	Need uint64 `json:"need"`
+	Free uint64 `json:"free"`
 }
 
 func (e *NoSpaceError) Error() string {

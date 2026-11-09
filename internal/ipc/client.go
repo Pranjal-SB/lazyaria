@@ -3,7 +3,9 @@ package ipc
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
+	"os"
 	"sync"
 
 	"github.com/creachadair/jrpc2"
@@ -27,12 +29,27 @@ func Dial(ctx context.Context, p config.Paths) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	// A socket in a shared dir could be someone else's daemon.
+	if uid, err := peerUID(conn); err != nil || uid != os.Geteuid() {
+		conn.Close()
+		return nil, &ErrForeignDaemon{Socket: p.Socket, UID: uid}
+	}
 	c := &Client{events: make(chan daemon.Event, 512), progress: make(chan []daemon.ProgressItem, 1)}
 	c.rpc = jrpc2.NewClient(&pushChannel{Channel: lineChannel(conn), c: c}, nil)
 	return c, nil
 }
 
 func (c *Client) Close() error { return c.rpc.Close() }
+
+// ErrForeignDaemon means the socket is served by another user.
+type ErrForeignDaemon struct {
+	Socket string
+	UID    int
+}
+
+func (e *ErrForeignDaemon) Error() string {
+	return fmt.Sprintf("%s is served by uid %d, not you; refusing to use it. Pick another advanced.socket_path or run `lazyaria doctor`", e.Socket, e.UID)
+}
 
 // Subscribe asks for job events, and progress frames when progress is set.
 func (c *Client) Subscribe(ctx context.Context, progress bool) (<-chan daemon.Event, <-chan []daemon.ProgressItem, error) {

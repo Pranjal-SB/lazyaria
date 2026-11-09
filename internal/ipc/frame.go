@@ -4,11 +4,29 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"net"
+	"time"
 
 	"github.com/creachadair/jrpc2/channel"
 )
 
-var ErrFrameTooLarge = errors.New("ipc message larger than 32 MiB")
+var ErrFrameTooLarge = errors.New("ipc message larger than 32 MiB; ask for less (e.g. a smaller --limit), or run `lazyaria doctor`")
+
+// writeTimeout is how long a client may leave the daemon's writes unread.
+const writeTimeout = 5 * time.Second
+
+// deadlineConn drops a client that stops reading instead of letting it pin
+// a pusher goroutine forever.
+type deadlineConn struct{ net.Conn }
+
+func (d deadlineConn) Write(p []byte) (int, error) {
+	d.SetWriteDeadline(time.Now().Add(writeTimeout))
+	n, err := d.Conn.Write(p)
+	if err != nil {
+		d.Conn.Close()
+	}
+	return n, err
+}
 
 // capReader fails once a line grows past MaxFrame, so a peer cannot make
 // channel.Line buffer without bound.

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"golang.org/x/sys/unix"
 
@@ -32,7 +33,7 @@ func Listen(p config.Paths) (net.Listener, *Lock, error) {
 	if err := config.EnsureDirs(p); err != nil {
 		return nil, nil, err
 	}
-	if err := os.MkdirAll(filepath.Dir(p.Socket), 0o700); err != nil {
+	if err := checkSocketDir(filepath.Dir(p.Socket)); err != nil {
 		return nil, nil, err
 	}
 	lock, err := takeLock(p.Lock)
@@ -40,9 +41,9 @@ func Listen(p config.Paths) (net.Listener, *Lock, error) {
 		return nil, nil, err
 	}
 	// Holding the lock proves no daemon is serving this socket.
-	if err := os.Remove(p.Socket); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := removeStale(p.Socket); err != nil {
 		lock.Close()
-		return nil, nil, fmt.Errorf("remove stale socket: %w; run `lazyaria doctor`", err)
+		return nil, nil, err
 	}
 	l, err := net.Listen("unix", p.Socket)
 	if err != nil {
@@ -55,6 +56,40 @@ func Listen(p config.Paths) (net.Listener, *Lock, error) {
 		return nil, nil, fmt.Errorf("chmod socket: %w; run `lazyaria doctor`", err)
 	}
 	return l, lock, nil
+}
+
+// checkSocketDir holds a custom advanced.socket_path dir to the same rule
+// as the runtime dir: ours, and closed to everyone else.
+func checkSocketDir(dir string) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("create %s: %w; run `lazyaria doctor`", dir, err)
+	}
+	fi, err := os.Stat(dir)
+	if err != nil {
+		return err
+	}
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	if !fi.IsDir() || !ok || int(st.Uid) != os.Geteuid() || fi.Mode().Perm()&0o077 != 0 {
+		return fmt.Errorf("socket dir %s must be a directory owned by you with mode 0700; fix it with `chmod 700 %s` or pick another advanced.socket_path", dir, dir)
+	}
+	return nil
+}
+
+func removeStale(path string) error {
+	fi, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if fi.Mode().Type() != os.ModeSocket {
+		return fmt.Errorf("%s exists and is not a socket; move it away or pick another advanced.socket_path", path)
+	}
+	if err := os.Remove(path); err != nil {
+		return fmt.Errorf("remove stale socket: %w; run `lazyaria doctor`", err)
+	}
+	return nil
 }
 
 func takeLock(path string) (*Lock, error) {

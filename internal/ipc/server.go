@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/creachadair/jrpc2"
 
@@ -31,14 +32,28 @@ func Serve(ctx context.Context, l net.Listener, h Handler) error {
 	defer cancel()
 	context.AfterFunc(ctx, func() { l.Close() })
 
+	var backoff time.Duration
 	for {
 		c, err := l.Accept()
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil
 			}
-			return err
+			if errors.Is(err, net.ErrClosed) {
+				return err
+			}
+			// Out of descriptors and the like: wait for clients to leave
+			// rather than stop serving.
+			backoff = min(max(2*backoff, 5*time.Millisecond), time.Second)
+			slog.Warn("ipc: accept failed, retrying", "err", err, "in", backoff)
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(backoff):
+			}
+			continue
 		}
+		backoff = 0
 		uid, err := peerUID(c)
 		if err != nil || uid != os.Geteuid() {
 			slog.Warn("ipc: rejected connection from another user", "uid", uid, "err", err)
@@ -53,8 +68,13 @@ func (s *server) serveConn(ctx context.Context, c net.Conn) {
 	cc := &conn{s: s}
 	srv := jrpc2.NewServer(cc.methods(), &jrpc2.ServerOptions{AllowPush: true})
 	cc.srv = srv
-	srv.Start(lineChannel(c))
-	stop := context.AfterFunc(ctx, srv.Stop)
+	srv.Start(lineChannel(deadlineConn{c}))
+	// Close the socket before Stop: a push stuck writing to a client that
+	// stopped reading holds the server lock Stop needs.
+	stop := context.AfterFunc(ctx, func() {
+		c.Close()
+		srv.Stop()
+	})
 	srv.Wait()
 	stop()
 	cc.unsubscribe()
@@ -109,8 +129,8 @@ func (c *conn) push(sub *daemon.Sub, done chan struct{}) {
 			}
 			err = c.srv.Notify(context.Background(), PushProgress, items)
 		}
-		if errors.Is(err, jrpc2.ErrConnClosed) {
-			return
+		if err != nil {
+			return // the client is gone; the bus resyncs it if it ever reads again
 		}
 	}
 }

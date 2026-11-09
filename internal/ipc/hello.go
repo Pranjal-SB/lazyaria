@@ -17,8 +17,13 @@ type ErrProtocolMismatch struct {
 }
 
 func (e *ErrProtocolMismatch) Error() string {
+	daemonV := strings.TrimPrefix(e.DaemonVersion, "v")
+	if e.Protocol > buildinfo.Protocol {
+		return fmt.Sprintf("this lazyaria (v%s) is older than the running daemon (v%s); update it",
+			strings.TrimPrefix(buildinfo.Version, "v"), daemonV)
+	}
 	return fmt.Sprintf("daemon v%s is running; it will upgrade when idle (protocol %d, this client speaks %d)",
-		strings.TrimPrefix(e.DaemonVersion, "v"), e.Protocol, buildinfo.Protocol)
+		daemonV, e.Protocol, buildinfo.Protocol)
 }
 
 // Hello does the version handshake (spec §17 G4). When the daemon is older

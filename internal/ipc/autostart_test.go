@@ -72,6 +72,19 @@ func TestConnectUnreachable(t *testing.T) {
 	}
 }
 
+func TestConnectFailsFastWhenDaemonDies(t *testing.T) {
+	dir := shortDir(t)
+	t.Setenv("LAZYARIA_TEST_FAKE_DAEMON", "fail")
+	start := time.Now()
+	_, err := Connect(context.Background(), testPaths(dir), true, os.Args[0])
+	if !errors.Is(err, ErrUnreachable) || !strings.Contains(err.Error(), "sudo pacman -S aria2") {
+		t.Fatalf("err = %v, want ErrUnreachable with the daemon's stderr", err)
+	}
+	if d := time.Since(start); d > 2*time.Second {
+		t.Fatalf("took %v; should fail as soon as the daemon exits", d)
+	}
+}
+
 func lockPID(t *testing.T, p config.Paths) int {
 	t.Helper()
 	b, err := os.ReadFile(p.Lock)

@@ -3,6 +3,7 @@ package ipc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"os/signal"
@@ -19,6 +20,9 @@ import (
 
 func TestMain(m *testing.M) {
 	switch {
+	case os.Getenv("LAZYARIA_TEST_FAKE_DAEMON") == "fail":
+		fmt.Fprintln(os.Stderr, "aria2c not found; install it with: sudo pacman -S aria2")
+		os.Exit(1)
 	case os.Getenv("LAZYARIA_TEST_FAKE_DAEMON") == "1":
 		os.Exit(fakeDaemon(os.Getenv("LAZYARIA_TEST_DIR")))
 	case os.Getenv("LAZYARIA_TEST_DIAL") != "":
@@ -28,12 +32,16 @@ func TestMain(m *testing.M) {
 }
 
 // fakeDaemon stands in for `lazyaria daemon --detach` until the real
-// command exists. It records the outcome in dir/log.
+// command exists. It records the outcome in dir/log. Like the real one it
+// exits 0 when another daemon already holds the lock.
 func fakeDaemon(dir string) int {
 	p := testPaths(dir)
 	l, lock, err := Listen(p)
 	if err != nil {
 		appendLog(dir, "busy")
+		if _, ok := errors.AsType[*ErrAlreadyRunning](err); ok {
+			return 0
+		}
 		return 1
 	}
 	defer lock.Close()

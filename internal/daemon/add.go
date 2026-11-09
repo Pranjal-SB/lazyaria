@@ -20,13 +20,14 @@ import (
 )
 
 type AddParams struct {
-	URIs        []string
-	Torrent     []byte
-	Dir, Out    string
-	Options     map[string]string
-	StartPaused bool
-	Force       bool  // skip the duplicate check
-	Total       int64 // size when the caller already knows it; 0 = unknown
+	URIs        []string          `json:"uris,omitempty"`
+	Torrent     []byte            `json:"torrent_b64,omitempty"`
+	Dir         string            `json:"dir,omitempty"`
+	Out         string            `json:"out,omitempty"`
+	Options     map[string]string `json:"options,omitempty"`
+	StartPaused bool              `json:"start_paused,omitempty"`
+	Force       bool              `json:"force,omitempty"` // skip the duplicate check
+	Total       int64             `json:"total,omitempty"` // size when the caller already knows it; 0 = unknown
 }
 
 // Add stores the job, with its gid, first and only then hands it to the
