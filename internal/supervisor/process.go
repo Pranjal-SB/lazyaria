@@ -97,7 +97,8 @@ func (sv *Supervisor) launch() (*proc, *aria2.Client, error) {
 }
 
 func (sv *Supervisor) spawn(port int, secret string) (*proc, error) {
-	if err := WriteConf(sv.p.AriaConf, sv.s, sv.p, port, secret); err != nil {
+	s := sv.settings()
+	if err := WriteConf(sv.p.AriaConf, s, sv.p, port, secret); err != nil {
 		return nil, err
 	}
 	logf, err := os.OpenFile(sv.logPath(), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
@@ -110,7 +111,7 @@ func (sv *Supervisor) spawn(port int, secret string) (*proc, error) {
 		return nil, fmt.Errorf("open aria2 log: %w", err)
 	}
 	// The secret lives only in the conf file; argv is world-readable in /proc.
-	cmd := exec.Command(sv.s.Engine.Aria2cPath,
+	cmd := exec.Command(s.Engine.Aria2cPath,
 		"--conf-path="+sv.p.AriaConf, "--stop-with-process="+strconv.Itoa(os.Getpid()))
 	cmd.Stdout, cmd.Stderr = logf, logf
 	cmd.SysProcAttr = sysProcAttr()
@@ -126,7 +127,7 @@ func (sv *Supervisor) spawn(port int, secret string) (*proc, error) {
 	}
 	sv.mu.Unlock()
 	if err != nil {
-		return nil, fmt.Errorf("start aria2c %q: %w (set engine.aria2c_path or run `lazyaria doctor`)", sv.s.Engine.Aria2cPath, err)
+		return nil, fmt.Errorf("start aria2c %q: %w (set engine.aria2c_path or run `lazyaria doctor`)", s.Engine.Aria2cPath, err)
 	}
 	pr.started = time.Now()
 	go func() {
@@ -219,23 +220,19 @@ func logPortState(log []byte, port int) portState {
 	return portPending
 }
 
-// stop asks aria2 to save and quit, escalating if it does not.
+// stop asks aria2 to save and quit, escalating if it does not. SIGTERM
+// makes aria2 halt gracefully, like aria2.shutdown, but without the fixed
+// 3 s delay that RPC call waits before halting; a second one forces it.
 func (sv *Supervisor) stop(pr *proc, c *aria2.Client) {
-	call := func(method string) {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		c.Call(ctx, method, nil, nil)
-	}
-	call("aria2.shutdown")
+	pr.cmd.Process.Signal(syscall.SIGTERM)
 	if pr.waitFor(3 * time.Second) {
 		return
 	}
-	call("aria2.forceShutdown")
-	if pr.waitFor(5 * time.Second) {
-		return
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	c.Call(ctx, "aria2.forceShutdown", nil, nil)
+	cancel()
 	pr.cmd.Process.Signal(syscall.SIGTERM)
-	if pr.waitFor(2 * time.Second) {
+	if pr.waitFor(5 * time.Second) {
 		return
 	}
 	pr.cmd.Process.Kill()

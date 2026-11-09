@@ -206,3 +206,16 @@ func TestHelperSupervisor(t *testing.T) {
 	fmt.Println(sv.pid())
 	os.Exit(0)
 }
+
+// aria2.shutdown waits a fixed 3 s before halting; the daemon's idle exit
+// must not (spec Q2: gone within 5 s of going idle with a 2 s timer).
+func TestShutdownIsQuick(t *testing.T) {
+	sv, _ := startSupervisor(t)
+	start := time.Now()
+	if err := sv.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Since(start); d > 2500*time.Millisecond {
+		t.Fatalf("Shutdown took %s, want under 2.5s", d)
+	}
+}
