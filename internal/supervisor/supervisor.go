@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Pranjal-SB/lazyaria/internal/aria2"
@@ -56,6 +57,8 @@ type Supervisor struct {
 	ctx     context.Context
 	cancel  context.CancelFunc
 	done    chan struct{}
+
+	frozen atomic.Bool // Freeze: stop supervising but leave aria2c running
 
 	mu      sync.Mutex
 	cur     *proc
@@ -131,25 +134,9 @@ func (sv *Supervisor) Start(ctx context.Context) (*aria2.Client, error) {
 	}
 }
 
-// Restart leaves the failed state and launches aria2c again with a fresh
-// restart policy. The new client arrives on Clients.
-func (sv *Supervisor) Restart() error {
-	sv.mu.Lock()
-	defer sv.mu.Unlock()
-	if sv.ctx.Err() != nil {
-		return errors.New("supervisor is shut down; start a new one")
-	}
-	if !sv.failed {
-		return errors.New("aria2c is not in the failed state; nothing to restart")
-	}
-	sv.failed = false
-	sv.restart <- struct{}{} // buffered, and failed guards against a second send
-	return nil
-}
-
-// Shutdown stops aria2c: aria2.shutdown, then aria2.forceShutdown after 3 s,
-// then SIGTERM after 5 s more. If ctx ends first aria2c is killed. The child
-// is always reaped before this returns.
+// Shutdown stops aria2c: SIGTERM, then aria2.forceShutdown and a second
+// SIGTERM after 3 s, then SIGKILL after 5 s more. If ctx ends first aria2c
+// is killed. The child is always reaped before this returns.
 func (sv *Supervisor) Shutdown(ctx context.Context) error {
 	sv.cancel()
 	sv.mu.Lock()
@@ -160,6 +147,14 @@ func (sv *Supervisor) Shutdown(ctx context.Context) error {
 	}
 	select {
 	case <-sv.done:
+		if sv.frozen.Load() { // nobody took the frozen aria2c over
+			sv.mu.Lock()
+			pr := sv.cur
+			sv.mu.Unlock()
+			if pr != nil {
+				sv.stop(pr, nil)
+			}
+		}
 		return nil
 	case <-ctx.Done():
 		sv.mu.Lock()
@@ -243,7 +238,9 @@ func (sv *Supervisor) supervise(first *chan<- startResult) ([]string, error) {
 			select {
 			case <-pr.exited:
 			case <-sv.ctx.Done():
-				sv.stop(pr, c)
+				if !sv.frozen.Load() {
+					sv.stop(pr, c)
+				}
 			}
 			c.Close()
 		}

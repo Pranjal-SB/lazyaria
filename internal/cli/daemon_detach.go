@@ -31,6 +31,7 @@ func detachDaemon(mode string, errOut io.Writer) int {
 		args = append(args, "--mode", mode)
 	}
 	cmd := exec.Command(exe, args...)
+	cmd.Dir = "/" // do not keep the caller's directory busy
 	// nil stdio is /dev/null; the pipe becomes fd 3.
 	cmd.ExtraFiles = []*os.File{w}
 	// It is not a systemd service even when we are, so it logs to its file.

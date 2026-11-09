@@ -3,6 +3,7 @@ package logging
 import (
 	"bytes"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -47,9 +48,32 @@ func TestRedactOff(t *testing.T) {
 	var buf bytes.Buffer
 	var on atomic.Bool
 	log := newLogger(&buf, Options{Redact: &on})
-	log.Info("x", "uri", "https://h/x?sig=abc")
-	if !strings.Contains(buf.String(), "sig=abc") {
-		t.Errorf("redaction should be off: %s", buf.String())
+	log.Info("call token:abc", "uri", "https://u:p@h/x?sig=abc", "http-passwd", "hunter2")
+	out := buf.String()
+	if !strings.Contains(out, "sig=abc") || !strings.Contains(out, "u:p@") {
+		t.Errorf("URL stripping should be off: %s", out)
+	}
+	if strings.Contains(out, "token:abc") || strings.Contains(out, "hunter2") {
+		t.Errorf("secrets must be masked even with redact_logs off: %s", out)
+	}
+}
+
+func TestRedactNested(t *testing.T) {
+	var buf bytes.Buffer
+	log := newLogger(&buf, Options{})
+	log.Info("x",
+		slog.Group("job", "uri", "https://u:p@h/x?q=1", "header", "Cookie: a=1"),
+		"opts", map[string]string{"header": "Bearer zz", "dir": "/d"},
+		"uris", []string{"https://h/a?sig=1"},
+		"req", struct{ URI string }{"https://h/b?sig=2"})
+	out := buf.String()
+	for _, leak := range []string{"u:p@", "q=1", "a=1", "Bearer", "sig=1", "sig=2"} {
+		if strings.Contains(out, leak) {
+			t.Errorf("log line leaks %q: %s", leak, out)
+		}
+	}
+	if !strings.Contains(out, `"dir":"/d"`) {
+		t.Errorf("harmless map entries should stay: %s", out)
 	}
 }
 

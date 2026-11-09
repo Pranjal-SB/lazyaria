@@ -33,6 +33,9 @@ commands:
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	// After the first signal the default action is back, so a second one
+	// ends a slow shutdown at once.
+	context.AfterFunc(ctx, stop)
 	code := run(ctx, os.Args, os.Stdout, os.Stderr)
 	stop()
 	os.Exit(code)

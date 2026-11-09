@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"runtime"
 	"slices"
 	"strings"
 	"syscall"
@@ -40,43 +39,45 @@ func takeHandoff() (*handoff, error) {
 
 // upgradeState is everything the exec needs once serving has stopped.
 type upgradeState struct {
-	listen *os.File // must stay open until the exec
-	env    []string
+	listenFD, lockFD int
+	env              []string
 }
 
-// prepareUpgrade readies the socket and lock for the exec. It must run
-// before Serve stops, which closes the listener. A nil result means the
-// exec cannot happen and the daemon just shuts down.
+// prepareUpgrade readies the socket and lock for the exec and freezes
+// aria2c's supervision, so no respawn can start a second, untracked
+// aria2c. It must run before Serve stops, which closes the listener. A nil
+// result means the exec cannot happen and the daemon just shuts down.
 func (d *daemonProc) prepareUpgrade() *upgradeState {
 	// The daemon.upgrade reply goes out after the handler returns; give it
 	// time to reach the client before the connection is cut.
 	time.Sleep(200 * time.Millisecond)
-	listen, lockFD, err := ipc.Handoff(d.l, d.lock)
+	listenFD, lockFD, err := ipc.Handoff(d.l, d.lock)
 	if err != nil {
 		d.log.Error("cannot upgrade in place; shutting down instead", "err", err)
 		return nil
 	}
-	h := handoff{ListenFD: int(listen.Fd()), LockFD: lockFD}
+	h := handoff{ListenFD: listenFD, LockFD: lockFD}
 	if d.sv != nil {
-		if ep, ok := d.sv.Endpoint(); ok {
+		if ep, ok := d.sv.Freeze(); ok {
 			h.Aria2 = &ep
 		}
 	}
 	b, _ := json.Marshal(h)
 	env := slices.DeleteFunc(os.Environ(), func(kv string) bool { return strings.HasPrefix(kv, handoffEnv+"=") })
 	d.log.Info("upgrading in place", "pid", os.Getpid())
-	return &upgradeState{listen: listen, env: append(env, handoffEnv+"="+string(b))}
+	return &upgradeState{listenFD: listenFD, lockFD: lockFD, env: append(env, handoffEnv+"="+string(b))}
 }
 
 // exec replaces this process with the current binary. The pid stays, so
 // aria2c's --stop-with-process still points at us. It returns only on failure.
 func (u *upgradeState) exec() error {
-	defer u.listen.Close()
+	defer syscall.Close(u.listenFD)
 	exe, err := os.Executable()
-	if err != nil {
-		return err
+	if err == nil {
+		err = ipc.KeepOnExec(u.listenFD, u.lockFD)
 	}
-	err = syscall.Exec(exe, os.Args, u.env)
-	runtime.KeepAlive(u.listen)
+	if err == nil {
+		err = syscall.Exec(exe, os.Args, u.env)
+	}
 	return fmt.Errorf("exec %s: %w", exe, err)
 }

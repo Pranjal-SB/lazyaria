@@ -203,12 +203,8 @@ func (m *Manager) banner(kind string, data map[string]any) {
 
 // ActiveCount is how many jobs still have work to do: queued, downloading,
 // waiting to retry or seeding.
-func (m *Manager) ActiveCount() int {
-	js, err := m.st.ListJobs(context.Background(), store.Filter{States: workStates})
-	if err != nil {
-		m.log.Warn("count active jobs", "err", err)
-	}
-	return len(js)
+func (m *Manager) ActiveCount() (int, error) {
+	return m.st.CountJobs(context.Background(), workStates...)
 }
 
 // SetObservers tells the manager how many clients want progress pushes.

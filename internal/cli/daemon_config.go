@@ -40,7 +40,9 @@ func (d *daemonProc) reload(ctx context.Context) error {
 	d.entries.Store(&ents)
 	d.m.SetSettings(cur)
 	if d.sv != nil {
-		d.sv.SetSettings(cur) // an aria2c respawned after a crash gets them too
+		// Onto the supervisor's own settings: engine.restart may have given
+		// it restart-only keys newer than the daemon's.
+		d.sv.SetSettings(config.WithLive(d.sv.Settings(), next))
 	}
 	d.level.Set(logLevel(cur.Log.Level))
 	d.redact.Store(cur.Privacy.RedactLogs)
@@ -104,6 +106,5 @@ func (d *daemonProc) restartEngine() error {
 	if err != nil {
 		return err
 	}
-	d.sv.SetSettings(next)
-	return d.sv.Restart()
+	return d.sv.RestartWith(next)
 }

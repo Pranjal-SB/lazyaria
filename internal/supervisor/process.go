@@ -228,9 +228,11 @@ func (sv *Supervisor) stop(pr *proc, c *aria2.Client) {
 	if pr.waitFor(3 * time.Second) {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	c.Call(ctx, "aria2.forceShutdown", nil, nil)
-	cancel()
+	if c != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		c.Call(ctx, "aria2.forceShutdown", nil, nil)
+		cancel()
+	}
 	pr.cmd.Process.Signal(syscall.SIGTERM)
 	if pr.waitFor(5 * time.Second) {
 		return

@@ -28,8 +28,14 @@ func (d *daemonProc) loop(ctx context.Context) (upgrade bool) {
 		if after := idleExit(s); after != idleFor {
 			idle, idleFor = daemon.NewIdle(after, nil), after
 		}
-		n := d.m.ActiveCount()
-		inh.update(s, n)
+		n, err := d.m.ActiveCount()
+		if err != nil {
+			// Unknown is not idle, and the inhibitor keeps its last state.
+			d.log.Warn("count active jobs", "err", err)
+			n = 1
+		} else {
+			inh.update(s, n)
+		}
 		if at := idle.Update(n, int(d.clients.Load()), s.Daemon.Mode == "always"); at != nil && !time.Now().Before(*at) {
 			d.log.Info("idle, shutting down", "idle_exit", idleFor)
 			return false

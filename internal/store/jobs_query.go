@@ -86,3 +86,14 @@ func (s *Store) PurgeDone(ctx context.Context, before time.Time) (int, error) {
 	n, err := r.RowsAffected()
 	return int(n), err
 }
+
+// CountJobs counts the jobs in any of states.
+func (s *Store) CountJobs(ctx context.Context, states ...State) (int, error) {
+	a := make([]any, len(states))
+	for i, st := range states {
+		a[i] = string(st)
+	}
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM jobs WHERE state IN (`+strings.TrimSuffix(strings.Repeat("?,", len(states)), ",")+`)`, a...).Scan(&n)
+	return n, err
+}

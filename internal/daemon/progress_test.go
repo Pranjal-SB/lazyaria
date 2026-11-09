@@ -93,8 +93,8 @@ func TestPollPublishesProgress(t *testing.T) {
 	if len(jobs) != 1 || jobs[0].DoneBytes == nil || *jobs[0].DoneBytes != 10 || len(speeds) != 1 {
 		t.Fatalf("snapshot jobs %+v speeds %v", jobs, speeds)
 	}
-	if r.m.ActiveCount() != 1 {
-		t.Fatalf("active count %d", r.m.ActiveCount())
+	if n, err := r.m.ActiveCount(); n != 1 || err != nil {
+		t.Fatalf("active count %d, %v", n, err)
 	}
 }
 

@@ -53,7 +53,7 @@ type LimitsSettings struct {
 type NetworkSettings struct {
 	AllProxy         string `toml:"all_proxy" default:"" live:"true" help:"HTTP(S) proxy URL; empty falls back to environment variables."`
 	NoProxy          string `toml:"no_proxy" default:"" live:"true" help:"Comma separated hosts that bypass the proxy."`
-	CheckCertificate bool   `toml:"check_certificate" default:"true" live:"true" help:"Verify TLS certificates; a warning is shown when off."`
+	CheckCertificate bool   `toml:"check_certificate" default:"true" live:"false" help:"Verify TLS certificates; a warning is shown when off."`
 	CACertificate    string `toml:"ca_certificate" default:"" live:"false" help:"Path to a custom CA bundle."`
 	Interface        string `toml:"interface" default:"" live:"false" help:"Bind to this network interface or IP."`
 	DisableIPv6      bool   `toml:"disable_ipv6" default:"false" live:"false" help:"Disable IPv6."`

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -233,5 +234,84 @@ func TestUpgradeKeepsPidAndAria2(t *testing.T) {
 	}
 	if strings.Contains(string(environ), "LAZYARIA_UPGRADE") {
 		t.Error("the respawned aria2c sees the upgrade handoff variable")
+	}
+}
+
+// A path fixed for engine.restart must survive later live reloads, or the
+// next crash respawn goes back to the broken one.
+func TestEngineRestartKeepsFixedPath(t *testing.T) {
+	good := testutil.RequireAria2(t)
+	e := newEnv(t, "")
+	if err := os.MkdirAll(filepath.Dir(e.p.DB), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(e.p.DB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.SetSetting(bg, "engine.aria2c_path", "/nonexistent")
+	st.Close()
+
+	e.start()
+	pid := e.pid()
+	c := e.dial()
+	engineIs := func(want string) func() bool {
+		return func() bool { s, err := c.Status(bg); return err == nil && s.EngineState == want }
+	}
+	waitFor(t, 5*time.Second, "engine failed", engineIs("failed"))
+	if err := c.ConfigSet(bg, "engine.aria2c_path", good); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.RestartEngine(bg); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 5*time.Second, "engine ready", engineIs("ready"))
+	if err := c.ConfigSet(bg, "limits.global_down", "1M"); err != nil {
+		t.Fatal(err)
+	}
+	syscall.Kill(pid, syscall.SIGHUP)
+	time.Sleep(200 * time.Millisecond)
+
+	old := aria2Child(t, pid)
+	syscall.Kill(old, syscall.SIGKILL)
+	var respawned int
+	waitFor(t, 10*time.Second, "a respawned aria2c", func() bool {
+		respawned = aria2Child(t, pid)
+		return respawned != 0 && respawned != old && alive(respawned)
+	})
+	b, _ := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", respawned))
+	if argv0, _, _ := strings.Cut(string(b), "\x00"); argv0 != good {
+		t.Errorf("respawned aria2c runs %q, want %q", argv0, good)
+	}
+	waitFor(t, 5*time.Second, "engine ready after respawn", engineIs("ready"))
+}
+
+// A second SIGTERM while shutting down exits at once; aria2c then follows
+// through --stop-with-process.
+func TestSecondSignalForcesExit(t *testing.T) {
+	testutil.RequireAria2(t)
+	e := newEnv(t, "")
+	cmd := e.cmd("daemon")
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	c := e.dial()
+	if _, err := c.Status(bg); err != nil {
+		t.Fatal(err)
+	}
+	ariaPID := aria2Child(t, cmd.Process.Pid)
+	cmd.Process.Signal(syscall.SIGTERM)
+	time.Sleep(100 * time.Millisecond)
+	start := time.Now()
+	cmd.Process.Signal(syscall.SIGTERM)
+	err := cmd.Wait()
+	if d := time.Since(start); d > 500*time.Millisecond {
+		t.Errorf("second SIGTERM took %s to end the daemon", d)
+	}
+	if ee, ok := errors.AsType[*exec.ExitError](err); !ok || ee.ExitCode() == 0 {
+		t.Errorf("forced exit = %v, want a non-zero exit", err)
+	}
+	if !waitGone(ariaPID, 3*time.Second) {
+		t.Errorf("aria2c %d outlived a forced daemon exit", ariaPID)
 	}
 }

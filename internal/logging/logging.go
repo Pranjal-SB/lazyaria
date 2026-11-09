@@ -20,7 +20,8 @@ type Options struct {
 	MaxSize int64 // bytes before rotating; default 5 MiB
 	Keep    int   // rotated files kept; default 3
 	Level   slog.Leveler
-	// Redact turns secret stripping on and off at runtime; nil means always on.
+	// Redact turns URL credential and query stripping on and off at runtime
+	// (nil means on). Secrets such as tokens and passwords are always masked.
 	Redact *atomic.Bool
 }
 
@@ -48,37 +49,56 @@ func New(o Options) (*slog.Logger, io.Closer) {
 }
 
 func newLogger(w io.Writer, o Options) *slog.Logger {
-	on := o.Redact
-	if on == nil {
-		on = new(atomic.Bool)
-		on.Store(true)
+	urls := o.Redact
+	if urls == nil {
+		urls = new(atomic.Bool)
+		urls.Store(true)
 	}
 	return slog.New(slog.NewJSONHandler(w, &slog.HandlerOptions{
 		Level: o.Level,
-		ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
-			if on.Load() {
-				return redactAttr(a)
-			}
-			return a
-		},
+		// slog walks groups itself and calls this for every member.
+		ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr { return redactAttr(a, urls.Load()) },
 	}))
 }
 
 var secretKey = regexp.MustCompile(`(?i)passw|secret|token|header|cookie|authorization`)
 
-func redactAttr(a slog.Attr) slog.Attr {
+// redactAttr always masks secrets; urls also strips URL credentials and
+// queries (privacy.redact_logs).
+func redactAttr(a slog.Attr, urls bool) slog.Attr {
 	if secretKey.MatchString(a.Key) {
 		return slog.String(a.Key, "***")
 	}
+	str := func(s string) string { return redact(s, urls) }
 	switch v := a.Value; v.Kind() {
 	case slog.KindString:
-		return slog.String(a.Key, Redact(v.String()))
+		return slog.String(a.Key, str(v.String()))
 	case slog.KindAny:
 		switch x := v.Any().(type) {
 		case error:
-			return slog.String(a.Key, Redact(x.Error()))
+			return slog.String(a.Key, str(x.Error()))
 		case fmt.Stringer:
-			return slog.String(a.Key, Redact(x.String()))
+			return slog.String(a.Key, str(x.String()))
+		case map[string]string:
+			m := make(map[string]string, len(x))
+			for k, val := range x {
+				if secretKey.MatchString(k) {
+					val = "***"
+				}
+				m[k] = str(val)
+			}
+			return slog.Any(a.Key, m)
+		case []string:
+			l := make([]string, len(x))
+			for i, val := range x {
+				l[i] = str(val)
+			}
+			return slog.Any(a.Key, l)
+		default:
+			// Anything else is logged as text if that text needed redacting.
+			if s := fmt.Sprintf("%+v", x); str(s) != s {
+				return slog.String(a.Key, str(s))
+			}
 		}
 	}
 	return a
@@ -91,8 +111,13 @@ var (
 
 // Redact strips credentials and query strings from URLs and masks aria2
 // "token:" secrets in s.
-func Redact(s string) string {
+func Redact(s string) string { return redact(s, true) }
+
+func redact(s string, urls bool) string {
 	s = tokenRe.ReplaceAllStringFunc(s, func(m string) string { return m[:len("token:")] + "***" })
+	if !urls {
+		return s
+	}
 	return urlRe.ReplaceAllStringFunc(s, func(u string) string {
 		scheme, rest, _ := strings.Cut(u, "://")
 		host, tail := rest, ""

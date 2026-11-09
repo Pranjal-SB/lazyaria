@@ -219,3 +219,28 @@ func TestShutdownIsQuick(t *testing.T) {
 		t.Fatalf("Shutdown took %s, want under 2.5s", d)
 	}
 }
+
+// Freeze hands over a live aria2c: supervision stops, the child keeps
+// running and answering, and a later Shutdown still stops it.
+func TestFreezeKeepsAria2(t *testing.T) {
+	sv, _ := startSupervisor(t)
+	pid := sv.pid()
+	ep, ok := sv.Freeze()
+	if !ok || ep.PID != pid || ep.Port == 0 || ep.Secret == "" {
+		t.Fatalf("Freeze = %+v, %v; want the running aria2c %d", ep, ok, pid)
+	}
+	time.Sleep(500 * time.Millisecond)
+	if !alive(pid) {
+		t.Fatal("Freeze stopped aria2c")
+	}
+	c, err := aria2.Dial(context.Background(), fmt.Sprintf("ws://127.0.0.1:%d/jsonrpc", ep.Port), ep.Secret, aria2.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	getVersion(t, c)
+	c.Close()
+	if err := sv.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	waitGone(t, pid, 3*time.Second)
+}

@@ -78,17 +78,21 @@ func (d *daemonProc) run(ctx context.Context, ready func()) (int, error) {
 	}
 	closeLog := d.openLog(pre)
 	defer closeLog()
-	if pre.Engine.AttachURL == "" {
-		// Fail before the socket exists, so the client that started us
-		// reports how to install aria2 instead of hanging (spec G13).
-		if d.ariaVer, err = aria2.CheckVersion(pre.Engine.Aria2cPath); err != nil && d.handoff == nil {
-			return 1, err
-		}
-	}
-
+	supervised := pre.Engine.AttachURL == ""
 	if d.handoff != nil {
 		d.l, d.lock, err = ipc.Adopt(d.handoff.ListenFD, d.handoff.LockFD)
+		if err == nil && supervised {
+			// Only now: the inherited fds are close-on-exec again.
+			d.ariaVer, _ = aria2.CheckVersion(pre.Engine.Aria2cPath)
+		}
 	} else {
+		if supervised {
+			// Fail before the socket exists, so the client that started us
+			// reports how to install aria2 instead of hanging (spec G13).
+			if d.ariaVer, err = aria2.CheckVersion(pre.Engine.Aria2cPath); err != nil {
+				return 1, err
+			}
+		}
 		d.l, d.lock, err = ipc.Listen(d.paths)
 	}
 	if err != nil {
@@ -148,7 +152,7 @@ func (d *daemonProc) run(ctx context.Context, ready func()) (int, error) {
 		d.st = nil
 	}
 	d.shutdown()
-	if next != nil {
+	if upgrade { // the upgrade did not happen
 		return 1, nil
 	}
 	return 0, nil

@@ -1,6 +1,7 @@
 package ipc
 
 import (
+	"cmp"
 	"fmt"
 	"net"
 	"os"
@@ -8,27 +9,44 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// Handoff prepares l and lock to survive an exec of the daemon binary: the
-// returned listener file and lock fd are inheritable, and closing l no
-// longer removes the socket file. The caller keeps listen open until the
-// exec and passes both fds to the new image, which calls Adopt.
-func Handoff(l net.Listener, lock *Lock) (listen *os.File, lockFD int, err error) {
+// Handoff readies l and lock for an exec of the daemon binary. It returns
+// a close-on-exec duplicate of the listening socket (the caller owns it)
+// and the lock's fd; KeepOnExec makes both inheritable just before the
+// exec. Closing l no longer removes the socket file.
+func Handoff(l net.Listener, lock *Lock) (listenFD, lockFD int, err error) {
 	ul, ok := l.(*net.UnixListener)
 	if !ok {
-		return nil, 0, fmt.Errorf("cannot hand over a %T", l)
+		return 0, 0, fmt.Errorf("cannot hand over a %T", l)
 	}
-	listen, err = ul.File() // a dup; the listener itself is closed by Serve
+	// Control rather than File: File's Fd would switch the socket, which
+	// Serve still uses, to blocking mode.
+	var derr error
+	rc, err := ul.SyscallConn()
+	if err == nil {
+		err = rc.Control(func(fd uintptr) { listenFD, derr = unix.FcntlInt(fd, unix.F_DUPFD_CLOEXEC, 0) })
+	}
+	if err = cmp.Or(err, derr); err != nil {
+		return 0, 0, fmt.Errorf("duplicate the socket: %w", err)
+	}
+	if rc, err = lock.f.SyscallConn(); err == nil {
+		err = rc.Control(func(fd uintptr) { lockFD = int(fd) })
+	}
 	if err != nil {
-		return nil, 0, err
+		unix.Close(listenFD)
+		return 0, 0, err
 	}
 	ul.SetUnlinkOnClose(false)
-	for _, fd := range []uintptr{listen.Fd(), lock.f.Fd()} {
-		if _, err := unix.FcntlInt(fd, unix.F_SETFD, 0); err != nil {
-			listen.Close()
-			return nil, 0, fmt.Errorf("keep fd %d across exec: %w", fd, err)
+	return listenFD, lockFD, nil
+}
+
+// KeepOnExec clears close-on-exec on fds so an exec'd image inherits them.
+func KeepOnExec(fds ...int) error {
+	for _, fd := range fds {
+		if _, err := unix.FcntlInt(uintptr(fd), unix.F_SETFD, 0); err != nil {
+			return fmt.Errorf("keep fd %d across exec: %w", fd, err)
 		}
 	}
-	return listen, int(lock.f.Fd()), nil
+	return nil
 }
 
 // Adopt takes over the listener and lock that a previous image of this

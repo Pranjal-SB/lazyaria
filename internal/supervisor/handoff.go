@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/Pranjal-SB/lazyaria/internal/aria2"
-	"github.com/Pranjal-SB/lazyaria/internal/config"
 )
 
 // Endpoint is a running aria2c: enough for a re-exec'd daemon to take it over.
@@ -15,20 +14,6 @@ type Endpoint struct {
 	PID    int    `json:"pid"`
 	Port   int    `json:"port"`
 	Secret string `json:"secret"`
-}
-
-// SetSettings replaces the settings used by the next launch, so a Restart
-// after fixing, say, engine.aria2c_path uses the new value.
-func (sv *Supervisor) SetSettings(s *config.Settings) {
-	sv.mu.Lock()
-	sv.s = s
-	sv.mu.Unlock()
-}
-
-func (sv *Supervisor) settings() *config.Settings {
-	sv.mu.Lock()
-	defer sv.mu.Unlock()
-	return sv.s
 }
 
 // Endpoint returns the aria2c that is running now, if any.
@@ -44,6 +29,21 @@ func (sv *Supervisor) Endpoint() (Endpoint, bool) {
 	default:
 	}
 	return Endpoint{PID: sv.cur.cmd.Process.Pid, Port: sv.cur.port, Secret: sv.cur.secret}, true
+}
+
+// Freeze ends supervision without stopping aria2c, so it can be handed to
+// a re-exec'd daemon, and returns it if one is running. Nothing respawns
+// after this; Shutdown still stops a frozen aria2c.
+func (sv *Supervisor) Freeze() (Endpoint, bool) {
+	sv.frozen.Store(true)
+	sv.cancel()
+	sv.mu.Lock()
+	started := sv.started
+	sv.mu.Unlock()
+	if started {
+		<-sv.done
+	}
+	return sv.Endpoint()
 }
 
 // Adopt makes Start take over ep, an aria2c this process started before
