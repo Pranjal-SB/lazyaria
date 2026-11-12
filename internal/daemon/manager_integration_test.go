@@ -181,7 +181,9 @@ func TestFreshAddNeverOverwritesLateFile(t *testing.T) {
 	old := []byte("the user's own file\n")
 	orig := filepath.Join(root, "dl", "late.bin")
 	var once sync.Once
+	spy := &addSpy{}
 	late := func(m *Manager) {
+		spy.Engine, m.e = m.e, spy
 		dev := m.dev
 		m.dev = func(dir string) (uint64, error) { // runs after the check, before the engine add
 			once.Do(func() {
@@ -198,8 +200,10 @@ func TestFreshAddNeverOverwritesLateFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if j.Out != nil {
-		t.Fatalf("out %q set by the daemon; this case is aria2's rename", *j.Out)
+	// The returned row may already carry aria2's new name; what matters is
+	// that the daemon itself did not pick one.
+	if out := spy.first().Out; out != "" {
+		t.Fatalf("out %q sent by the daemon; this case is aria2's rename", out)
 	}
 	got := waitJob(t, st, j.ID, 30*time.Second, func(j *store.Job) bool { return j.State == store.Done || j.State == store.Error })
 	if got.State != store.Done {
@@ -214,6 +218,26 @@ func TestFreshAddNeverOverwritesLateFile(t *testing.T) {
 	if testutil.SHA256File(t, filepath.Join(got.Dir, got.Name)) != testutil.SHA256File(t, writeFile(t, data)) {
 		t.Fatal("sha mismatch")
 	}
+}
+
+// addSpy records the engine add requests.
+type addSpy struct {
+	engine.Engine
+	mu   sync.Mutex
+	reqs []engine.AddRequest
+}
+
+func (s *addSpy) Add(ctx context.Context, req engine.AddRequest) (engine.EngineRef, error) {
+	s.mu.Lock()
+	s.reqs = append(s.reqs, req)
+	s.mu.Unlock()
+	return s.Engine.Add(ctx, req)
+}
+
+func (s *addSpy) first() engine.AddRequest {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.reqs[0]
 }
 
 // A server-named job whose first attempt failed before any response never
