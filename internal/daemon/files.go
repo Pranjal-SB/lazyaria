@@ -23,12 +23,14 @@ type FileRemover interface {
 	RestoreFiles(ctx context.Context, es []trash.Entry) error
 }
 
-// NeedsConfirmError means the files cannot go to a trash. Nothing was
-// deleted and the job is as it was; deleting for real needs the user's say-so.
+// NeedsConfirmError means the files cannot go to a trash. lazyaria never
+// deletes for real, so nothing was deleted and the job was kept; one that
+// was running comes back paused. The user removes the job without its
+// files and deals with them by hand.
 type NeedsConfirmError struct{ Path string }
 
 func (e *NeedsConfirmError) Error() string {
-	return fmt.Sprintf("no trash is available for %s; the files are untouched and the job is as it was. Remove the job without deleting files, then move or delete them yourself", e.Path)
+	return fmt.Sprintf("no trash is available for %s; the files are untouched and the job was kept (paused, if it was running). Remove the job without --delete-files, then move or delete the files yourself", e.Path)
 }
 
 // TrashFiles is the default FileRemover: it moves the payload and its
