@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"syscall"
 )
 
 // maxSocketPath is sun_path on macOS/BSD: 104 bytes including the NUL, so 103 usable.
@@ -141,8 +140,8 @@ func checkTmpDir(dir string) error {
 }
 
 func verifyDir(dir string, fi os.FileInfo) error {
-	st, ok := fi.Sys().(*syscall.Stat_t)
-	if !fi.IsDir() || !ok || int(st.Uid) != os.Getuid() || fi.Mode().Perm() != 0o700 {
+	uid, ok := ownerUID(fi)
+	if !fi.IsDir() || !ok || uid != os.Getuid() || !modeOK(fi) {
 		return fmt.Errorf("%s has unsafe permissions (must be a directory owned by you with mode 0700, not a symlink); remove or fix it, or run `lazyaria doctor`", dir)
 	}
 	return nil
@@ -171,14 +170,14 @@ func EnsureDirs(p Paths) error {
 		if err != nil {
 			return err
 		}
-		st, ok := fi.Sys().(*syscall.Stat_t)
+		owner, ok := ownerUID(fi)
 		if !fi.IsDir() || !ok {
 			return fmt.Errorf("%s is not a directory; remove it or run `lazyaria doctor`", d)
 		}
-		if int(st.Uid) != uid {
-			return fmt.Errorf("%s is owned by uid %d, not you (uid %d); chown it to yourself or remove it, or run `lazyaria doctor`", d, st.Uid, uid)
+		if owner != uid {
+			return fmt.Errorf("%s is owned by uid %d, not you (uid %d); chown it to yourself or remove it, or run `lazyaria doctor`", d, owner, uid)
 		}
-		if fi.Mode().Perm() != 0o700 {
+		if !modeOK(fi) {
 			if err := os.Chmod(d, 0o700); err != nil {
 				return fmt.Errorf("chmod %s: %w", d, err)
 			}

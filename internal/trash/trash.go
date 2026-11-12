@@ -37,14 +37,6 @@ func homeTrash() string {
 	return filepath.Join(home, ".local", "share", "Trash")
 }
 
-func device(fi os.FileInfo) (uint64, bool) {
-	st, ok := fi.Sys().(*syscall.Stat_t)
-	if !ok {
-		return 0, false
-	}
-	return uint64(st.Dev), true //nolint:unconvert // Dev width differs per OS
-}
-
 // mountTop resolves symlinks in dir, then walks up while the device id stays the same.
 func mountTop(dir string, dev uint64) string {
 	if r, err := filepath.EvalSymlinks(dir); err == nil {
