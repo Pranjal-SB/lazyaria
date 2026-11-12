@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"regexp"
 	"strings"
 )
 
@@ -38,10 +39,26 @@ func NormalizeURL(raw string) (string, error) {
 	return u.String(), nil
 }
 
+// userinfoRe matches the scheme and userinfo of a URL url.Parse rejects.
+var userinfoRe = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9+.-]*://)[^/?#]*@`)
+
+// StripUserinfo replaces the userinfo of a URL that url.Parse rejects, and
+// its "@", with mask.
+func StripUserinfo(raw, mask string) string {
+	m := userinfoRe.FindStringSubmatchIndex(raw)
+	if m == nil {
+		return raw
+	}
+	return raw[:m[3]] + mask + raw[m[1]:]
+}
+
 // SplitUserinfo pulls credentials out of a URL so they never get logged or stored with it.
 func SplitUserinfo(raw string) (clean string, user, pass string) {
 	u, err := url.Parse(raw)
-	if err != nil || u.User == nil {
+	if err != nil {
+		return StripUserinfo(raw, ""), "", ""
+	}
+	if u.User == nil {
 		return raw, "", ""
 	}
 	user = u.User.Username()

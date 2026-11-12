@@ -119,3 +119,13 @@ func TestListMasksUserinfo(t *testing.T) {
 		}
 	}
 }
+
+func TestListMasksUnparseableUserinfo(t *testing.T) {
+	f := startFake(t)
+	f.jobs = sampleJobs()
+	f.jobs[0].URIs = []string{"https://alice:p%zzword@example.com/f"}
+	_, out, _ := run(t, List, "", "--json")
+	if strings.Contains(out, "p%zzword") || strings.Contains(out, "alice") || !strings.Contains(out, "https://***@example.com/f") {
+		t.Errorf("list --json leaks credentials:\n%s", out)
+	}
+}

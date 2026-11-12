@@ -367,3 +367,21 @@ func TestFreeNameFitsLimit(t *testing.T) {
 		t.Fatalf("no extension: %q", got)
 	}
 }
+
+// A link url.Parse rejects keeps its userinfo, so it must be refused
+// before a row (shown by list, snapshots and search) is written, and the
+// error must not echo it.
+func TestAddRejectsUnparseableLinkBeforeStoring(t *testing.T) {
+	r := newRig(t)
+	_, err := r.m.Add(bg, AddParams{URIs: []string{"https://alice:p%zzword@host/f"}, Dir: r.dir})
+	if err == nil || strings.Contains(err.Error(), "p%zzword") || strings.Contains(err.Error(), "alice") {
+		t.Fatalf("err = %v, want a refusal that does not echo the link", err)
+	}
+	js, err := r.st.ListJobs(bg, store.Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(js) != 0 {
+		t.Fatalf("a row was stored: %+v", js[0].URIs)
+	}
+}

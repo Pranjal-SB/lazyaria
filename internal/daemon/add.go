@@ -39,6 +39,9 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 	if len(p.URIs) == 0 && len(p.Torrent) == 0 {
 		return nil, errors.New("nothing to download: give a link or a torrent file")
 	}
+	if err := engine.CheckLinks(p.URIs); err != nil {
+		return nil, err
+	}
 	for k := range p.Options {
 		if !slices.Contains(engine.AllowedOptions, k) {
 			return nil, engine.ErrInvalidOption{Name: k}

@@ -79,3 +79,14 @@ func FuzzSanitizeName(f *testing.F) {
 		}
 	})
 }
+
+// A URL that does not parse must still lose its userinfo.
+func TestSplitUserinfoUnparseable(t *testing.T) {
+	c, _, _ := SplitUserinfo("https://alice:p%zzword@host/f")
+	if strings.Contains(c, "alice") || strings.Contains(c, "p%zzword") || c != "https://host/f" {
+		t.Fatalf("clean = %q, want the userinfo gone", c)
+	}
+	if c, _, _ := SplitUserinfo("https://host/a@b%zz"); c != "https://host/a@b%zz" {
+		t.Fatalf("an @ in the path was taken for userinfo: %q", c)
+	}
+}

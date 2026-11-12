@@ -22,15 +22,8 @@ func (e *aria2Engine) Add(ctx context.Context, req AddRequest) (EngineRef, error
 	if len(req.URIs) == 0 && len(req.Torrent) == 0 {
 		return "", fmt.Errorf("nothing to download: give a link or a torrent file")
 	}
-	// An unparseable link would keep its userinfo, so it never reaches aria2.
-	// The link itself stays out of the message: it may hold credentials.
-	for i, u := range req.URIs {
-		if strings.HasPrefix(strings.ToLower(u), "magnet:") {
-			continue
-		}
-		if _, err := url.Parse(u); err != nil {
-			return "", fmt.Errorf("link %d is not a valid URL; check its %%-escapes and spaces, then add it again", i+1)
-		}
+	if err := CheckLinks(req.URIs); err != nil {
+		return "", err
 	}
 	opts := maps.Clone(req.Options)
 	if opts == nil {
@@ -183,4 +176,19 @@ func (e *aria2Engine) SetLimit(ctx context.Context, ref EngineRef, down, up int6
 		"max-download-limit": strconv.FormatInt(down, 10),
 		"max-upload-limit":   strconv.FormatInt(up, 10),
 	})
+}
+
+// CheckLinks refuses a link url.Parse rejects: it would keep its userinfo,
+// so it must reach neither aria2 nor the database. The link itself stays
+// out of the message, as it may hold credentials.
+func CheckLinks(uris []string) error {
+	for i, u := range uris {
+		if strings.HasPrefix(strings.ToLower(u), "magnet:") {
+			continue
+		}
+		if _, err := url.Parse(u); err != nil {
+			return fmt.Errorf("link %d is not a valid URL; check its %%-escapes and spaces, then add it again", i+1)
+		}
+	}
+	return nil
 }

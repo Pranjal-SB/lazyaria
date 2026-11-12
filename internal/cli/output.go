@@ -10,6 +10,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/Pranjal-SB/lazyaria/internal/store"
+	"github.com/Pranjal-SB/lazyaria/internal/textutil"
 )
 
 // writeJSON prints one indented JSON document.
@@ -97,7 +98,10 @@ func printJobs(out io.Writer, jobs []*store.Job) {
 // maskURL hides the userinfo of a URL.
 func maskURL(v string) string {
 	u, err := url.Parse(v)
-	if err != nil || u.User == nil {
+	if err != nil {
+		return textutil.StripUserinfo(v, "***@")
+	}
+	if u.User == nil {
 		return v
 	}
 	u.User = nil // url.User("***") would print as %2A%2A%2A
