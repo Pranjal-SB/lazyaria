@@ -1,12 +1,16 @@
 package daemon
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -208,6 +212,60 @@ func TestFreshAddNeverOverwritesLateFile(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(orig); string(b) != string(old) {
 		t.Fatalf("the existing file was changed (now %d bytes)", len(b))
+	}
+	if testutil.SHA256File(t, filepath.Join(got.Dir, got.Name)) != testutil.SHA256File(t, writeFile(t, data)) {
+		t.Fatal("sha mismatch")
+	}
+}
+
+// A server-named job whose first attempt failed before any response never
+// learned its path; when the retry names an existing user file, the re-add
+// must rename beside it, not resume into it.
+func TestRetryNeverResumesIntoUnownedFile(t *testing.T) {
+	testutil.RequireAria2(t)
+	data := testutil.RandBytes(256 << 10)
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Disposition", `attachment; filename="report.pdf"`)
+		if hits.Add(1) == 1 {
+			http.Error(w, "busy", http.StatusServiceUnavailable)
+			return
+		}
+		http.ServeContent(w, r, "report.pdf", time.Time{}, bytes.NewReader(data))
+	}))
+	defer srv.Close()
+	root := t.TempDir()
+	st, err := store.Open(filepath.Join(root, "l.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	old := []byte("the user's own report\n")
+	orig := filepath.Join(root, "dl", "report.pdf")
+	retry := func(s *config.Settings) {
+		s.Retry.MaxTries = 1 // aria2 gives up at once; the daemon's retry re-adds
+		s.Retry.AutoRetry = []string{"503"}
+		s.Retry.BackoffBase = "1s"
+	}
+	d := startLive(t, st, root, retry, func(*Manager) {
+		if err := os.WriteFile(orig, old, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	})
+	defer d.stop(t)
+	j, err := d.m.Add(bg, AddParams{URIs: []string{srv.URL + "/get"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := waitJob(t, st, j.ID, 30*time.Second, func(j *store.Job) bool { return j.State == store.Done })
+	if hits.Load() < 2 || !eventSeen(t, st, j.ID, "retry") {
+		t.Fatalf("no re-add happened (%d requests)", hits.Load())
+	}
+	if b, _ := os.ReadFile(orig); string(b) != string(old) {
+		t.Fatalf("the existing file was changed (now %d bytes)", len(b))
+	}
+	if got.Name != "report.1.pdf" || got.Out == nil || *got.Out != got.Name {
+		t.Fatalf("name %q out %v; want report.1.pdf tracked", got.Name, got.Out)
 	}
 	if testutil.SHA256File(t, filepath.Join(got.Dir, got.Name)) != testutil.SHA256File(t, writeFile(t, data)) {
 		t.Fatal("sha mismatch")

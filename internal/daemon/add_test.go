@@ -282,25 +282,51 @@ func TestAddOnExists(t *testing.T) {
 		if req := r.e.adds[0]; j.Out != nil || req.Out != "" || !req.NoContinue || req.AllowOverwrite {
 			t.Fatalf("out %q request %+v", deref(j.Out), req)
 		}
-		// A re-add keeps the global continue=true so it resumes.
+	})
+}
+
+// A re-add sends continue=false only while no path was ever reported for
+// the job (Out unset); a job that owns its file resumes with continue=true.
+func TestReaddNoContinueOnlyWithoutOut(t *testing.T) {
+	r := newRig(t)
+	for i, out := range []string{"", "a.bin"} {
+		j := r.add(t, AddParams{URIs: []string{"http://example.com/"}, Out: out, Force: true})
 		if _, err := r.m.readd(bg, j, false, "readded"); err != nil {
 			t.Fatal(err)
 		}
-		if r.e.adds[1].NoContinue {
-			t.Fatal("re-add sent continue=false")
+		if got, want := r.e.adds[len(r.e.adds)-1].NoContinue, out == ""; got != want {
+			t.Fatalf("case %d out %q: re-add continue=false %v, want %v", i, out, got, want)
 		}
-	})
+	}
+}
+
+// Live jobs hold their names before their files exist on disk.
+func TestAddRenameSkipsHeldNames(t *testing.T) {
+	r := newRig(t)
+	os.WriteFile(filepath.Join(r.dir, "ex.bin"), []byte("mine"), 0o600)
+	var names []string
+	for range 2 {
+		j, err := r.m.Add(bg, AddParams{URIs: []string{"http://example.com/ex.bin"}, Dir: r.dir, Force: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		names = append(names, j.Name)
+	}
+	if names[0] != "ex.1.bin" || names[1] != "ex.2.bin" {
+		t.Fatalf("names %v, want ex.1.bin then ex.2.bin", names)
+	}
 }
 
 func TestFreeNameFitsLimit(t *testing.T) {
 	dir := t.TempDir()
-	long := strings.Repeat("é", 125) + "x.bin" // 255 bytes
+	long := strings.Repeat("é", 122) + "x.bin" // 249 bytes, the cap
 	os.WriteFile(filepath.Join(dir, long), nil, 0o600)
-	got, err := freeName(filepath.Join(dir, long))
-	if err != nil || len(got) > 255 || !strings.HasSuffix(got, ".1.bin") || !utf8.ValidString(got) {
+	got, err := freeName(filepath.Join(dir, long), nil)
+	// name.aria2 must still fit in 255 bytes.
+	if err != nil || len(got) > 249 || len(got+".aria2") > 255 || !strings.HasSuffix(got, ".1.bin") || !utf8.ValidString(got) {
 		t.Fatalf("%q (%d bytes) %v", got, len(got), err)
 	}
-	if got, _ := freeName(filepath.Join(dir, "README")); got != "README.1" {
+	if got, _ := freeName(filepath.Join(dir, "README"), nil); got != "README.1" {
 		t.Fatalf("no extension: %q", got)
 	}
 }

@@ -56,6 +56,7 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 	ctx = context.WithoutCancel(ctx)
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	target := existingTarget(dir, p)
 	if mode := m.s.Load().Reliability.Duplicates; !p.Force && mode != "allow" {
 		if j := m.findDuplicate(ctx, p.URIs); j != nil {
 			if mode == "skip" {
@@ -63,22 +64,26 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 			}
 			return nil, &DuplicateError{Existing: j}
 		}
-		if path := existingTarget(dir, p); path != "" {
+		if target != "" {
 			if mode == "skip" {
-				return nil, &SkippedError{Path: path}
+				return nil, &SkippedError{Path: target}
 			}
-			return nil, &DuplicateError{Path: path}
+			return nil, &DuplicateError{Path: target}
 		}
 	}
 	overwrite := false
-	if path := existingTarget(dir, p); path != "" {
+	if target != "" {
 		switch m.s.Load().Downloads.OnExists {
 		case "overwrite":
 			overwrite = true
 		case "ask":
-			return nil, &ExistsError{Path: path}
+			return nil, &ExistsError{Path: target}
 		default: // rename
-			name, err := freeName(path)
+			held, err := m.heldNames(ctx, dir)
+			if err != nil {
+				return nil, err
+			}
+			name, err := freeName(target, held)
 			if err != nil {
 				return nil, err
 			}
@@ -282,9 +287,29 @@ func existingTarget(dir string, p AddParams) string {
 	return ""
 }
 
+// heldNames are the names live jobs in dir will write, which may not be
+// on disk yet.
+func (m *Manager) heldNames(ctx context.Context, dir string) (map[string]bool, error) {
+	js, err := m.st.ListJobs(ctx, store.Filter{})
+	if err != nil {
+		return nil, fmt.Errorf("list jobs to pick a free name: %w", err)
+	}
+	held := map[string]bool{}
+	for _, j := range js {
+		if j.Dir == dir {
+			held[j.Name] = true
+			if j.Out != nil {
+				held[*j.Out] = true
+			}
+		}
+	}
+	return held, nil
+}
+
 // freeName picks the name aria2 itself would rename path to: the first
-// free base.N.ext, shortened to fit the 255-byte name limit.
-func freeName(path string) (string, error) {
+// base.N.ext not on disk and not held by a live job, shortened to fit
+// textutil.MaxName.
+func freeName(path string, held map[string]bool) (string, error) {
 	dir, name := filepath.Split(path)
 	base, ext := name, ""
 	if i := strings.LastIndexByte(name, '.'); i > 0 && len(name)-i <= 32 {
@@ -293,14 +318,14 @@ func freeName(path string) (string, error) {
 	for n := 1; n < 10000; n++ {
 		suffix := "." + strconv.Itoa(n) + ext
 		b := base
-		if keep := 255 - len(suffix); len(b) > keep {
+		if keep := textutil.MaxName - len(suffix); len(b) > keep {
 			b = b[:keep]
 			for !utf8.ValidString(b) {
 				b = b[:len(b)-1]
 			}
 		}
 		cand := filepath.Join(dir, b+suffix)
-		if !exists(cand) && !exists(cand+".aria2") {
+		if !held[b+suffix] && !exists(cand) && !exists(cand+".aria2") {
 			return b + suffix, nil
 		}
 	}

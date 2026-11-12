@@ -6,7 +6,9 @@ import (
 	"unicode/utf8"
 )
 
-const maxName = 255
+// MaxName is the longest name in bytes: 255 less room for aria2's
+// ".aria2" control file beside it.
+const MaxName = 255 - len(".aria2")
 
 // SanitizeName makes a server-supplied name safe to use as a single file name.
 func SanitizeName(name string, fat bool) string {
@@ -32,8 +34,8 @@ func SanitizeName(name string, fat bool) string {
 			return r
 		}, name)
 	}
-	if len(name) > maxName {
-		name = name[:maxName]
+	if len(name) > MaxName {
+		name = name[:MaxName]
 		for !utf8.ValidString(name) {
 			name = name[:len(name)-1]
 		}

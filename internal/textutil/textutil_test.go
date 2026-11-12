@@ -31,7 +31,7 @@ func TestSanitizeName(t *testing.T) {
 
 func TestSanitizeName_LongUnicode(t *testing.T) {
 	got := SanitizeName(strings.Repeat("é", 150), false)
-	if len(got) > 255 || !utf8.ValidString(got) {
+	if len(got) != MaxName-1 || !utf8.ValidString(got) { // 249 cuts an é in half
 		t.Fatalf("len=%d valid=%v", len(got), utf8.ValidString(got))
 	}
 }
@@ -74,7 +74,7 @@ func FuzzSanitizeName(f *testing.F) {
 	f.Add("../a", true)
 	f.Fuzz(func(t *testing.T, s string, fat bool) {
 		got := SanitizeName(s, fat)
-		if strings.Contains(got, "/") || got == ".." || got == "" || len(got) > 255 || !utf8.ValidString(got) {
+		if strings.Contains(got, "/") || got == ".." || got == "" || len(got) > MaxName || !utf8.ValidString(got) {
 			t.Fatalf("bad %q -> %q", s, got)
 		}
 	})

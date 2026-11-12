@@ -169,6 +169,10 @@ func (m *Manager) readd(ctx context.Context, j *store.Job, paused bool, why stri
 	// A started download whose control file is gone (a server without
 	// ranges, or an unknown size) restarts in place instead of beside it.
 	req.AllowOverwrite = j.StartedAt != nil && j.Out != nil
+	// No path was ever reported for this job, so a file at the name the
+	// server picks now is not ours: aria2 renames beside it. A partial file
+	// with its .aria2 still resumes under continue=false.
+	req.NoContinue = j.Out == nil
 	ref, err := m.e.Add(ctx, req)
 	if err != nil {
 		return j, err
