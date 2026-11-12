@@ -23,6 +23,8 @@ type Client struct {
 	progress chan []daemon.ProgressItem
 }
 
+var clientPeerUID = peerUID // swapped in tests
+
 // Dial connects to a running daemon.
 func Dial(ctx context.Context, p config.Paths) (*Client, error) {
 	conn, err := (&net.Dialer{}).DialContext(ctx, "unix", p.Socket)
@@ -30,7 +32,12 @@ func Dial(ctx context.Context, p config.Paths) (*Client, error) {
 		return nil, err
 	}
 	// A socket in a shared dir could be someone else's daemon.
-	if uid, err := peerUID(conn); err != nil || uid != os.Geteuid() {
+	uid, err := clientPeerUID(conn)
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("could not check who runs the daemon at %s: %w; run `lazyaria doctor`", p.Socket, err)
+	}
+	if uid != os.Geteuid() {
 		conn.Close()
 		return nil, &ErrForeignDaemon{Socket: p.Socket, UID: uid}
 	}

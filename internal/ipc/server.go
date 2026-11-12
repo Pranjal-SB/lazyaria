@@ -140,7 +140,12 @@ func (c *conn) push(sub *daemon.Sub, done chan struct{}) {
 			err = c.srv.Notify(context.Background(), PushProgress, items)
 		}
 		if err != nil {
-			return // the client is gone; the bus resyncs it if it ever reads again
+			if !errors.Is(err, jrpc2.ErrConnClosed) {
+				slog.Warn("ipc: push failed, dropping the client", "err", err)
+			}
+			// Hang up so the client sees a disconnect and resyncs.
+			c.srv.Stop()
+			return
 		}
 	}
 }
