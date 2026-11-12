@@ -11,8 +11,7 @@ const maxName = 255
 // SanitizeName makes a server-supplied name safe to use as a single file name.
 func SanitizeName(name string, fat bool) string {
 	name = strings.Map(func(r rune) rune {
-		// Cf covers the bidi overrides that can disguise an extension.
-		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+		if unicode.IsControl(r) || isBidi(r) {
 			return -1
 		}
 		return r
@@ -43,4 +42,11 @@ func SanitizeName(name string, fat bool) string {
 		return "download"
 	}
 	return name
+}
+
+// isBidi matches the direction controls (and the BOM) that can disguise an
+// extension. ZWJ and ZWNJ stay: emoji and Indic scripts need them.
+func isBidi(r rune) bool {
+	return r == 0x061C || r == 0xFEFF || r == 0x200E || r == 0x200F ||
+		r >= 0x202A && r <= 0x202E || r >= 0x2066 && r <= 0x2069
 }

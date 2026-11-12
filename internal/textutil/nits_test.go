@@ -39,3 +39,18 @@ func TestSanitizeNameStripsBidi(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestSanitizeNameBidiOnly(t *testing.T) {
+	if got := SanitizeName("a\u061Cb\uFEFF.txt", false); got != "ab.txt" {
+		t.Fatalf("got %q", got)
+	}
+	for _, in := range []string{
+		"\u0915\u094D\u200D\u0937.txt",
+		"\u0915\u094D\u200C\u0937.txt",
+		"\U0001F468\u200D\U0001F469\u200D\U0001F467.txt",
+	} {
+		if got := SanitizeName(in, false); got != in {
+			t.Errorf("%+q -> %+q", in, got)
+		}
+	}
+}
