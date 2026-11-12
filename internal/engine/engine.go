@@ -110,10 +110,14 @@ type EngineDetails struct {
 
 // ErrInvalidOption is returned for a per-job option outside AllowedOptions.
 type ErrInvalidOption struct {
-	Name string `json:"name"`
+	Name   string `json:"name"`
+	Reason string `json:"reason,omitempty"` // replaces the list of allowed options
 }
 
 func (e ErrInvalidOption) Error() string {
+	if e.Reason != "" {
+		return fmt.Sprintf("option %q: %s", e.Name, e.Reason)
+	}
 	return fmt.Sprintf("option %q cannot be set per download; allowed: %s", e.Name, strings.Join(AllowedOptions, ", "))
 }
 

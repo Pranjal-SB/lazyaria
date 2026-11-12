@@ -84,6 +84,9 @@ func (m *Manager) failed(ctx context.Context, j *store.Job, st engine.EngineStat
 
 func setErr(x *store.Job, kind string, st engine.EngineStatus) {
 	code, msg := st.ErrorCode, st.ErrorMsg
+	if kind == "exists" {
+		msg += " Move or rename the existing file, then retry the job."
+	}
 	x.ErrorKind, x.ErrorCode, x.ErrorMsg = &kind, &code, &msg
 	setBytes(x, st)
 }

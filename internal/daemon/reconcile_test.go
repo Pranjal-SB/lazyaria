@@ -275,7 +275,10 @@ func TestCompletedOfflineNotRedownloaded(t *testing.T) {
 	out := "full.bin"
 	total := int64(5)
 	os.WriteFile(filepath.Join(r.dir, out), []byte("12345"), 0o600)
-	j := r.insert(t, store.Active, "old1", func(j *store.Job) { j.Out, j.StartedAt, j.TotalBytes = &out, &started, &total })
+	wrote := int64(3)
+	j := r.insert(t, store.Active, "old1", func(j *store.Job) {
+		j.Out, j.StartedAt, j.TotalBytes, j.DoneBytes = &out, &started, &total, &wrote
+	})
 	if err := r.m.Reconcile(bg); err != nil {
 		t.Fatal(err)
 	}
@@ -288,9 +291,20 @@ func TestCompletedOfflineNotRedownloaded(t *testing.T) {
 	// A short file is a partial download and is re-added.
 	short := "short.bin"
 	os.WriteFile(filepath.Join(r.dir, short), []byte("12"), 0o600)
-	k := r.insert(t, store.Active, "old2", func(j *store.Job) { j.Out, j.StartedAt, j.TotalBytes = &short, &started, &total })
+	k := r.insert(t, store.Active, "old2", func(j *store.Job) {
+		j.Out, j.StartedAt, j.TotalBytes, j.DoneBytes = &short, &started, &total, &wrote
+	})
 	r.m.Reconcile(bg)
 	if adds, _ := r.e.count(); adds != 1 || r.get(t, k.ID).State != store.Queued {
 		t.Fatalf("short file: adds %d", adds)
+	}
+	// A same-size file at Out that the job never wrote to is not adopted;
+	// the re-add renames beside it.
+	foreign := "foreign.bin"
+	os.WriteFile(filepath.Join(r.dir, foreign), []byte("abcde"), 0o600)
+	f := r.insert(t, store.Active, "old3", func(j *store.Job) { j.Out, j.StartedAt, j.TotalBytes = &foreign, &started, &total })
+	r.m.Reconcile(bg)
+	if adds, _ := r.e.count(); adds != 2 || r.get(t, f.ID).State == store.Done || !r.e.adds[1].NoContinue || r.e.adds[1].AllowOverwrite {
+		t.Fatalf("foreign file: adds %d state %s", adds, r.get(t, f.ID).State)
 	}
 }

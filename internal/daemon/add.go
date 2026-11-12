@@ -44,6 +44,11 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 			return nil, engine.ErrInvalidOption{Name: k}
 		}
 	}
+	if p.Out != "" || p.Options["out"] != "" {
+		if k := jobKind(p.URIs, p.Torrent); isBT(k) {
+			return nil, engine.ErrInvalidOption{Name: "out", Reason: "torrents and magnet links name their own files; drop --out"}
+		}
+	}
 	dir := p.Dir
 	if dir == "" {
 		dir = m.s.Load().Downloads.Dir
@@ -72,18 +77,26 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 		}
 	}
 	overwrite := false
-	if target != "" {
-		switch m.s.Load().Downloads.OnExists {
+	name := targetName(dir, p)
+	var held map[string]bool
+	if name != "" {
+		var err error
+		if held, err = m.heldNames(ctx, dir); err != nil {
+			return nil, err
+		}
+	}
+	if onExists := m.s.Load().Downloads.OnExists; target != "" || held[name] {
+		if held[name] {
+			// Another live job writes this name; any .aria2 there is its own.
+			onExists = "rename"
+		}
+		switch onExists {
 		case "overwrite":
 			overwrite = true
 		case "ask":
 			return nil, &ExistsError{Path: target}
 		default: // rename
-			held, err := m.heldNames(ctx, dir)
-			if err != nil {
-				return nil, err
-			}
-			name, err := freeName(target, held)
+			name, err := freeName(filepath.Join(dir, name), held)
 			if err != nil {
 				return nil, err
 			}
@@ -103,9 +116,9 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 	}
 	m.bus.Publish(Event{Type: "job.added", Job: j})
 	req := m.request(j, paused)
-	// Fresh adds only: re-adds keep the global continue=true to resume. A
-	// file that appears after the check above is then renamed by aria2.
-	req.AllowOverwrite, req.NoContinue = overwrite, true
+	// A fresh job owns no file yet: continue=false makes aria2 rename beside
+	// a file that appears after the check above. readd decides by ownership.
+	req.AllowOverwrite, req.NoContinue = overwrite && !isBT(j.Kind), true
 	ref, err := m.e.Add(ctx, req)
 	if engineDown(err) {
 		// The add may or may not have landed under the job's gid; the poll
@@ -190,7 +203,7 @@ func (m *Manager) newJob(dir string, p AddParams, paused bool) *store.Job {
 		opts["file-allocation"] = alloc
 	}
 	kind := jobKind(uris, p.Torrent)
-	if kind == "torrent" || kind == "magnet" {
+	if isBT(kind) {
 		// Per job, so a live change to the bt settings applies to new torrents.
 		setDefault(opts, "seed-time", strconv.Itoa(m.s.Load().BT.SeedMinutes))
 		setDefault(opts, "seed-ratio", strconv.FormatFloat(m.s.Load().BT.SeedRatio, 'f', -1, 64))
@@ -269,6 +282,20 @@ func displayName(out string, uris []string) string {
 // the file exists and has no .aria2 control file, which would mean an
 // unfinished download that aria2 resumes (spec §8.4).
 func existingTarget(dir string, p AddParams) string {
+	name := targetName(dir, p)
+	if name == "" {
+		return ""
+	}
+	path := filepath.Join(dir, name)
+	if exists(path) && !exists(path+".aria2") {
+		return path
+	}
+	return ""
+}
+
+// targetName is the sanitized name the add will write, or "" when only the
+// server or the torrent can tell.
+func targetName(dir string, p AddParams) string {
 	clean := make([]string, len(p.URIs))
 	for i, u := range p.URIs {
 		clean[i], _, _ = textutil.SplitUserinfo(u)
@@ -280,12 +307,10 @@ func existingTarget(dir string, p AddParams) string {
 	if name == "" {
 		return ""
 	}
-	path := filepath.Join(dir, textutil.SanitizeName(name, fsinfo.IsFAT(dir)))
-	if exists(path) && !exists(path+".aria2") {
-		return path
-	}
-	return ""
+	return textutil.SanitizeName(name, fsinfo.IsFAT(dir))
 }
+
+func isBT(kind string) bool { return kind == "torrent" || kind == "magnet" }
 
 // heldNames are the names live jobs in dir will write, which may not be
 // on disk yet.
@@ -296,7 +321,7 @@ func (m *Manager) heldNames(ctx context.Context, dir string) (map[string]bool, e
 	}
 	held := map[string]bool{}
 	for _, j := range js {
-		if j.Dir == dir {
+		if filepath.Clean(j.Dir) == filepath.Clean(dir) {
 			held[j.Name] = true
 			if j.Out != nil {
 				held[*j.Out] = true

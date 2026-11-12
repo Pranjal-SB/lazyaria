@@ -1,16 +1,12 @@
 package daemon
 
 import (
-	"bytes"
 	"context"
 	"io"
 	"log/slog"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -224,16 +220,7 @@ func TestFreshAddNeverOverwritesLateFile(t *testing.T) {
 func TestRetryNeverResumesIntoUnownedFile(t *testing.T) {
 	testutil.RequireAria2(t)
 	data := testutil.RandBytes(256 << 10)
-	var hits atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Disposition", `attachment; filename="report.pdf"`)
-		if hits.Add(1) == 1 {
-			http.Error(w, "busy", http.StatusServiceUnavailable)
-			return
-		}
-		http.ServeContent(w, r, "report.pdf", time.Time{}, bytes.NewReader(data))
-	}))
-	defer srv.Close()
+	srv, hits := reportServer(t, data)
 	root := t.TempDir()
 	st, err := store.Open(filepath.Join(root, "l.db"))
 	if err != nil {

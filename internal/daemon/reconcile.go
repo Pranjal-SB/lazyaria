@@ -166,13 +166,15 @@ func (m *Manager) readd(ctx context.Context, j *store.Job, paused bool, why stri
 	} else {
 		req.GID = newGID()
 	}
-	// A started download whose control file is gone (a server without
-	// ranges, or an unknown size) restarts in place instead of beside it.
-	req.AllowOverwrite = j.StartedAt != nil && j.Out != nil
-	// No path was ever reported for this job, so a file at the name the
-	// server picks now is not ours: aria2 renames beside it. A partial file
-	// with its .aria2 still resumes under continue=false.
-	req.NoContinue = j.Out == nil
+	// A job owns its file only once it has written bytes to it. An owned
+	// partial whose control file is gone (a server without ranges, or an
+	// unknown size) restarts in place; aria2 would clobber a torrent's
+	// colliding files, so those never overwrite. A file the job does not
+	// own is never written into: continue=false makes aria2 rename beside
+	// it, and a partial with its .aria2 still resumes.
+	owned := ownsFile(j)
+	req.AllowOverwrite = owned && j.StartedAt != nil && !isBT(j.Kind)
+	req.NoContinue = !owned
 	ref, err := m.e.Add(ctx, req)
 	if err != nil {
 		return j, err
@@ -198,8 +200,14 @@ func (m *Manager) readd(ctx context.Context, j *store.Job, paused bool, why stri
 // completedOffline catches a download that finished while its completion
 // went unseen: the file has its full size and no control file. Re-adding it
 // with allow-overwrite would download it again over itself.
+// ownsFile: the job has written bytes to the file at its Out.
+func ownsFile(j *store.Job) bool {
+	return j.Out != nil && j.DoneBytes != nil && *j.DoneBytes > 0
+}
+
 func (m *Manager) completedOffline(ctx context.Context, j *store.Job) (*store.Job, bool) {
-	if j.Out == nil || j.TotalBytes == nil || *j.TotalBytes <= 0 {
+	// A same-size file the job never wrote to is someone else's.
+	if !ownsFile(j) || j.TotalBytes == nil || *j.TotalBytes <= 0 {
 		return j, false
 	}
 	p := filepath.Join(j.Dir, *j.Out)

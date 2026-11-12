@@ -248,6 +248,10 @@ func TestErrorMapping(t *testing.T) {
 	if !errors.As(err, &inv) || inv.Name != "on-download-complete" {
 		t.Errorf("invalid option: %#v", err)
 	}
+	_, err = add(engine.ErrInvalidOption{Name: "out", Reason: "drop --out"})
+	if !errors.As(err, &inv) || inv.Reason != "drop --out" {
+		t.Errorf("invalid option reason: %#v", err)
+	}
 }
 
 func TestRedactsCredentials(t *testing.T) {

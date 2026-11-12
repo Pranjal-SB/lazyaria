@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Pranjal-SB/lazyaria/internal/daemon"
+	"github.com/Pranjal-SB/lazyaria/internal/engine"
 	"github.com/Pranjal-SB/lazyaria/internal/store"
 )
 
@@ -115,7 +116,7 @@ func TestDaemonUnreachableExit3(t *testing.T) {
 }
 
 func TestExitCodes(t *testing.T) {
-	if !slices.Equal([]int{exitCode(nil), exitCode(&daemon.DuplicateError{Path: "/x"}), exitCode(&daemon.SkippedError{Path: "/x"}), exitCode(&daemon.ExistsError{Path: "/x"})}, []int{0, 4, 0, 4}) {
+	if !slices.Equal([]int{exitCode(nil), exitCode(&daemon.DuplicateError{Path: "/x"}), exitCode(&daemon.SkippedError{Path: "/x"}), exitCode(&daemon.ExistsError{Path: "/x"}), exitCode(engine.ErrInvalidOption{Name: "out", Reason: "r"})}, []int{0, 4, 0, 4, 2}) {
 		t.Fatal("exit codes")
 	}
 }

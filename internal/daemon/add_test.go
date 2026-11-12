@@ -285,18 +285,74 @@ func TestAddOnExists(t *testing.T) {
 	})
 }
 
-// A re-add sends continue=false only while no path was ever reported for
-// the job (Out unset); a job that owns its file resumes with continue=true.
-func TestReaddNoContinueOnlyWithoutOut(t *testing.T) {
+// A re-add resumes (continue=true) only into a file the job owns: Out set
+// and bytes written. Only an owned, started HTTP job may overwrite.
+func TestReaddOwnership(t *testing.T) {
 	r := newRig(t)
-	for i, out := range []string{"", "a.bin"} {
-		j := r.add(t, AddParams{URIs: []string{"http://example.com/"}, Out: out, Force: true})
+	wrote, none := int64(10), int64(0)
+	started := r.clk.now()
+	for _, c := range []struct {
+		name      string
+		uri, out  string
+		done      *int64
+		owned, ow bool
+	}{
+		{"no out", "http://example.com/", "", &wrote, false, false},
+		{"out, no bytes recorded", "http://example.com/a", "a.bin", nil, false, false},
+		{"out, zero bytes", "http://example.com/b", "b.bin", &none, false, false},
+		{"owned", "http://example.com/c", "c.bin", &wrote, true, true},
+		{"owned torrent", "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567", "", &wrote, true, false},
+	} {
+		j := r.add(t, AddParams{URIs: []string{c.uri}, Out: c.out, Force: true})
+		j.DoneBytes, j.StartedAt = c.done, &started
+		if c.name == "owned torrent" {
+			out := "t" // aria2 reported a path for the torrent
+			j.Out = &out
+		}
 		if _, err := r.m.readd(bg, j, false, "readded"); err != nil {
 			t.Fatal(err)
 		}
-		if got, want := r.e.adds[len(r.e.adds)-1].NoContinue, out == ""; got != want {
-			t.Fatalf("case %d out %q: re-add continue=false %v, want %v", i, out, got, want)
+		req := r.e.adds[len(r.e.adds)-1]
+		if req.NoContinue != !c.owned || req.AllowOverwrite != c.ow {
+			t.Errorf("%s: continue=false %v overwrite %v; want %v %v", c.name, req.NoContinue, req.AllowOverwrite, !c.owned, c.ow)
 		}
+	}
+}
+
+func TestAddBTRejectsOut(t *testing.T) {
+	r := newRig(t)
+	for _, p := range []AddParams{
+		{URIs: []string{"magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567"}, Out: "x"},
+		{Torrent: []byte("d4:infod4:name1:xee"), Options: map[string]string{"out": "x"}},
+	} {
+		p.Dir = r.dir
+		_, err := r.m.Add(bg, p)
+		if inv, ok := errors.AsType[engine.ErrInvalidOption](err); !ok || inv.Name != "out" || !strings.Contains(err.Error(), "drop --out") {
+			t.Fatalf("want ErrInvalidOption out, got %v", err)
+		}
+	}
+	if len(r.e.adds) != 0 {
+		t.Fatal("added anyway")
+	}
+}
+
+// A name held by a live job is taken even when its .aria2 sits there: that
+// control file is the other job's progress.
+func TestAddHeldPartialIsRenamed(t *testing.T) {
+	r := newRig(t)
+	part := filepath.Join(r.dir, "ex.bin")
+	os.WriteFile(part, []byte("half"), 0o600)
+	os.WriteFile(part+".aria2", []byte("ctl"), 0o600)
+	a := r.add(t, AddParams{URIs: []string{"http://a.example.com/ex.bin"}})
+	if err := r.m.Pause(bg, []string{a.ID}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := r.m.Add(bg, AddParams{URIs: []string{"http://b.example.com/ex.bin"}, Dir: r.dir + "/"})
+	if err != nil || b.Name != "ex.1.bin" || r.e.adds[1].Out != "ex.1.bin" {
+		t.Fatalf("job B: %v name %q", err, b.Name)
+	}
+	if got, _ := os.ReadFile(part); string(got) != "half" {
+		t.Fatal("job A's file changed")
 	}
 }
 

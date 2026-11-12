@@ -28,7 +28,7 @@ func (e *aria2Engine) ChangeURI(ctx context.Context, ref EngineRef, uri string) 
 	clean := SplitAuth([]string{uri}, "", "", auth)[0]
 	for {
 		var s aria2.Status
-		if err := e.call(ctx, "aria2.tellStatus", &s, string(ref), []string{"status", "dir", "files", "bittorrent"}); err != nil {
+		if err := e.call(ctx, "aria2.tellStatus", &s, string(ref), []string{"status", "dir", "files", "bittorrent", "completedLength"}); err != nil {
 			return "", fmt.Errorf("refresh %s: %w", ref, err)
 		}
 		if s.Bittorrent != nil {
@@ -133,10 +133,17 @@ func (e *aria2Engine) readd(ctx context.Context, ref EngineRef, s *aria2.Status,
 		opts[k] = v
 	}
 	opts["dir"] = s.Dir
+	derived := false
 	if len(s.Files) > 0 && s.Files[0].Path != "" {
 		if rel, err := filepath.Rel(s.Dir, s.Files[0].Path); err == nil && !strings.HasPrefix(rel, "..") {
-			opts["out"] = rel
+			opts["out"], derived = rel, true
 		}
+	}
+	// The old download wrote nothing, or never learned its file: a file at
+	// the name now is not its own, so aria2 renames beside it rather than
+	// resuming into it. A partial with its .aria2 still resumes.
+	if s.CompletedLength == 0 || !derived {
+		opts["continue"] = "false"
 	}
 	// A failure here only means the gid is still taken; the add below says so.
 	_ = e.call(ctx, "aria2.removeDownloadResult", nil, string(ref))
