@@ -30,3 +30,10 @@ jobs:
             arch=${target#*/}
             CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build ./...
           done
+
+      # internal/cli and the root package still use unix-only process APIs,
+      # so windows builds skip them until they get windows support.
+      - name: Cross-compile windows
+        run: |
+          pkgs=$(go list ./... | grep -v -e '/internal/cli$' -e '/lazyaria$')
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build $pkgs
