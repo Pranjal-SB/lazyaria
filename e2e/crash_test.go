@@ -21,7 +21,9 @@ func TestCrashNeverLoses(t *testing.T) {
 		files[name] = payload(4<<20+i*4096, byte(0x11*(i+1)))
 	}
 	srv := testutil.NewFaultServer(t, files)
-	e := newEnv(t, "")
+	// list --json refreshes on the sentinel poll when nobody observes; at the
+	// 15 s default one refresh can jump past several kill thresholds.
+	e := newEnv(t, "[advanced]\nsentinel_interval = \"1s\"\n")
 	var links []string
 	for name := range files {
 		links = append(links, srv.URL(name, testutil.ModeSlow))
@@ -75,8 +77,8 @@ func TestCrashNeverLoses(t *testing.T) {
 				time.Sleep(100 * time.Millisecond)
 				frac, allDone = progress()
 			}
-			if allDone {
-				break
+			if allDone || frac < lateAt[0] {
+				break // done, or the deadline passed before the threshold
 			}
 			for len(lateAt) > 0 && frac >= lateAt[0] {
 				lateAt = lateAt[1:]
