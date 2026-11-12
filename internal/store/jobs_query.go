@@ -87,8 +87,11 @@ func (s *Store) PurgeDone(ctx context.Context, before time.Time) (int, error) {
 	return int(n), err
 }
 
-// CountJobs counts the jobs in any of states.
+// CountJobs counts the jobs in any of states. With no states it counts nothing and returns 0.
 func (s *Store) CountJobs(ctx context.Context, states ...State) (int, error) {
+	if len(states) == 0 {
+		return 0, nil
+	}
 	a := make([]any, len(states))
 	for i, st := range states {
 		a[i] = string(st)

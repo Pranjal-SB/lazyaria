@@ -128,9 +128,11 @@ func (m *Manager) Undo(ctx context.Context, token string) error {
 	var errs []error
 	left := undoRecord{until: rec.until, prev: map[string]store.State{}, files: map[string][]trash.Entry{}}
 	for id, was := range rec.prev {
-		if err := m.Files.RestoreFiles(ctx, rec.files[id]); err != nil {
+		// Entries an earlier attempt already put back would fail the pre-check.
+		todo := inTrash(rec.files[id])
+		if err := m.Files.RestoreFiles(ctx, todo); err != nil {
 			errs = append(errs, fmt.Errorf("job %s stays removed, its files are still in the trash: %w", id, err))
-			left.prev[id], left.files[id] = was, rec.files[id]
+			left.prev[id], left.files[id] = was, inTrash(todo)
 			continue
 		}
 		to := was
@@ -156,4 +158,15 @@ func (m *Manager) Undo(ctx context.Context, token string) error {
 		m.undo[token] = left
 	}
 	return errors.Join(errs...)
+}
+
+// inTrash keeps the entries whose trashed copy is still there.
+func inTrash(es []trash.Entry) []trash.Entry {
+	var out []trash.Entry
+	for _, e := range es {
+		if lexists(e.TrashedPath) {
+			out = append(out, e)
+		}
+	}
+	return out
 }

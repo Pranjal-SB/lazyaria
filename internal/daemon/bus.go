@@ -105,7 +105,7 @@ func (b *Bus) Publish(ev Event) {
 				drained = true
 			}
 		}
-		s.events <- Event{Seq: ev.Seq, Type: "resync_required"} // queue is empty, cannot block
+		s.events <- Event{Seq: b.seq.Add(1), Type: "resync_required"} // queue is empty, cannot block
 		s.resync = true
 	}
 }
