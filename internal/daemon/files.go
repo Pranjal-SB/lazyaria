@@ -53,15 +53,16 @@ func (t *TrashFiles) probe(p string) error {
 }
 
 // targets lists what removing j may trash. The payload counts only when the
-// job provably owns it, so a duplicate "download anyway" or a magnet still
-// named "download" never takes a file that was already there.
+// job provably owns it: it wrote bytes there, or finished. So a duplicate
+// "download anyway", a job that failed before its first byte, or a magnet
+// still named "download" never takes a file that was already there.
 func targets(j *store.Job) []string {
 	p, ok := payloadPath(j)
 	if !ok {
 		return nil
 	}
 	var out []string
-	owned := j.StartedAt != nil || j.State == store.Done || j.State == store.Seeding || lexists(p+".aria2")
+	owned := (j.DoneBytes != nil && *j.DoneBytes > 0) || j.State == store.Done || j.State == store.Seeding
 	if owned && lexists(p) {
 		out = append(out, p)
 	}

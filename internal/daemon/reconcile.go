@@ -194,6 +194,9 @@ func (m *Manager) readd(ctx context.Context, j *store.Job, paused bool, why stri
 				m.log.Warn("disown before restart; downloading beside it", "job", j.ID, "err", err)
 				partial = false
 			}
+			// The cached progress still counts the old bytes; a pause
+			// before the next poll would store them and re-own Out.
+			m.prog.forget(j.ID)
 		}
 		if partial {
 			if e, err := m.trash(p); err != nil {

@@ -24,6 +24,14 @@ func wfile(t *testing.T, p, s string) {
 
 func exists1(p string) bool { _, err := os.Lstat(p); return err == nil }
 
+// wrote records that job id has written bytes, which makes its file its own.
+func (r *rig) wrote(t *testing.T, id string) {
+	t.Helper()
+	if _, err := r.m.change(bg, id, "", "", func(x *store.Job) { n := int64(4); x.DoneBytes = &n }); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRemoveUndo(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
 	r := newRig(t)
@@ -33,6 +41,7 @@ func TestRemoveUndo(t *testing.T) {
 	r.event(ref, engine.KindStart)
 	payload := filepath.Join(r.dir, "a.iso")
 	wfile(t, payload, "data")
+	r.wrote(t, j.ID)
 	wfile(t, payload+".aria2", "ctl")
 
 	tok, err := r.m.Remove(bg, []string{j.ID}, true)
@@ -78,6 +87,7 @@ func TestRemoveNoTrashNeedsConfirm(t *testing.T) {
 	before := r.get(t, j.ID)
 	payload := filepath.Join(r.dir, "a.iso")
 	wfile(t, payload, "data")
+	r.wrote(t, j.ID)
 	tok, err := r.m.Remove(bg, []string{j.ID}, true)
 	var nc *NeedsConfirmError
 	if !errors.As(err, &nc) {
@@ -110,6 +120,7 @@ func TestRemoveRenameFailureReaddsPaused(t *testing.T) {
 	r.event(ref, engine.KindStart)
 	payload := filepath.Join(r.dir, "a.iso")
 	wfile(t, payload, "data")
+	r.wrote(t, j.ID)
 	_, err := r.m.Remove(bg, []string{j.ID}, true)
 	var nc *NeedsConfirmError
 	if !errors.As(err, &nc) {
@@ -162,6 +173,7 @@ func TestUndoStaysRemovedWhenFilesCannotReturn(t *testing.T) {
 	r.event(ref, engine.KindStart)
 	payload := filepath.Join(r.dir, "a.iso")
 	wfile(t, payload, "data")
+	r.wrote(t, j.ID)
 	tok, err := r.m.Remove(bg, []string{j.ID}, true)
 	if err != nil {
 		t.Fatal(err)
@@ -202,6 +214,7 @@ func TestRemoveRollsBackOnPartialTrash(t *testing.T) {
 	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}, Out: "a.iso"})
 	payload := filepath.Join(r.dir, "a.iso")
 	wfile(t, payload, "data")
+	r.wrote(t, j.ID)
 	wfile(t, payload+".aria2", "ctl")
 	_, err := r.m.Remove(bg, []string{j.ID}, true)
 	var nc *NeedsConfirmError
@@ -288,5 +301,22 @@ func TestDoneStampsReferrerWithoutUserinfo(t *testing.T) {
 	}
 	if origin(payload) != "http://example.com/a.iso" {
 		t.Fatalf("origin %q", origin(payload))
+	}
+}
+
+// StartedAt is set before aria2 writes a byte. A job that failed before
+// writing anything does not own the user's file at its name.
+func TestRemoveDeleteFilesSparesUnwrittenName(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
+	r := newRig(t)
+	started, none := r.clk.now(), int64(0)
+	j := r.insert(t, store.Error, "", func(j *store.Job) { j.StartedAt, j.DoneBytes = &started, &none })
+	user := filepath.Join(r.dir, "f.bin")
+	wfile(t, user, "USER FILE")
+	if _, err := r.m.Remove(bg, []string{j.ID}, true); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(user); string(b) != "USER FILE" {
+		t.Fatalf("the user's f.bin was trashed (now %q)", b)
 	}
 }

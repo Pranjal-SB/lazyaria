@@ -230,3 +230,29 @@ func TestP9TrashThenAddFails(t *testing.T) {
 		t.Fatalf("user's a.bin now %q", b)
 	}
 }
+
+// The progress cache still holds the bytes of the trashed partial after a
+// re-add disowns it. A pause before the next poll must not copy them back,
+// or the user's file saved at Out later passes for the job's partial.
+func TestPauseAfterDisownKeepsJobDisowned(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
+	r := newRig(t)
+	j, path := noRangePartial(t, r)
+	r.m.prog.observe(j.ID, r.clk.now(), engine.EngineStatus{State: "active", Done: 100, Total: 1000})
+	if _, err := r.m.readd(bg, j, false, "resumed"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.m.Pause(bg, []string{j.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.get(t, j.ID); ownsFile(got) {
+		t.Fatalf("paused job owns Out again: done %d", *got.DoneBytes)
+	}
+	os.WriteFile(path, []byte("USER FILE"), 0o600)
+	if _, err := r.m.readd(bg, r.get(t, j.ID), false, "resumed"); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(path); string(b) != "USER FILE" {
+		t.Fatalf("user's a.bin now %q", b)
+	}
+}
