@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/Pranjal-SB/lazyaria/internal/engine"
 	"github.com/Pranjal-SB/lazyaria/internal/fsinfo"
@@ -69,6 +70,21 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 			return nil, &DuplicateError{Path: path}
 		}
 	}
+	overwrite := false
+	if path := existingTarget(dir, p); path != "" {
+		switch m.s.Load().Downloads.OnExists {
+		case "overwrite":
+			overwrite = true
+		case "ask":
+			return nil, &ExistsError{Path: path}
+		default: // rename
+			name, err := freeName(path)
+			if err != nil {
+				return nil, err
+			}
+			p.Out = name
+		}
+	}
 	if ns := m.noSpace(dir, p.Total, 0); ns != nil {
 		return nil, ns
 	}
@@ -81,7 +97,11 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 		m.log.Warn("record job event", "job", j.ID, "err", err)
 	}
 	m.bus.Publish(Event{Type: "job.added", Job: j})
-	ref, err := m.e.Add(ctx, m.request(j, paused))
+	req := m.request(j, paused)
+	// Fresh adds only: re-adds keep the global continue=true to resume. A
+	// file that appears after the check above is then renamed by aria2.
+	req.AllowOverwrite, req.NoContinue = overwrite, true
+	ref, err := m.e.Add(ctx, req)
 	if engineDown(err) {
 		// The add may or may not have landed under the job's gid; the poll
 		// or Reconcile finds out and re-adds only if it did not.
@@ -260,6 +280,31 @@ func existingTarget(dir string, p AddParams) string {
 		return path
 	}
 	return ""
+}
+
+// freeName picks the name aria2 itself would rename path to: the first
+// free base.N.ext, shortened to fit the 255-byte name limit.
+func freeName(path string) (string, error) {
+	dir, name := filepath.Split(path)
+	base, ext := name, ""
+	if i := strings.LastIndexByte(name, '.'); i > 0 && len(name)-i <= 32 {
+		base, ext = name[:i], name[i:]
+	}
+	for n := 1; n < 10000; n++ {
+		suffix := "." + strconv.Itoa(n) + ext
+		b := base
+		if keep := 255 - len(suffix); len(b) > keep {
+			b = b[:keep]
+			for !utf8.ValidString(b) {
+				b = b[:len(b)-1]
+			}
+		}
+		cand := filepath.Join(dir, b+suffix)
+		if !exists(cand) && !exists(cand+".aria2") {
+			return b + suffix, nil
+		}
+	}
+	return "", fmt.Errorf("%s already exists and no free name beside it was found; choose another name with --out", path)
 }
 
 func exists(path string) bool {

@@ -115,7 +115,7 @@ func TestDaemonUnreachableExit3(t *testing.T) {
 }
 
 func TestExitCodes(t *testing.T) {
-	if !slices.Equal([]int{exitCode(nil), exitCode(&daemon.DuplicateError{Path: "/x"}), exitCode(&daemon.SkippedError{Path: "/x"})}, []int{0, 4, 0}) {
+	if !slices.Equal([]int{exitCode(nil), exitCode(&daemon.DuplicateError{Path: "/x"}), exitCode(&daemon.SkippedError{Path: "/x"}), exitCode(&daemon.ExistsError{Path: "/x"})}, []int{0, 4, 0, 4}) {
 		t.Fatal("exit codes")
 	}
 }

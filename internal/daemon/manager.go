@@ -85,6 +85,16 @@ func (e *DuplicateError) Error() string {
 	return fmt.Sprintf("%q is already in the list (%s); add it with --force to download it again", e.Existing.Name, e.Existing.State)
 }
 
+// ExistsError means downloads.on_exists is "ask" and a finished file
+// already sits at the target path; nothing was added.
+type ExistsError struct {
+	Path string `json:"path"`
+}
+
+func (e *ExistsError) Error() string {
+	return fmt.Sprintf("%s already exists (downloads.on_exists = ask); save it under another name with --out, or set downloads.on_exists to rename or overwrite", e.Path)
+}
+
 // SkippedError means reliability.duplicates is "skip" and nothing was
 // added: the link is already known (Existing), or a finished file already
 // sits at the target path (Path). Callers treat it as success.

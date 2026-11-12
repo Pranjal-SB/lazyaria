@@ -107,7 +107,8 @@ func exitCode(err error) int {
 	}
 	_, dup := errors.AsType[*daemon.DuplicateError](err)
 	_, nospace := errors.AsType[*daemon.NoSpaceError](err)
-	if dup || nospace {
+	_, exists := errors.AsType[*daemon.ExistsError](err)
+	if dup || nospace || exists {
 		return exitRefused
 	}
 	return exitRuntime

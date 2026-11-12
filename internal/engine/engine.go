@@ -43,6 +43,10 @@ type AddRequest struct {
 	// AllowOverwrite lets a re-add restart a partial file that has no
 	// control file instead of writing name.1.ext next to it.
 	AllowOverwrite bool
+	// NoContinue sends continue=false for this download only: a fresh add
+	// must not take an existing file without a control file for its own
+	// partial download, so aria2 renames beside it instead of writing into it.
+	NoContinue bool
 }
 
 type EngineStatus struct {

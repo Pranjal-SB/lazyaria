@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -160,4 +161,55 @@ func writeFile(t *testing.T, b []byte) string {
 		t.Fatal(err)
 	}
 	return p
+}
+
+// A file that appears between the on_exists check and aria2's start, under
+// a name taken from the URL (no --out), is renamed beside by aria2 and
+// never written into; the job follows the new name (spec G7).
+func TestFreshAddNeverOverwritesLateFile(t *testing.T) {
+	testutil.RequireAria2(t)
+	data := testutil.RandBytes(256 << 10)
+	srv := testutil.NewFaultServer(t, map[string][]byte{"late.bin": data})
+	root := t.TempDir()
+	st, err := store.Open(filepath.Join(root, "l.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	old := []byte("the user's own file\n")
+	orig := filepath.Join(root, "dl", "late.bin")
+	var once sync.Once
+	late := func(m *Manager) {
+		dev := m.dev
+		m.dev = func(dir string) (uint64, error) { // runs after the check, before the engine add
+			once.Do(func() {
+				if err := os.WriteFile(orig, old, 0o600); err != nil {
+					t.Error(err)
+				}
+			})
+			return dev(dir)
+		}
+	}
+	d := startLive(t, st, root, nil, late)
+	defer d.stop(t)
+	j, err := d.m.Add(bg, AddParams{URIs: []string{srv.URL("late.bin", testutil.ModeOK)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if j.Out != nil {
+		t.Fatalf("out %q set by the daemon; this case is aria2's rename", *j.Out)
+	}
+	got := waitJob(t, st, j.ID, 30*time.Second, func(j *store.Job) bool { return j.State == store.Done || j.State == store.Error })
+	if got.State != store.Done {
+		t.Fatalf("state %s kind %v msg %v", got.State, got.ErrorKind, got.ErrorMsg)
+	}
+	if got.Name != "late.1.bin" || got.Out == nil || *got.Out != got.Name {
+		t.Fatalf("name %q out %v; want the renamed file tracked", got.Name, got.Out)
+	}
+	if b, _ := os.ReadFile(orig); string(b) != string(old) {
+		t.Fatalf("the existing file was changed (now %d bytes)", len(b))
+	}
+	if testutil.SHA256File(t, filepath.Join(got.Dir, got.Name)) != testutil.SHA256File(t, writeFile(t, data)) {
+		t.Fatal("sha mismatch")
+	}
 }

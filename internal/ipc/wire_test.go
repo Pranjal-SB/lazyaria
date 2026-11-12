@@ -64,6 +64,7 @@ func TestWireKeys(t *testing.T) {
 		Options: map[string]string{"k": "v"}, StartPaused: true, Force: true, Total: 1}),
 		"uris torrent_b64 dir out options start_paused force total")
 	sameKeys(t, "DuplicateError", keys(t, &daemon.DuplicateError{Existing: job, Path: "p"}), "existing_job path")
+	sameKeys(t, "ExistsError", keys(t, &daemon.ExistsError{Path: "p"}), "path")
 	sameKeys(t, "NoSpaceError", keys(t, &daemon.NoSpaceError{Dir: "d"}), "dir need free")
 	sameKeys(t, "SpeedSample", keys(t, daemon.SpeedSample{}), "at speed_down speed_up")
 }
@@ -102,4 +103,14 @@ func TestRedactsErrorData(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 	check("skipped", j)
+}
+
+func TestExistsErrorCrossesTheWire(t *testing.T) {
+	f := newFake()
+	f.addErr = &daemon.ExistsError{Path: "/dl/a.bin"}
+	c, _ := serve(t, f)
+	_, err := c.Add(context.Background(), daemon.AddParams{URIs: []string{"https://example.com/a.bin"}})
+	if ex, ok := errors.AsType[*daemon.ExistsError](err); !ok || ex.Path != "/dl/a.bin" {
+		t.Fatalf("err = %v", err)
+	}
 }

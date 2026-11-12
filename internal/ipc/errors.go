@@ -17,6 +17,7 @@ const (
 	CodeDuplicate jrpc2.Code = -32001
 	CodeSkipped   jrpc2.Code = -32002
 	CodeNoSpace   jrpc2.Code = -32003
+	CodeExists    jrpc2.Code = -32004
 )
 
 // toWire turns a handler error into a JSON-RPC error carrying enough data
@@ -29,6 +30,7 @@ func toWire(err error) error {
 		dup *daemon.DuplicateError
 		sk  *daemon.SkippedError
 		ns  *daemon.NoSpaceError
+		ex  *daemon.ExistsError
 		inv engine.ErrInvalidOption
 	)
 	switch {
@@ -38,6 +40,8 @@ func toWire(err error) error {
 		return jrpc2.Errorf(CodeSkipped, "%s", err).WithData(&daemon.SkippedError{Existing: redact(sk.Existing), Path: sk.Path})
 	case errors.As(err, &ns):
 		return jrpc2.Errorf(CodeNoSpace, "%s", err).WithData(ns)
+	case errors.As(err, &ex):
+		return jrpc2.Errorf(CodeExists, "%s", err).WithData(ex)
 	case errors.As(err, &inv):
 		return jrpc2.Errorf(jrpc2.InvalidParams, "%s", err).WithData(inv)
 	}
@@ -58,6 +62,8 @@ func fromWire(err error) error {
 		out = decode(e, &daemon.SkippedError{})
 	case CodeNoSpace:
 		out = decode(e, &daemon.NoSpaceError{})
+	case CodeExists:
+		out = decode(e, &daemon.ExistsError{})
 	case jrpc2.InvalidParams:
 		var inv engine.ErrInvalidOption
 		if json.Unmarshal(e.Data, &inv) == nil && inv.Name != "" {

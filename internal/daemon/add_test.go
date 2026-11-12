@@ -6,8 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Pranjal-SB/lazyaria/internal/engine"
 	"github.com/Pranjal-SB/lazyaria/internal/store"
@@ -215,5 +217,90 @@ func TestStartPausedIntentSurvivesLostAdd(t *testing.T) {
 	}
 	if got := r.get(t, j.ID); got.State != store.Paused {
 		t.Fatalf("state %s, want paused", got.State)
+	}
+}
+
+func TestAddOnExists(t *testing.T) {
+	deref := func(s *string) string {
+		if s == nil {
+			return ""
+		}
+		return *s
+	}
+	setup := func(t *testing.T, mode string) *rig {
+		r := newRig(t)
+		r.m.s.Load().Reliability.Duplicates = "allow"
+		r.m.s.Load().Downloads.OnExists = mode
+		for _, n := range []string{"ex.bin", "ex.1.bin", "my.iso"} {
+			os.WriteFile(filepath.Join(r.dir, n), []byte("mine"), 0o600)
+		}
+		return r
+	}
+	t.Run("rename", func(t *testing.T) {
+		r := setup(t, "rename")
+		j := r.add(t, AddParams{URIs: []string{"http://example.com/ex.bin"}})
+		req := r.e.adds[0]
+		if j.Name != "ex.2.bin" || deref(j.Out) != "ex.2.bin" || req.Out != "ex.2.bin" || !req.NoContinue || req.AllowOverwrite {
+			t.Fatalf("name %q out %q; request out %q continue=false %v overwrite %v", j.Name, deref(j.Out), req.Out, req.NoContinue, req.AllowOverwrite)
+		}
+		if got := r.get(t, j.ID); deref(got.Out) != "ex.2.bin" {
+			t.Fatalf("db out %q", deref(got.Out))
+		}
+		// An explicit --out with Force, under the default duplicates mode.
+		r.m.s.Load().Reliability.Duplicates = "ask"
+		j, err := r.m.Add(bg, AddParams{URIs: []string{"http://example.com/x"}, Out: "my.iso", Dir: r.dir, Force: true})
+		if err != nil || j.Name != "my.1.iso" || r.e.adds[1].Out != "my.1.iso" {
+			t.Fatalf("forced --out: %v name %q", err, j.Name)
+		}
+	})
+	t.Run("overwrite", func(t *testing.T) {
+		r := setup(t, "overwrite")
+		j := r.add(t, AddParams{URIs: []string{"http://example.com/ex.bin"}})
+		req := r.e.adds[0]
+		if j.Name != "ex.bin" || j.Out != nil || !req.AllowOverwrite || !req.NoContinue {
+			t.Fatalf("name %q out %q overwrite %v continue=false %v", j.Name, deref(j.Out), req.AllowOverwrite, req.NoContinue)
+		}
+		if _, ok := r.get(t, j.ID).Options["allow-overwrite"]; ok {
+			t.Fatal("allow-overwrite was persisted")
+		}
+	})
+	t.Run("ask", func(t *testing.T) {
+		r := setup(t, "ask")
+		_, err := r.m.Add(bg, AddParams{URIs: []string{"http://example.com/ex.bin"}, Dir: r.dir})
+		var ex *ExistsError
+		if !errors.As(err, &ex) || ex.Path != filepath.Join(r.dir, "ex.bin") || !strings.Contains(ex.Error(), "downloads.on_exists") {
+			t.Fatalf("want ExistsError, got %v", err)
+		}
+		if js, _ := r.st.ListJobs(bg, store.Filter{}); len(js) != 0 || len(r.e.adds) != 0 {
+			t.Fatalf("ask added anyway: %d jobs, %d engine adds", len(js), len(r.e.adds))
+		}
+	})
+	t.Run("no-out", func(t *testing.T) {
+		// The server names the file: aria2 renames it, guarded by continue=false.
+		r := setup(t, "rename")
+		j := r.add(t, AddParams{URIs: []string{"http://example.com/"}})
+		if req := r.e.adds[0]; j.Out != nil || req.Out != "" || !req.NoContinue || req.AllowOverwrite {
+			t.Fatalf("out %q request %+v", deref(j.Out), req)
+		}
+		// A re-add keeps the global continue=true so it resumes.
+		if _, err := r.m.readd(bg, j, false, "readded"); err != nil {
+			t.Fatal(err)
+		}
+		if r.e.adds[1].NoContinue {
+			t.Fatal("re-add sent continue=false")
+		}
+	})
+}
+
+func TestFreeNameFitsLimit(t *testing.T) {
+	dir := t.TempDir()
+	long := strings.Repeat("é", 125) + "x.bin" // 255 bytes
+	os.WriteFile(filepath.Join(dir, long), nil, 0o600)
+	got, err := freeName(filepath.Join(dir, long))
+	if err != nil || len(got) > 255 || !strings.HasSuffix(got, ".1.bin") || !utf8.ValidString(got) {
+		t.Fatalf("%q (%d bytes) %v", got, len(got), err)
+	}
+	if got, _ := freeName(filepath.Join(dir, "README")); got != "README.1" {
+		t.Fatalf("no extension: %q", got)
 	}
 }
