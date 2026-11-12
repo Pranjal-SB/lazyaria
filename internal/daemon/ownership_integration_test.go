@@ -77,7 +77,7 @@ func ownershipCase(t *testing.T, out string, recover func(d *liveDaemon, j *stor
 }
 
 // A refreshed link on a server-named job that never got a reply must not
-// resume into the user's file the server names now (probe p1).
+// resume into the user's file the server names now.
 func TestRefreshNeverResumesIntoUnownedFile(t *testing.T) {
 	ownershipCase(t, "", func(d *liveDaemon, j *store.Job, u string) error {
 		_, err := d.m.RefreshURI(bg, j.ID, u+"/get2")

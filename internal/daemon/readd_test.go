@@ -97,10 +97,10 @@ func noRangePartial(t *testing.T, r *rig) (*store.Job, string) {
 	return r.get(t, j.ID), path
 }
 
-// Probe p7: the own partial is trashed on retry, the next attempt fails
+// The own partial is trashed on retry, the next attempt fails
 // before any reply, the user saves a.bin, and the retry after that must
 // leave the user's file alone and download beside it.
-func TestP7UserFileAfterTrashedPartialSurvives(t *testing.T) {
+func TestUserFileAfterTrashedPartialSurvives(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
 	r := newRig(t)
 	j, path := noRangePartial(t, r)
@@ -123,9 +123,9 @@ func TestP7UserFileAfterTrashedPartialSurvives(t *testing.T) {
 	}
 }
 
-// Probe p7b: another drive mounted at the dir holds a file at Out; it is
+// Another drive mounted at the dir holds a file at Out; it is
 // not the job's and is never touched.
-func TestP7bOtherDriveFileUntouched(t *testing.T) {
+func TestOtherDriveFileUntouched(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
 	r := newRig(t)
 	j, path := noRangePartial(t, r)
@@ -206,10 +206,10 @@ func (failAdd) Add(context.Context, engine.AddRequest) (engine.EngineRef, error)
 	return "", errors.New("engine down")
 }
 
-// Probe p9: the partial is trashed and then the engine add fails. The
+// The partial is trashed and then the engine add fails. The
 // disown must already be stored, so a user's a.bin saved afterwards is not
 // taken for the job's partial on the next re-add.
-func TestP9TrashThenAddFails(t *testing.T) {
+func TestDisownSurvivesFailedAddAfterTrash(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
 	r := newRig(t)
 	j, path := noRangePartial(t, r)

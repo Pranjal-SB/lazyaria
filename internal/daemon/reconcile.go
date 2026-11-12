@@ -186,7 +186,7 @@ func (m *Manager) readd(ctx context.Context, j *store.Job, paused bool, why stri
 		if gone || partial || otherDrive {
 			// Disown first, durably: should the trash, the add or the process
 			// fail after this, the job owns nothing at Out, so a file saved
-			// there later is never taken for its partial (probe p9).
+			// there later is never taken for its partial.
 			if _, err := m.change(ctx, j.ID, "", "", func(x *store.Job) {
 				zero := int64(0)
 				x.DoneBytes = &zero

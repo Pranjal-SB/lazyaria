@@ -255,7 +255,7 @@ func TestAddOnExists(t *testing.T) {
 	})
 	t.Run("overwrite", func(t *testing.T) {
 		// An HTTP link to a .torrent: aria2 would hand allow-overwrite on to
-		// the torrent it starts (probe p6), so overwrite trashes instead.
+		// the torrent it starts, so overwrite trashes instead.
 		t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
 		r := setup(t, "overwrite")
 		orig := filepath.Join(r.dir, "ex.torrent")
