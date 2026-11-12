@@ -37,3 +37,31 @@ jobs:
         run: |
           pkgs=$(go list ./... | grep -v -e '/internal/cli$' -e '/lazyaria$')
           CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build $pkgs
+
+      - name: Fuzz smoke
+        run: |
+          for pkg in $(go list ./...); do
+            for target in $(go test -list '^Fuzz' "$pkg" | grep '^Fuzz'); do
+              go test -run '^$' -fuzz "^${target}\$" -fuzztime 10s "$pkg"
+            done
+          done
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+
+      - name: Install aria2
+        run: sudo apt-get install -y aria2
+
+      # The disk-full test mounts a tmpfs in a user namespace. Ubuntu's
+      # AppArmor blocks that by default, and the test skips without it.
+      - name: Allow user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+
+      - name: End-to-end
+        run: go test -race -tags e2e -v ./e2e/
