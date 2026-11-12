@@ -46,6 +46,16 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+// skipOrFail skips, except under CI or E2E_STRICT=1, where a test that
+// cannot run is a failure: a green run must mean everything ran.
+func skipOrFail(t *testing.T, format string, args ...any) {
+	t.Helper()
+	if os.Getenv("CI") != "" || os.Getenv("E2E_STRICT") == "1" {
+		t.Fatalf(format, args...)
+	}
+	t.Skipf(format, args...)
+}
+
 // env is one isolated user: HOME, XDG dirs, config file and download dir.
 type env struct {
 	t    *testing.T
@@ -58,7 +68,9 @@ type env struct {
 
 func newEnv(t *testing.T, cfg string) *env {
 	t.Helper()
-	testutil.RequireAria2(t)
+	if _, err := exec.LookPath("aria2c"); err != nil {
+		skipOrFail(t, "aria2c not found on PATH")
+	}
 	root := t.TempDir()
 	// The socket path must stay under 104 bytes, and a long TMPDIR would
 	// otherwise push lazyaria onto the shared /tmp/lazyaria-<uid> fallback.

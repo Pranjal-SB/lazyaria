@@ -3,7 +3,6 @@
 package e2e
 
 import (
-	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -32,23 +31,80 @@ func TestCrashNeverLoses(t *testing.T) {
 		t.Fatalf("added %d jobs, want 3", len(ids))
 	}
 
+	var total int64
+	for _, b := range files {
+		total += int64(len(b))
+	}
+	// progress is the share of all bytes written, from lazyaria list --json.
+	progress := func() (frac float64, allDone bool) {
+		var done int64
+		allDone = true
+		for _, j := range e.jobs() {
+			switch {
+			case j.State == store.Done:
+				done += int64(len(files[j.Name]))
+			case j.DoneBytes != nil:
+				done += *j.DoneBytes
+				allDone = false
+			default:
+				allDone = false
+			}
+		}
+		return float64(done) / float64(total), allDone
+	}
+
+	// Kill until every job is done, one kill per 5% of progress (1% above 85%), so the
+	// kills also land in the finalise window (.aria2 removal, Done).
 	start := time.Now()
-	for i := range 20 {
-		time.Sleep(time.Duration(100+rand.IntN(700)) * time.Millisecond)
+	const minKills = 20
+	kills, late := 0, 0
+	for time.Since(start) < 150*time.Second {
+		frac, allDone := progress()
+		if allDone {
+			break
+		}
 		// status auto-starts the daemon after the previous kill.
 		pid := e.status().PID
 		victim, what := pid, "daemon"
-		if i%2 == 1 {
+		if kills%2 == 1 {
 			what = "aria2c"
-			waitFor(t, 10*time.Second, "an aria2c child", func() bool {
+			waitFor(t, 10*time.Second, "an aria2c child or completion", func() bool {
 				victim = aria2Child(pid)
-				return victim != 0
+				_, allDone = progress()
+				return victim != 0 || allDone
 			})
+			if victim == 0 {
+				break
+			}
 		}
 		if err := syscall.Kill(victim, syscall.SIGKILL); err != nil {
 			t.Fatalf("kill %s %d: %v", what, victim, err)
 		}
-		t.Logf("kill %2d: %s %d at %s", i+1, what, victim, time.Since(start).Round(time.Millisecond))
+		kills++
+		if frac > 0.9 {
+			late++
+		}
+		t.Logf("kill %2d: %s %d at %s, progress %.1f%%", kills, what, victim, time.Since(start).Round(time.Millisecond), frac*100)
+		// Wait for the next step (or 4 s, if a restart makes no headway).
+		// Steps shrink above 90% to put several kills in the finalise window.
+		step := 0.05
+		if frac > 0.85 {
+			step = 0.01
+		}
+		target, until := frac+step, time.Now().Add(4*time.Second)
+		for time.Now().Before(until) {
+			if f, done := progress(); f >= target || done {
+				break
+			}
+			time.Sleep(200 * time.Millisecond)
+		}
+	}
+	t.Logf("%d kills, %d up to 90%% progress, %d after", kills, kills-late, late)
+	if kills < minKills {
+		t.Errorf("only %d kills, want at least %d", kills, minKills)
+	}
+	if late < 3 {
+		t.Errorf("only %d kills above 90%% progress, want at least 3", late)
 	}
 
 	for _, id := range ids {

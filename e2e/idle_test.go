@@ -4,7 +4,9 @@ package e2e
 
 import (
 	"errors"
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -35,15 +37,26 @@ func TestIdleZeroProcesses(t *testing.T) {
 	if aria2Child(pid) == 0 {
 		t.Fatal("no aria2c child while the daemon is up")
 	}
-	if ps := e.procs(); len(ps) == 0 {
-		t.Fatal("process scan found nothing while the daemon runs; the scan is broken")
+	hasAria2 := false
+	for _, p := range e.procs() {
+		if b, _ := os.ReadFile(fmt.Sprintf("/proc/%d/comm", p)); strings.TrimSpace(string(b)) == "aria2c" {
+			hasAria2 = true
+		}
+	}
+	if !hasAria2 {
+		t.Fatalf("aria2c is not among procs() %v while the daemon runs; the scan is broken", e.procs())
 	}
 	// The queue is empty and status, the last client, has gone.
 	emptied := time.Now()
 
 	// 30 s idle_exit, then the shutdown: aria2c gets SIGTERM and, per the
 	// spec §21 escalation, SIGKILL at the latest 5 s later.
-	deadline := emptied.Add(35 * time.Second)
+	// An early exit would also pass the zero-process check below.
+	time.Sleep(time.Until(emptied.Add(25 * time.Second)))
+	if !alive(pid) {
+		t.Fatalf("daemon exited %s after the queue emptied, before its 30 s idle_exit", time.Since(emptied).Round(time.Millisecond))
+	}
+	deadline := emptied.Add(33 * time.Second)
 	for len(e.procs()) > 0 && time.Now().Before(deadline) {
 		time.Sleep(200 * time.Millisecond)
 	}

@@ -22,7 +22,7 @@ import (
 func testDiskFull(t *testing.T) {
 	t.Parallel()
 	if out, err := exec.Command("unshare", "-rm", "sh", "-c", "mount -t tmpfs -o size=1m tmpfs \"$1\"", "sh", t.TempDir()).CombinedOutput(); err != nil {
-		t.Skipf("cannot mount a tmpfs in a user namespace (unshare -rm): %v %s", err, out)
+		skipOrFail(t, "cannot mount a tmpfs in a user namespace (unshare -rm): %v %s", err, out)
 	}
 	srv := testutil.NewFaultServer(t, map[string][]byte{"big.bin": payload(2<<20, 0x51)})
 	// Without the precheck turned off the job would be paused for lack of

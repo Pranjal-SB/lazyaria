@@ -34,7 +34,11 @@ func TestFailurePaths(t *testing.T) {
 			srv := testutil.NewFaultServer(t, map[string][]byte{"f.bin": payload(64<<10, 0x41)})
 			e := newEnv(t, fastRetry)
 			j := e.failed(srv.URL("f.bin", c.mode))
-			t.Logf("error %s, aria2 code %d: %s", deref(j.ErrorKind), *j.ErrorCode, deref(j.ErrorMsg))
+			code := -1
+			if j.ErrorCode != nil {
+				code = *j.ErrorCode
+			}
+			t.Logf("error %s, aria2 code %d: %s", deref(j.ErrorKind), code, deref(j.ErrorMsg))
 			if got := deref(j.ErrorKind); got != c.kind {
 				t.Errorf("error kind %q, want %q (message %q)", got, c.kind, deref(j.ErrorMsg))
 			}

@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // procs returns every live process started for this env: the daemon, its
@@ -37,6 +38,10 @@ func (e *env) cleanup() {
 	}
 	for _, pid := range e.procs() {
 		syscall.Kill(pid, syscall.SIGKILL)
+	}
+	// Let them die before TempDir removal runs, or files appear mid-delete.
+	for end := time.Now().Add(3 * time.Second); len(e.procs()) > 0 && time.Now().Before(end); {
+		time.Sleep(50 * time.Millisecond)
 	}
 }
 
