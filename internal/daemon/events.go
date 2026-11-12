@@ -100,11 +100,19 @@ func (m *Manager) apply(ctx context.Context, j *store.Job, st engine.EngineStatu
 }
 
 func setBytes(x *store.Job, st engine.EngineStatus) {
-	done := st.Done
-	x.DoneBytes = &done
+	setDone(x, st.Done)
 	if st.Total > 0 {
 		total := st.Total
 		x.TotalBytes = &total
+	}
+}
+
+// setDone records done bytes, but a 0 never lowers a positive count: a
+// retry that failed before any reply must not cost the job ownership of
+// its file. trackName resets the count when the file changes.
+func setDone(x *store.Job, done int64) {
+	if done > 0 || x.DoneBytes == nil || *x.DoneBytes <= 0 {
+		x.DoneBytes = &done
 	}
 }
 
@@ -130,7 +138,8 @@ func (m *Manager) trackName(ctx context.Context, j *store.Job, st engine.EngineS
 		kind = "renamed"
 	}
 	name := filepath.Base(rel)
-	return m.set(ctx, j, kind, rel, func(x *store.Job) { x.Out, x.Name = &rel, name })
+	done := st.Done // the bytes counted so far were for another file
+	return m.set(ctx, j, kind, rel, func(x *store.Job) { x.Out, x.Name, x.DoneBytes = &rel, name, &done })
 }
 
 // learnTotal stores a newly reported size and, the first time one shows

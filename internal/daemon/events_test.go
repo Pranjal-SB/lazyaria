@@ -1,6 +1,8 @@
 package daemon
 
 import (
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -172,5 +174,43 @@ func TestMagnetAdoption(t *testing.T) {
 	}
 	if len(r.e.removed) != 1 || r.e.removed[0] != parent {
 		t.Fatalf("parent not removed: %v", r.e.removed)
+	}
+}
+
+func TestExistsHints(t *testing.T) {
+	for _, c := range []struct {
+		code      int
+		want, not string
+	}{
+		{13, "Move or rename the existing file", "Another download"},
+		{11, "Another download in aria2 is writing the same file", "Move or rename"},
+	} {
+		var x store.Job
+		setErr(&x, "exists", engine.EngineStatus{ErrorCode: c.code, ErrorMsg: "File /d/a.bin exists."})
+		if msg := *x.ErrorMsg; !strings.Contains(msg, c.want) || strings.Contains(msg, c.not) {
+			t.Errorf("code %d: %q", c.code, msg)
+		}
+	}
+}
+
+// A retry that fails before any reply reports 0 bytes; the job keeps the
+// count, and with it ownership of its file. A new file resets it.
+func TestDoneBytesKeepOwnership(t *testing.T) {
+	r := newRig(t)
+	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.bin"}, Out: "a.bin"})
+	path := filepath.Join(r.dir, "a.bin")
+	j = r.m.apply(bg, j, engine.EngineStatus{State: "active", Done: 100, Total: 1000, Path: path}, "")
+	if !ownsFile(j) {
+		t.Fatalf("done %v: not owned after writing", j.DoneBytes)
+	}
+	j = r.m.apply(bg, j, engine.EngineStatus{State: "error", ErrorCode: 22, HTTPStatus: 503, Path: path}, "")
+	if got := r.get(t, j.ID); got.DoneBytes == nil || *got.DoneBytes != 100 {
+		t.Fatalf("after a failed retry done %v, want 100", got.DoneBytes)
+	}
+	j = r.get(t, j.ID)
+	j.State = store.Active
+	j = r.m.trackName(bg, j, engine.EngineStatus{Path: filepath.Join(r.dir, "a.1.bin")})
+	if ownsFile(j) || *j.Out != "a.1.bin" {
+		t.Fatalf("after a rename out %q done %v", *j.Out, *j.DoneBytes)
 	}
 }

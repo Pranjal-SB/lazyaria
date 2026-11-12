@@ -45,9 +45,6 @@ func (e *aria2Engine) Add(ctx context.Context, req AddRequest) (EngineRef, error
 	if req.Paused {
 		opts["pause"] = "true"
 	}
-	if req.AllowOverwrite {
-		opts["allow-overwrite"] = "true"
-	}
 	if req.NoContinue {
 		opts["continue"] = "false"
 	}

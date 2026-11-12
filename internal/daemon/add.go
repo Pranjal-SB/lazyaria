@@ -18,6 +18,7 @@ import (
 	"github.com/Pranjal-SB/lazyaria/internal/fsinfo"
 	"github.com/Pranjal-SB/lazyaria/internal/store"
 	"github.com/Pranjal-SB/lazyaria/internal/textutil"
+	"github.com/Pranjal-SB/lazyaria/internal/trash"
 )
 
 type AddParams struct {
@@ -77,6 +78,9 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 		}
 	}
 	overwrite := false
+	// shortcut: a server-chosen name (Content-Disposition, no URL basename)
+	// is unknown here, so aria2 may adopt another live job's partial through
+	// its .aria2 (probe p4); v0.2 probes the name first and writes .laria files.
 	name := targetName(dir, p)
 	var held map[string]bool
 	if name != "" {
@@ -106,19 +110,39 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 	if ns := m.noSpace(dir, p.Total, 0); ns != nil {
 		return nil, ns
 	}
+	// Overwrite never reaches aria2 (allow-overwrite would pass on to a
+	// torrent a link turns into, probe p6): the old file goes to the trash,
+	// where the user can restore it, and the add is a plain one.
+	var trashed *trash.Entry
+	if overwrite {
+		e, err := trash.Trash(target)
+		if err != nil {
+			return nil, fmt.Errorf("move %s to the trash before overwriting it: %w; nothing was added. Move it aside, or set downloads.on_exists to rename", target, err)
+		}
+		trashed = &e
+	}
 	paused := p.StartPaused || m.s.Load().Downloads.StartPaused
 	j := m.newJob(dir, p, paused)
 	if err := m.st.InsertJob(ctx, j); err != nil {
+		if trashed != nil {
+			err = errors.Join(err, trash.Restore(*trashed))
+		}
 		return nil, fmt.Errorf("save the new job: %w", err)
 	}
 	if err := m.st.AddEvent(ctx, j.ID, "added", ""); err != nil {
 		m.log.Warn("record job event", "job", j.ID, "err", err)
 	}
+	if trashed != nil {
+		if err := m.st.AddEvent(ctx, j.ID, "trashed-existing", trashed.TrashedPath); err != nil {
+			m.log.Warn("record job event", "job", j.ID, "err", err)
+		}
+	}
 	m.bus.Publish(Event{Type: "job.added", Job: j})
 	req := m.request(j, paused)
 	// A fresh job owns no file yet: continue=false makes aria2 rename beside
-	// a file that appears after the check above. readd decides by ownership.
-	req.AllowOverwrite, req.NoContinue = overwrite && !isBT(j.Kind), true
+	// a finished file that appears after the check above (one with a .aria2
+	// is adopted and resumed). readd decides by ownership.
+	req.NoContinue = true
 	ref, err := m.e.Add(ctx, req)
 	if engineDown(err) {
 		// The add may or may not have landed under the job's gid; the poll

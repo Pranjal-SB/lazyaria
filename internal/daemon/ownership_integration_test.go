@@ -92,3 +92,54 @@ func TestRetryWithOutNeverWritesUnownedFile(t *testing.T) {
 		return d.m.Resume(bg, []string{j.ID})
 	})
 }
+
+// With --out the failed first attempt reports a path but no bytes, so the
+// refresh takes the completedLength == 0 branch, not the no-path one.
+func TestRefreshWithOutNeverResumesIntoUnownedFile(t *testing.T) {
+	ownershipCase(t, "report.pdf", func(d *liveDaemon, j *store.Job, u string) error {
+		_, err := d.m.RefreshURI(bg, j.ID, u+"/get2")
+		return err
+	})
+}
+
+// on_exists = overwrite moves the user's file to the trash, where it can
+// be restored, and downloads normally; aria2 is never asked to overwrite.
+func TestOverwriteTrashesExisting(t *testing.T) {
+	testutil.RequireAria2(t)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
+	data := testutil.RandBytes(128 << 10)
+	srv := testutil.NewFaultServer(t, map[string][]byte{"ow.bin": data})
+	root := t.TempDir()
+	st, err := store.Open(filepath.Join(root, "l.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	old := []byte("the user's old copy\n")
+	orig := filepath.Join(root, "dl", "ow.bin")
+	mode := func(s *config.Settings) { s.Reliability.Duplicates, s.Downloads.OnExists = "allow", "overwrite" }
+	d := startLive(t, st, root, mode, func(*Manager) {
+		if err := os.WriteFile(orig, old, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	})
+	defer d.stop(t)
+	j, err := d.m.Add(bg, AddParams{URIs: []string{srv.URL("ow.bin", testutil.ModeOK)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := waitJob(t, st, j.ID, 30*time.Second, func(j *store.Job) bool { return j.State == store.Done || j.State == store.Error })
+	if got.State != store.Done || got.Name != "ow.bin" {
+		t.Fatalf("state %s name %q (%v)", got.State, got.Name, got.ErrorMsg)
+	}
+	if testutil.SHA256File(t, orig) != testutil.SHA256File(t, writeFile(t, data)) {
+		t.Fatal("the new download is not at ow.bin")
+	}
+	trashed := filepath.Join(os.Getenv("XDG_DATA_HOME"), "Trash", "files", "ow.bin")
+	if b, err := os.ReadFile(trashed); err != nil || string(b) != string(old) {
+		t.Fatalf("old copy not in the trash: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(os.Getenv("XDG_DATA_HOME"), "Trash", "info", "ow.bin.trashinfo")); err != nil {
+		t.Fatalf("no trashinfo, so it cannot be restored: %v", err)
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -166,15 +167,21 @@ func (m *Manager) readd(ctx context.Context, j *store.Job, paused bool, why stri
 	} else {
 		req.GID = newGID()
 	}
-	// A job owns its file only once it has written bytes to it. An owned
-	// partial whose control file is gone (a server without ranges, or an
-	// unknown size) restarts in place; aria2 would clobber a torrent's
-	// colliding files, so those never overwrite. A file the job does not
-	// own is never written into: continue=false makes aria2 rename beside
-	// it, and a partial with its .aria2 still resumes.
+	// A job owns its file only once it has written bytes to it. A file it
+	// does not own is never written into: continue=false makes aria2 rename
+	// beside it, and a partial with its .aria2 still resumes. An owned
+	// partial without a control file (a server without ranges, or an
+	// unknown size) is deleted so it restarts in place; aria2 is never
+	// asked to overwrite.
 	owned := ownsFile(j)
-	req.AllowOverwrite = owned && j.StartedAt != nil && !isBT(j.Kind)
 	req.NoContinue = !owned
+	if owned && j.StartedAt != nil && !isBT(j.Kind) {
+		if p := filepath.Join(j.Dir, *j.Out); !exists(p + ".aria2") {
+			if err := os.Remove(p); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				return j, fmt.Errorf("restart %s from scratch: %w", p, err)
+			}
+		}
+	}
 	ref, err := m.e.Add(ctx, req)
 	if err != nil {
 		return j, err
@@ -197,14 +204,14 @@ func (m *Manager) readd(ctx context.Context, j *store.Job, paused bool, why stri
 	})
 }
 
-// completedOffline catches a download that finished while its completion
-// went unseen: the file has its full size and no control file. Re-adding it
-// with allow-overwrite would download it again over itself.
 // ownsFile: the job has written bytes to the file at its Out.
 func ownsFile(j *store.Job) bool {
 	return j.Out != nil && j.DoneBytes != nil && *j.DoneBytes > 0
 }
 
+// completedOffline catches a download that finished while its completion
+// went unseen: the file has its full size and no control file. Re-adding it
+// would delete it and download it again.
 func (m *Manager) completedOffline(ctx context.Context, j *store.Job) (*store.Job, bool) {
 	// A same-size file the job never wrote to is someone else's.
 	if !ownsFile(j) || j.TotalBytes == nil || *j.TotalBytes <= 0 {

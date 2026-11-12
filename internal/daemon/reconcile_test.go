@@ -304,7 +304,7 @@ func TestCompletedOfflineNotRedownloaded(t *testing.T) {
 	os.WriteFile(filepath.Join(r.dir, foreign), []byte("abcde"), 0o600)
 	f := r.insert(t, store.Active, "old3", func(j *store.Job) { j.Out, j.StartedAt, j.TotalBytes = &foreign, &started, &total })
 	r.m.Reconcile(bg)
-	if adds, _ := r.e.count(); adds != 2 || r.get(t, f.ID).State == store.Done || !r.e.adds[1].NoContinue || r.e.adds[1].AllowOverwrite {
+	if adds, _ := r.e.count(); adds != 2 || r.get(t, f.ID).State == store.Done || !r.e.adds[1].NoContinue || !exists(filepath.Join(r.dir, foreign)) {
 		t.Fatalf("foreign file: adds %d state %s", adds, r.get(t, f.ID).State)
 	}
 }

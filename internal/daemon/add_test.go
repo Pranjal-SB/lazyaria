@@ -240,8 +240,8 @@ func TestAddOnExists(t *testing.T) {
 		r := setup(t, "rename")
 		j := r.add(t, AddParams{URIs: []string{"http://example.com/ex.bin"}})
 		req := r.e.adds[0]
-		if j.Name != "ex.2.bin" || deref(j.Out) != "ex.2.bin" || req.Out != "ex.2.bin" || !req.NoContinue || req.AllowOverwrite {
-			t.Fatalf("name %q out %q; request out %q continue=false %v overwrite %v", j.Name, deref(j.Out), req.Out, req.NoContinue, req.AllowOverwrite)
+		if j.Name != "ex.2.bin" || deref(j.Out) != "ex.2.bin" || req.Out != "ex.2.bin" || !req.NoContinue {
+			t.Fatalf("name %q out %q; request out %q continue=false %v", j.Name, deref(j.Out), req.Out, req.NoContinue)
 		}
 		if got := r.get(t, j.ID); deref(got.Out) != "ex.2.bin" {
 			t.Fatalf("db out %q", deref(got.Out))
@@ -254,14 +254,29 @@ func TestAddOnExists(t *testing.T) {
 		}
 	})
 	t.Run("overwrite", func(t *testing.T) {
+		// An HTTP link to a .torrent: aria2 would hand allow-overwrite on to
+		// the torrent it starts (probe p6), so overwrite trashes instead.
+		t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
 		r := setup(t, "overwrite")
-		j := r.add(t, AddParams{URIs: []string{"http://example.com/ex.bin"}})
+		orig := filepath.Join(r.dir, "ex.torrent")
+		os.WriteFile(orig, []byte("mine"), 0o600)
+		j := r.add(t, AddParams{URIs: []string{"http://example.com/ex.torrent"}})
 		req := r.e.adds[0]
-		if j.Name != "ex.bin" || j.Out != nil || !req.AllowOverwrite || !req.NoContinue {
-			t.Fatalf("name %q out %q overwrite %v continue=false %v", j.Name, deref(j.Out), req.AllowOverwrite, req.NoContinue)
+		if _, ok := req.Options["allow-overwrite"]; ok || j.Name != "ex.torrent" || j.Out != nil || !req.NoContinue {
+			t.Fatalf("name %q out %q options %v continue=false %v", j.Name, deref(j.Out), req.Options, req.NoContinue)
 		}
-		if _, ok := r.get(t, j.ID).Options["allow-overwrite"]; ok {
-			t.Fatal("allow-overwrite was persisted")
+		if exists(orig) {
+			t.Fatal("the existing file is still in place")
+		}
+		evs, _ := r.st.Events(bg, j.ID)
+		var trashed string
+		for _, e := range evs {
+			if e.Kind == "trashed-existing" {
+				trashed = e.Detail
+			}
+		}
+		if b, err := os.ReadFile(trashed); err != nil || string(b) != "mine" {
+			t.Fatalf("trashed copy %q: %v", trashed, err)
 		}
 	})
 	t.Run("ask", func(t *testing.T) {
@@ -279,29 +294,32 @@ func TestAddOnExists(t *testing.T) {
 		// The server names the file: aria2 renames it, guarded by continue=false.
 		r := setup(t, "rename")
 		j := r.add(t, AddParams{URIs: []string{"http://example.com/"}})
-		if req := r.e.adds[0]; j.Out != nil || req.Out != "" || !req.NoContinue || req.AllowOverwrite {
+		if req := r.e.adds[0]; j.Out != nil || req.Out != "" || !req.NoContinue {
 			t.Fatalf("out %q request %+v", deref(j.Out), req)
 		}
 	})
 }
 
 // A re-add resumes (continue=true) only into a file the job owns: Out set
-// and bytes written. Only an owned, started HTTP job may overwrite.
+// and bytes written. Only an owned, started HTTP job's partial without a
+// control file is deleted, so it restarts in place.
 func TestReaddOwnership(t *testing.T) {
 	r := newRig(t)
 	wrote, none := int64(10), int64(0)
 	started := r.clk.now()
 	for _, c := range []struct {
-		name      string
-		uri, out  string
-		done      *int64
-		owned, ow bool
+		name           string
+		uri, out       string
+		done           *int64
+		ctl            bool // a .aria2 sits beside the file
+		owned, deleted bool
 	}{
-		{"no out", "http://example.com/", "", &wrote, false, false},
-		{"out, no bytes recorded", "http://example.com/a", "a.bin", nil, false, false},
-		{"out, zero bytes", "http://example.com/b", "b.bin", &none, false, false},
-		{"owned", "http://example.com/c", "c.bin", &wrote, true, true},
-		{"owned torrent", "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567", "", &wrote, true, false},
+		{"no out", "http://example.com/", "", &wrote, false, false, false},
+		{"out, no bytes recorded", "http://example.com/a", "a.bin", nil, false, false, false},
+		{"out, zero bytes", "http://example.com/b", "b.bin", &none, false, false, false},
+		{"owned", "http://example.com/c", "c.bin", &wrote, false, true, true},
+		{"owned with .aria2", "http://example.com/d", "d.bin", &wrote, true, true, false},
+		{"owned torrent", "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567", "", &wrote, false, true, false},
 	} {
 		j := r.add(t, AddParams{URIs: []string{c.uri}, Out: c.out, Force: true})
 		j.DoneBytes, j.StartedAt = c.done, &started
@@ -309,12 +327,23 @@ func TestReaddOwnership(t *testing.T) {
 			out := "t" // aria2 reported a path for the torrent
 			j.Out = &out
 		}
+		var p string
+		if j.Out != nil {
+			p = filepath.Join(r.dir, *j.Out)
+			os.WriteFile(p, []byte("part"), 0o600)
+			if c.ctl {
+				os.WriteFile(p+".aria2", []byte("ctl"), 0o600)
+			}
+		}
 		if _, err := r.m.readd(bg, j, false, "readded"); err != nil {
 			t.Fatal(err)
 		}
 		req := r.e.adds[len(r.e.adds)-1]
-		if req.NoContinue != !c.owned || req.AllowOverwrite != c.ow {
-			t.Errorf("%s: continue=false %v overwrite %v; want %v %v", c.name, req.NoContinue, req.AllowOverwrite, !c.owned, c.ow)
+		if _, ok := req.Options["allow-overwrite"]; ok || req.NoContinue != !c.owned {
+			t.Errorf("%s: continue=false %v options %v; want continue=false %v", c.name, req.NoContinue, req.Options, !c.owned)
+		}
+		if p != "" && exists(p) == c.deleted {
+			t.Errorf("%s: file deleted %v, want %v", c.name, !exists(p), c.deleted)
 		}
 	}
 }

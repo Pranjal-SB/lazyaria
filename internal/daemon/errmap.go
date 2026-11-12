@@ -84,7 +84,10 @@ func (m *Manager) failed(ctx context.Context, j *store.Job, st engine.EngineStat
 
 func setErr(x *store.Job, kind string, st engine.EngineStatus) {
 	code, msg := st.ErrorCode, st.ErrorMsg
-	if kind == "exists" {
+	switch {
+	case kind == "exists" && code == 11:
+		msg += " Another download in aria2 is writing the same file; wait for it to finish or remove one of them, then retry."
+	case kind == "exists":
 		msg += " Move or rename the existing file, then retry the job."
 	}
 	x.ErrorKind, x.ErrorCode, x.ErrorMsg = &kind, &code, &msg

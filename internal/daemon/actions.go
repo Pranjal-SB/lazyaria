@@ -93,7 +93,7 @@ func (m *Manager) pause(ctx context.Context, j *store.Job) error {
 	m.to(ctx, j, store.Paused, "", func(x *store.Job) {
 		x.RetryAt = nil
 		if seen {
-			x.DoneBytes = &it.Done
+			setDone(x, it.Done)
 		}
 	})
 	return nil
