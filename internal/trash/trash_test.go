@@ -228,7 +228,7 @@ func TestTrashCrossDeviceIsNoTrash(t *testing.T) {
 	p := filepath.Join(work, "f")
 	write(t, p, "x")
 	renameFn = func(string, string) error { return &os.LinkError{Op: "rename", Err: syscall.EXDEV} }
-	t.Cleanup(func() { renameFn = os.Rename })
+	t.Cleanup(func() { renameFn = moveNoReplace })
 	if _, err := Trash(p); !errors.Is(err, ErrNoTrash) {
 		t.Fatalf("want ErrNoTrash, got %v", err)
 	}
@@ -292,5 +292,30 @@ func TestCheck(t *testing.T) {
 	}
 	if err := Check(filepath.Join(work, "nope")); !os.IsNotExist(err) {
 		t.Fatalf("want not-exist, got %v", err)
+	}
+}
+
+// A trashed name taken between the check and the move is never replaced;
+// the item goes under the next name.
+func TestTrashNeverReplacesRacingName(t *testing.T) {
+	work := setup(t)
+	p := filepath.Join(work, "r")
+	write(t, p, "mine")
+	renameFn = func(src, dst string) error {
+		renameFn = moveNoReplace
+		write(t, dst, "racer") // appears just before the move
+		return moveNoReplace(src, dst)
+	}
+	t.Cleanup(func() { renameFn = moveNoReplace })
+	e, err := Trash(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := filepath.Join(os.Getenv("XDG_DATA_HOME"), "Trash", "files")
+	if b, _ := os.ReadFile(filepath.Join(files, "r")); string(b) != "racer" {
+		t.Fatalf("racing file replaced: %q", b)
+	}
+	if b, _ := os.ReadFile(e.TrashedPath); filepath.Base(e.TrashedPath) != "r.2" || string(b) != "mine" {
+		t.Fatalf("trashed at %s: %q", e.TrashedPath, b)
 	}
 }

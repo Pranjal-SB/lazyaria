@@ -177,6 +177,9 @@ func Trash(path string) (Entry, error) {
 		}
 		if werr != nil {
 			os.Remove(e.InfoPath)
+			if errors.Is(werr, os.ErrExist) {
+				continue // the name was taken after the check; try the next
+			}
 			if errors.Is(werr, syscall.EXDEV) {
 				return Entry{}, ErrNoTrash
 			}

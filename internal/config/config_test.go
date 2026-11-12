@@ -123,7 +123,8 @@ func TestRPCGuard(t *testing.T) {
 		"--enable-rp", " --rpc-secret=x", "-rpc-listen-port=1", "--RPC-SECRET=x",
 		"-- rpc-listen-all=true", "--\trpc-secret=x", "--log-level=debug", "--conf-path=/x",
 		"--log=/x", "--stop-with-process=1", "--dir=/x\nrpc-listen-all=true", "--Max-Tries=3", "-x16",
-		"---rpc-secret=x", "--daemon=true", "--input-file=/x", "--save-session=/x"} {
+		"---rpc-secret=x", "--daemon=true", "--input-file=/x", "--save-session=/x",
+		"--allow-overwrite=true", "--remove-control-file", "--always-resume=true"} {
 		if err := f.check([]string{a}); err == nil {
 			t.Errorf("%q accepted", a)
 		}

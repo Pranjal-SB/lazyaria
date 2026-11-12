@@ -183,6 +183,9 @@ var extraArgName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 var ownedOptions = map[string]bool{
 	"log": true, "log-level": true, "conf-path": true, "stop-with-process": true,
 	"daemon": true, "input-file": true, "save-session": true,
+	// lazyaria never lets aria2 overwrite, drop a control file or resume
+	// into a file it does not own; extra_args must not undo that.
+	"allow-overwrite": true, "remove-control-file": true, "always-resume": true,
 }
 
 // ParseExtraArg splits one engine.aria2_extra_args entry, "--name=value" or a

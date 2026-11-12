@@ -172,7 +172,6 @@ func (m *Manager) readd(ctx context.Context, j *store.Job, paused bool, why stri
 	// beside it, and a partial with its .aria2 still resumes.
 	owned := ownsFile(j)
 	req.NoContinue = !owned
-	disowned := false
 	if owned && j.StartedAt != nil && !isBT(j.Kind) && !exists(filepath.Join(j.Dir, *j.Out)+".aria2") {
 		// No control file (a server without ranges, or an unknown size), so
 		// aria2 cannot resume. A true partial of ours goes to the trash and
@@ -181,21 +180,27 @@ func (m *Manager) readd(ctx context.Context, j *store.Job, paused bool, why stri
 		req.NoContinue = true
 		p := filepath.Join(j.Dir, *j.Out)
 		fi, err := os.Lstat(p)
-		switch {
-		case errors.Is(err, fs.ErrNotExist):
-			disowned = true
-		case err == nil && m.ownPartial(j, fi):
-			e, terr := m.trash(p)
-			if terr != nil {
-				m.log.Warn("trash own partial; downloading beside it", "job", j.ID, "err", terr)
-				break
+		gone := errors.Is(err, fs.ErrNotExist)
+		partial := err == nil && m.ownPartial(j, fi)
+		otherDrive := err == nil && !m.sameDev(j) // the file there is not ours
+		if gone || partial || otherDrive {
+			// Disown first, durably: should the trash, the add or the process
+			// fail after this, the job owns nothing at Out, so a file saved
+			// there later is never taken for its partial (probe p9).
+			if _, err := m.change(ctx, j.ID, "", "", func(x *store.Job) {
+				zero := int64(0)
+				x.DoneBytes = &zero
+			}); err != nil {
+				m.log.Warn("disown before restart; downloading beside it", "job", j.ID, "err", err)
+				partial = false
 			}
-			disowned = true
-			if err := m.st.AddEvent(ctx, j.ID, "trashed-partial", e.TrashedPath); err != nil {
+		}
+		if partial {
+			if e, err := m.trash(p); err != nil {
+				m.log.Warn("trash own partial; downloading beside it", "job", j.ID, "err", err)
+			} else if err := m.st.AddEvent(ctx, j.ID, "trashed-partial", e.TrashedPath); err != nil {
 				m.log.Warn("record job event", "job", j.ID, "err", err)
 			}
-		case err == nil && !m.sameDev(j):
-			disowned = true // another drive's file sits at the path, not ours
 		}
 	}
 	ref, err := m.e.Add(ctx, req)
@@ -216,10 +221,6 @@ func (m *Manager) readd(ctx context.Context, j *store.Job, paused bool, why stri
 		x.ErrorKind, x.ErrorCode, x.ErrorMsg = nil, nil, nil
 		if why != "retry" {
 			x.RetryCount = 0
-		}
-		if disowned {
-			zero := int64(0) // no file of ours at Out any more
-			x.DoneBytes = &zero
 		}
 	})
 }

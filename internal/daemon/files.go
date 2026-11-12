@@ -28,7 +28,7 @@ type FileRemover interface {
 type NeedsConfirmError struct{ Path string }
 
 func (e *NeedsConfirmError) Error() string {
-	return fmt.Sprintf("no trash is available for %s; nothing was deleted. Remove the job without deleting files, or confirm a permanent delete", e.Path)
+	return fmt.Sprintf("no trash is available for %s; the files are untouched and the job is as it was. Remove the job without deleting files, then move or delete them yourself", e.Path)
 }
 
 // TrashFiles is the default FileRemover: it moves the payload and its

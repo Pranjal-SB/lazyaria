@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -196,5 +197,36 @@ func TestOverwriteOnlyRegularAndUndoneOnTrashFailure(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(filepath.Join(r.dir, "f.bin")); string(b) != "mine" {
 		t.Fatal("the existing file changed")
+	}
+}
+
+type failAdd struct{ engine.Engine }
+
+func (failAdd) Add(context.Context, engine.AddRequest) (engine.EngineRef, error) {
+	return "", errors.New("engine down")
+}
+
+// Probe p9: the partial is trashed and then the engine add fails. The
+// disown must already be stored, so a user's a.bin saved afterwards is not
+// taken for the job's partial on the next re-add.
+func TestP9TrashThenAddFails(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
+	r := newRig(t)
+	j, path := noRangePartial(t, r)
+	real := r.m.e
+	r.m.e = failAdd{real}
+	if _, err := r.m.readd(bg, j, false, "resumed"); err == nil {
+		t.Fatal("want the engine error")
+	}
+	if exists(path) || ownsFile(r.get(t, j.ID)) {
+		t.Fatalf("partial there %v, still owned %v", exists(path), ownsFile(r.get(t, j.ID)))
+	}
+	os.WriteFile(path, []byte("USER FILE"), 0o600)
+	r.m.e = real
+	if _, err := r.m.readd(bg, r.get(t, j.ID), false, "resumed"); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(path); string(b) != "USER FILE" {
+		t.Fatalf("user's a.bin now %q", b)
 	}
 }

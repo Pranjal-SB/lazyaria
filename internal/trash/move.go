@@ -7,9 +7,9 @@ import (
 )
 
 var (
-	renameFn   = os.Rename // swapped in tests to simulate EXDEV
-	beforeMove = func() {} // test hook: runs between the exists check and the move
-	linkMode   bool        // test hook: force the portable fallback
+	renameFn   = moveNoReplace // never replaces; swapped in tests to simulate EXDEV
+	beforeMove = func() {}     // test hook: runs between the exists check and the move
+	linkMode   bool            // test hook: force the portable fallback
 )
 
 // errNoAtomic means the platform or filesystem has no atomic no-replace rename.
