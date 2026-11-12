@@ -58,7 +58,7 @@ func TestConfigPathAndKeys(t *testing.T) {
 }
 
 // fakeEditor writes a script that replaces the file with each body in turn.
-func fakeEditor(t *testing.T, bodies ...string) {
+func fakeEditor(t *testing.T, bodies ...string) string {
 	t.Helper()
 	dir := t.TempDir()
 	script := "#!/bin/sh\nn=$(cat " + dir + "/n 2>/dev/null || echo 0)\nn=$((n+1))\necho $n > " + dir + "/n\ncp " + dir + "/body$n \"$1\"\n"
@@ -69,6 +69,7 @@ func fakeEditor(t *testing.T, bodies ...string) {
 	os.WriteFile(ed, []byte(script), 0o700)
 	t.Setenv("VISUAL", "")
 	t.Setenv("EDITOR", ed)
+	return dir
 }
 
 func TestConfigEditReedit(t *testing.T) {
@@ -97,5 +98,41 @@ func TestConfigEditDiscard(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(p.ConfigFile); string(b) != "version = 1\n" {
 		t.Errorf("config changed to %q", b)
+	}
+}
+
+func TestConfigValuesVerbatim(t *testing.T) {
+	f := startFake(t)
+	if code, _, errOut := run(t, Config, "", "set", "engine.aria2_extra_args", "--max-tries=5"); code != 0 {
+		t.Fatalf("set extra args: exit %d: %s", code, errOut)
+	}
+	if f.overrides["engine.aria2_extra_args"] != "--max-tries=5" {
+		t.Errorf("overrides = %v", f.overrides)
+	}
+	code, _, errOut := run(t, Config, "", "set", "downloads.max_concurrent", "-3")
+	if code != 2 || !strings.Contains(errOut, "allowed 1 or more") {
+		t.Errorf("negative number: exit %d: %s", code, errOut)
+	}
+}
+
+func TestConfigMasksProxyCredentials(t *testing.T) {
+	f := startFake(t)
+	f.overrides["network.all_proxy"] = "http://bob:hunter2@proxy:3128"
+	for _, args := range [][]string{{"get", "network.all_proxy"}, {"list"}, {"list", "--json"}} {
+		_, out, _ := run(t, Config, "", args...)
+		if strings.Contains(out, "hunter2") || !strings.Contains(out, "proxy:3128") {
+			t.Errorf("config %v: %s", args, out)
+		}
+	}
+}
+
+func TestConfigEditPromptEOF(t *testing.T) {
+	isolate(t)
+	dir := fakeEditor(t, "[ui]\nunits = \"bogus\"\n")
+	if code, _, _ := run(t, Config, "", "edit"); code != 1 {
+		t.Fatalf("exit %d, want 1", code)
+	}
+	if n, _ := os.ReadFile(filepath.Join(dir, "n")); strings.TrimSpace(string(n)) != "1" {
+		t.Errorf("editor ran %s times, want 1", n)
 	}
 }

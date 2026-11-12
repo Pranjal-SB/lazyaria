@@ -27,7 +27,7 @@ func waitJobs(ctx context.Context, c *ipc.Client, events <-chan daemon.Event, id
 		}
 		switch {
 		case removed || j.State == store.Removed:
-			fmt.Fprintf(errOut, "lazyaria add: %s %s was removed\n", j.ID, j.Name)
+			fmt.Fprintf(errOut, "lazyaria add: %s was removed before it finished\n", j.ID)
 		case j.State == store.Error:
 			msg := ""
 			if j.ErrorMsg != nil {
@@ -46,10 +46,22 @@ func waitJobs(ctx context.Context, c *ipc.Client, events <-chan daemon.Event, id
 	}
 	snapshot := func() (uint64, error) {
 		r, err := c.List(ctx, true, 0)
+		if err != nil {
+			return 0, err
+		}
+		seen := map[string]bool{}
 		for _, j := range r.Jobs {
+			seen[j.ID] = true
 			settle(j, false)
 		}
-		return r.Seq, err
+		// Removed rows are not in the snapshot, and the removal event is
+		// at or below its seq, so a missing job will never be reported.
+		for id := range pending {
+			if !seen[id] {
+				settle(&store.Job{ID: id}, true)
+			}
+		}
+		return r.Seq, nil
 	}
 
 	seq, err := snapshot()

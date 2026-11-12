@@ -107,3 +107,15 @@ func TestRemoveDeleteFilesAfterIDs(t *testing.T) {
 		t.Fatalf("exit %d removed %v deleted %v: %s", code, f.removed, f.deleted, errOut)
 	}
 }
+
+func TestListMasksUserinfo(t *testing.T) {
+	f := startFake(t)
+	f.jobs = sampleJobs()
+	f.jobs[0].URIs = []string{"https://bob:hunter2@example.com/debian.iso"}
+	for _, args := range [][]string{nil, {"--json"}} {
+		_, out, _ := run(t, List, "", args...)
+		if strings.Contains(out, "hunter2") || strings.Contains(out, "bob") || (args != nil && !strings.Contains(out, "https://***@example.com/debian.iso")) {
+			t.Errorf("list %v leaks credentials:\n%s", args, out)
+		}
+	}
+}

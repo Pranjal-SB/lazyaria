@@ -156,7 +156,7 @@ func checkProxy(d daemonView, s *config.Settings) checkDoc {
 		k, v, _ := strings.Cut(kv, "=")
 		for _, name := range proxyVars {
 			if k == name && v != "" {
-				seen = append(seen, k+"="+redactUserinfo(v))
+				seen = append(seen, k+"="+maskProxy(v))
 			}
 		}
 	}
@@ -165,25 +165,12 @@ func checkProxy(d daemonView, s *config.Settings) checkDoc {
 		proxy = v
 	}
 	if proxy != "" {
-		seen = append(seen, "network.all_proxy="+redactUserinfo(proxy))
+		seen = append(seen, "network.all_proxy="+maskProxy(proxy))
 	}
 	if len(seen) == 0 {
 		return checkDoc{Check: "proxy", OK: true, Detail: "none (" + from + ")"}
 	}
 	return checkDoc{Check: "proxy", OK: true, Detail: strings.Join(seen, ", ") + " (" + from + ")"}
-}
-
-// redactUserinfo masks "user:password@" in a proxy URL, scheme or not.
-func redactUserinfo(v string) string {
-	at := strings.LastIndex(v, "@")
-	if at < 0 {
-		return v
-	}
-	start := 0
-	if i := strings.Index(v, "://"); i >= 0 && i < at {
-		start = i + 3
-	}
-	return v[:start] + "***" + v[at:]
 }
 
 func optionalTools() []checkDoc {

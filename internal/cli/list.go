@@ -11,7 +11,7 @@ import (
 func List(ctx context.Context, args []string, out, errOut io.Writer) int {
 	fs := newFlags("list", errOut)
 	asJSON := fs.Bool("json", false, "print JSON")
-	all := fs.Bool("all", false, "include finished and removed jobs")
+	all := fs.Bool("all", false, "include finished jobs")
 	if _, err := parseArgs(fs, args); err != nil {
 		return flagExit(err)
 	}
@@ -24,6 +24,7 @@ func List(ctx context.Context, args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return fail(errOut, "list", err)
 	}
+	maskJobs(r.Jobs)
 	if *asJSON {
 		return fail(errOut, "list", writeJSON(out, listDoc{Jobs: r.Jobs}))
 	}

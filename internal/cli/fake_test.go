@@ -31,6 +31,11 @@ type fake struct {
 	deleted   bool
 	overrides map[string]string
 	restarts  int
+
+	pid        int   // reported by Status
+	restartErr error // returned by RestartEngine
+	dropAdded  bool  // Add answers but keeps no row, as if removed at once
+	stop       func()
 }
 
 func (f *fake) All() (map[string]string, error) { return f.overrides, nil }
@@ -40,7 +45,7 @@ func (f *fake) Hello(context.Context, ipc.HelloParams) (ipc.HelloResult, error) 
 }
 
 func (f *fake) Status(context.Context) (ipc.Status, error) {
-	return ipc.Status{PID: 0, Mode: "on-demand", Uptime: 75, EngineState: "ready", Aria2Version: "1.37.0", DownloadDir: "/dl"}, nil
+	return ipc.Status{PID: f.pid, Mode: "on-demand", Uptime: 75, EngineState: "ready", Aria2Version: "1.37.0", DownloadDir: "/dl"}, nil
 }
 
 func (f *fake) Upgrade(context.Context) error { return nil }
@@ -49,7 +54,7 @@ func (f *fake) RestartEngine(context.Context) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.restarts++
-	return nil
+	return f.restartErr
 }
 
 func (f *fake) Add(_ context.Context, p daemon.AddParams) (*store.Job, error) {
@@ -63,7 +68,9 @@ func (f *fake) Add(_ context.Context, p daemon.AddParams) (*store.Job, error) {
 		return nil, f.addErr
 	}
 	j := &store.Job{ID: store.NewID(), Kind: "http", State: store.Queued, URIs: p.URIs, Name: "file", Dir: p.Dir}
-	f.jobs = append(f.jobs, j)
+	if !f.dropAdded {
+		f.jobs = append(f.jobs, j)
+	}
 	return j, nil
 }
 
@@ -165,7 +172,9 @@ func startFake(t *testing.T) *fake {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { ipc.Serve(ctx, l, f); close(done) }()
-	t.Cleanup(func() { cancel(); <-done; lock.Close() })
+	var once sync.Once
+	f.stop = func() { once.Do(func() { cancel(); <-done; lock.Close() }) }
+	t.Cleanup(f.stop)
 	return f
 }
 

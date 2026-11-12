@@ -27,11 +27,15 @@ func Config(ctx context.Context, args []string, out, errOut io.Writer) int {
 		fmt.Fprintf(errOut, "lazyaria config: unknown subcommand %q\n%s\n", sub, configUsage)
 		return exitUsage
 	}
-	fs := newFlags("config "+sub, errOut)
-	asJSON := fs.Bool("json", false, "print JSON (list only)")
-	pos, err := parseArgs(fs, rest)
-	if err != nil {
-		return flagExit(err)
+	// Values are taken verbatim: "--max-tries=5" and "-1" are values, not flags.
+	pos, asJSON := rest, new(bool)
+	if sub == "list" || sub == "keys" {
+		fs := newFlags("config "+sub, errOut)
+		asJSON = fs.Bool("json", false, "print JSON")
+		var err error
+		if pos, err = parseArgs(fs, rest); err != nil {
+			return flagExit(err)
+		}
 	}
 	if len(pos) != n {
 		fmt.Fprintln(errOut, configUsage)
@@ -70,7 +74,7 @@ func Config(ctx context.Context, args []string, out, errOut io.Writer) int {
 		if err != nil {
 			return fail(errOut, "config", err)
 		}
-		fmt.Fprintf(out, "%s (%s)\n", fmtValue(e.Value), e.Source)
+		fmt.Fprintf(out, "%s (%s)\n", fmtValue(maskSetting(e.Key, e.Value)), e.Source)
 	case "set":
 		if err := c.ConfigSet(ctx, pos[0], pos[1]); err != nil {
 			return fail(errOut, "config", err)
@@ -116,7 +120,7 @@ func printSettings(out io.Writer, ents []ipc.ConfigEntry) {
 		if !e.Live {
 			restart = "  (restart)"
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s%s\n", e.Key, fmtValue(e.Value), e.Source, restart)
+		fmt.Fprintf(tw, "%s\t%s\t%s%s\n", e.Key, fmtValue(maskSetting(e.Key, e.Value)), e.Source, restart)
 	}
 	tw.Flush()
 }

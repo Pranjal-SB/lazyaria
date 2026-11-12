@@ -10,6 +10,10 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
+
+	"github.com/Pranjal-SB/lazyaria/internal/ipc"
 )
 
 // KillMode=mixed: systemd sends SIGTERM only to the daemon, which stops
@@ -63,22 +67,63 @@ func Service(ctx context.Context, args []string, out, errOut io.Writer) int {
 		return exitOK
 	}
 
-	if strings.ContainsAny(exe, " \t\"\\") {
-		exe = strconv.Quote(exe)
+	// A daemon already holding the lock would make the service's daemon
+	// lose the race and exit 0, which Restart=on-failure never retries.
+	if err := stopRunningDaemon(ctx, out); err != nil {
+		return fail(errOut, "service", err)
 	}
 	if err := os.MkdirAll(filepath.Dir(unit), 0o755); err != nil {
 		return fail(errOut, "service", err)
 	}
-	if err := os.WriteFile(unit, []byte(fmt.Sprintf(unitTemplate, exe)), 0o644); err != nil {
+	if err := os.WriteFile(unit, []byte(fmt.Sprintf(unitTemplate, unitExec(exe))), 0o644); err != nil {
 		return fail(errOut, "service", err)
 	}
-	for _, a := range [][]string{{"daemon-reload"}, {"enable", "--now", "lazyaria"}} {
+	// restart, not start: a reinstall may point at a new executable.
+	for _, a := range [][]string{{"daemon-reload"}, {"enable", "lazyaria"}, {"restart", "lazyaria"}} {
 		if err := systemctl(ctx, errOut, a...); err != nil {
 			return fail(errOut, "service", err)
 		}
 	}
+	time.Sleep(settleDelay)
+	if systemctl(ctx, io.Discard, "is-active", "--quiet", "lazyaria") != nil {
+		return fail(errOut, "service", fmt.Errorf("installed %s, but the service is not running; see `journalctl --user -u lazyaria`", unit))
+	}
 	fmt.Fprintf(out, "installed %s and started it; logs: journalctl --user -u lazyaria\n", unit)
 	return exitOK
+}
+
+// stopRunningDaemon ends a daemon started on demand so the service can
+// take over. Its jobs live in the DB, so the service's daemon resumes them.
+func stopRunningDaemon(ctx context.Context, out io.Writer) error {
+	_, p, err := resolveLocal(os.Environ(), nil)
+	if err != nil {
+		return err
+	}
+	c, err := ipc.Dial(ctx, p)
+	if err != nil {
+		return nil // nothing running
+	}
+	st, err := c.Status(ctx)
+	c.Close()
+	if err != nil {
+		return err
+	}
+	if st.PID <= 0 {
+		return errors.New("the running daemon did not report its pid; stop it and try again")
+	}
+	if err := syscall.Kill(st.PID, syscall.SIGTERM); err != nil {
+		return fmt.Errorf("stop the running daemon (pid %d): %w", st.PID, err)
+	}
+	fmt.Fprintln(out, "stopped the running daemon; running downloads continue under the service")
+	// The lock goes with the process, so wait for the process, not the socket.
+	deadline := time.Now().Add(stopTimeout)
+	for syscall.Kill(st.PID, 0) == nil {
+		if time.Now().After(deadline) {
+			return fmt.Errorf("the running daemon (pid %d) did not exit within %s; stop it and try again", st.PID, stopTimeout)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return nil
 }
 
 func configHome() string {
@@ -96,4 +141,19 @@ func systemctl(ctx context.Context, errOut io.Writer, args ...string) error {
 		return fmt.Errorf("systemctl --user %s: %w", strings.Join(args, " "), err)
 	}
 	return nil
+}
+
+const stopTimeout = 10 * time.Second
+
+// settleDelay gives a just-started service time to fail; tests shorten it.
+var settleDelay = time.Second
+
+// unitExec quotes the executable path for ExecStart. systemd expands %
+// specifiers there, so a literal % is doubled.
+func unitExec(exe string) string {
+	exe = strings.ReplaceAll(exe, "%", "%%")
+	if strings.ContainsAny(exe, " \t\"\\") {
+		exe = strconv.Quote(exe)
+	}
+	return exe
 }

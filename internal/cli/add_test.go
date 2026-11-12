@@ -119,3 +119,24 @@ func TestExitCodes(t *testing.T) {
 		t.Fatal("exit codes")
 	}
 }
+
+func TestAddWaitJobRemovedBeforeSnapshot(t *testing.T) {
+	f := startFake(t)
+	f.dropAdded = true
+	code, _, errOut := run(t, Add, "", "--wait", "https://a/b")
+	if code != 1 || !strings.Contains(errOut, "removed before it finished") {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+}
+
+func TestAddUsageErrors(t *testing.T) {
+	startFake(t)
+	for _, args := range [][]string{
+		{"--paused", "--wait", "https://a/b"},
+		{"--out", "x.bin", "https://a/b", "https://a/c"},
+	} {
+		if code, _, errOut := run(t, Add, "", args...); code != 2 {
+			t.Errorf("%v: exit %d, want 2: %s", args, code, errOut)
+		}
+	}
+}

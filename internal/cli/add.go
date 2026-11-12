@@ -24,9 +24,15 @@ func Add(ctx context.Context, args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return flagExit(err)
 	}
+	if *paused && *wait {
+		return fail(errOut, "add", usagef("--wait never ends for a paused job; drop --paused or --wait"))
+	}
 	reqs, err := addRequests(pos)
 	if err != nil {
 		return fail(errOut, "add", err)
+	}
+	if *outName != "" && len(reqs) > 1 {
+		return fail(errOut, "add", usagef("--out names one file; give one link with it"))
 	}
 	if *dir != "" {
 		// The daemon has its own working directory.

@@ -12,8 +12,9 @@ import (
 // (spec §10, G28): change them only together with the golden files in
 // testdata/cli. Field names are snake_case like the IPC wire format.
 
-// listDoc is `lazyaria list --json`. Jobs use the IPC job shape, which
-// never carries the torrent blob and has credentials masked.
+// listDoc is `lazyaria list --json`. Jobs use the IPC job shape: no
+// torrent blob, auth options masked by the daemon, link userinfo masked
+// by the CLI.
 type listDoc struct {
 	Jobs []*store.Job `json:"jobs"`
 }
@@ -70,7 +71,7 @@ func settingDocs(entries []ipc.ConfigEntry) []settingDoc {
 		if enum == nil {
 			enum = []string{}
 		}
-		out[i] = settingDoc{Key: e.Key, Type: typ, Value: e.Value, Default: def.Value, Source: e.Source, Live: e.Live, Enum: enum, Help: e.Help}
+		out[i] = settingDoc{Key: e.Key, Type: typ, Value: maskSetting(e.Key, e.Value), Default: maskSetting(e.Key, def.Value), Source: e.Source, Live: e.Live, Enum: enum, Help: e.Help}
 	}
 	return out
 }

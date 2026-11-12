@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -91,5 +92,26 @@ func TestDoctorNoBTPortsWithoutTorrents(t *testing.T) {
 	startFake(t)
 	if _, m := doctorJSON(t); m["bt ports"].Check != "" {
 		t.Errorf("bt ports shown with no torrents: %+v", m["bt ports"])
+	}
+}
+
+func TestDoctorRestartFailure(t *testing.T) {
+	f := startFake(t)
+	f.restartErr = errors.New("aria2c exploded")
+	_, m := doctorJSON(t, "--restart-engine")
+	if r := m["engine restart"]; r.OK || !strings.Contains(r.Detail, "exploded") {
+		t.Errorf("engine restart row = %+v", r)
+	}
+	if !m["daemon"].OK {
+		t.Errorf("the daemon answered, so its row is ok: %+v", m["daemon"])
+	}
+}
+
+func TestDoctorRestartUnreachable(t *testing.T) {
+	isolate(t)
+	_, m := doctorJSON(t, "--restart-engine")
+	d := m["daemon"]
+	if d.OK || !strings.Contains(d.Detail, "cannot reach") || strings.Contains(d.Fix, "stale socket") {
+		t.Errorf("daemon row = %+v", d)
 	}
 }

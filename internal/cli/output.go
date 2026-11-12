@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"slices"
 	"strings"
 	"text/tabwriter"
@@ -91,4 +92,55 @@ func printJobs(out io.Writer, jobs []*store.Job) {
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", j.ID[:min(n, len(j.ID))], j.State, done, size, name)
 	}
 	tw.Flush()
+}
+
+// maskURL hides the userinfo of a URL.
+func maskURL(v string) string {
+	u, err := url.Parse(v)
+	if err != nil || u.User == nil {
+		return v
+	}
+	u.User = nil // url.User("***") would print as %2A%2A%2A
+	return strings.Replace(u.String(), "://", "://***@", 1)
+}
+
+// maskProxy is maskURL that also takes a bare user:pass@host:port.
+func maskProxy(v string) string {
+	if u, err := url.Parse(v); err == nil && u.Host != "" {
+		return maskURL(v)
+	}
+	at := strings.LastIndex(v, "@")
+	if at < 0 {
+		return v
+	}
+	start := 0
+	if i := strings.Index(v, "://"); i >= 0 && i < at {
+		start = i + 3
+	}
+	return v[:start] + "***" + v[at:]
+}
+
+// maskJobs hides credentials left in job links. The daemon already masks
+// auth options and moves userinfo out of links; this covers older rows.
+func maskJobs(jobs []*store.Job) {
+	for _, j := range jobs {
+		for i, u := range j.URIs {
+			j.URIs[i] = maskURL(u)
+		}
+		if j.Referrer != nil {
+			r := maskURL(*j.Referrer)
+			j.Referrer = &r
+		}
+	}
+}
+
+// urlSettings hold URLs that may carry credentials.
+var urlSettings = map[string]bool{"network.all_proxy": true, "engine.attach_url": true}
+
+// maskSetting hides credentials in a setting's value.
+func maskSetting(key string, v any) any {
+	if s, ok := v.(string); ok && urlSettings[key] {
+		return maskProxy(s)
+	}
+	return v
 }

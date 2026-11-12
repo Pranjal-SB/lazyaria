@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"syscall"
 	"text/tabwriter"
 
 	"github.com/Pranjal-SB/lazyaria/internal/config"
@@ -90,24 +91,27 @@ func checkDaemon(ctx context.Context, p config.Paths, restart bool) (daemonView,
 		rows []checkDoc
 	)
 	if restart {
-		if c, err = connect(ctx); err == nil {
-			err = c.RestartEngine(ctx)
-			row := checkDoc{Check: "engine restart", OK: err == nil, Detail: "aria2 restarted with the current config"}
-			if err != nil {
-				row.Detail, row.Fix = err.Error(), "see `lazyaria logs`"
-			}
-			rows = append(rows, row)
-		}
+		c, err = connect(ctx) // may start the daemon, which starts aria2
 	} else if _, serr := os.Stat(p.Socket); errors.Is(serr, os.ErrNotExist) {
 		return daemonView{}, []checkDoc{{Check: "daemon", OK: true, Detail: "not running; it starts when a client needs it"}}
 	} else {
 		c, err = ipc.Dial(ctx, p)
 	}
 	if err != nil {
-		return daemonView{}, append(rows, checkDoc{Check: "daemon", Detail: err.Error(),
-			Fix: "if no daemon is running, remove the stale socket " + p.Socket + "; otherwise see `lazyaria logs`"})
+		fix := "see the reason above and `lazyaria logs`"
+		if errors.Is(err, syscall.ECONNREFUSED) {
+			fix = "no daemon is listening; remove the stale socket " + p.Socket
+		}
+		return daemonView{}, []checkDoc{{Check: "daemon", Detail: err.Error(), Fix: fix}}
 	}
 	defer c.Close()
+	if restart {
+		row := checkDoc{Check: "engine restart", OK: true, Detail: "aria2 restarted with the current config"}
+		if err := c.RestartEngine(ctx); err != nil {
+			row = checkDoc{Check: "engine restart", Detail: err.Error(), Fix: "fix the cause, then run `lazyaria doctor --restart-engine` again; see `lazyaria logs`"}
+		}
+		rows = append(rows, row)
+	}
 
 	h, _, err := c.Hello(ctx)
 	if err != nil {

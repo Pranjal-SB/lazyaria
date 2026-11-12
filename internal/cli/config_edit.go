@@ -65,8 +65,9 @@ func configEdit(ctx context.Context, out, errOut io.Writer) error {
 			break
 		}
 		fmt.Fprintf(errOut, "error: %v\nedit again? [Y/n] ", lerr)
-		line, _ := answers.ReadString('\n')
-		if a := strings.ToLower(strings.TrimSpace(line)); a == "n" || a == "no" {
+		line, rerr := answers.ReadString('\n')
+		// No answer (EOF, not a terminal) counts as no, so this never loops.
+		if a := strings.ToLower(strings.TrimSpace(line)); a == "n" || a == "no" || (rerr != nil && a == "") {
 			return errors.New("not saved; the config file is unchanged")
 		}
 	}
