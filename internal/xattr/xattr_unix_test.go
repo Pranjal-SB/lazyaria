@@ -34,3 +34,16 @@ func TestStampOrigin(t *testing.T) {
 		t.Fatalf("referrer = %q err %v", buf[:n], err)
 	}
 }
+
+func TestSupported(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "probe")
+	os.WriteFile(p, nil, 0o600)
+	want := unix.Setxattr(p, "user.x", []byte("1"), 0) == nil
+	if got := Supported(dir); got != want {
+		t.Fatalf("Supported = %v, want %v", got, want)
+	}
+	if ents, _ := os.ReadDir(dir); len(ents) != 1 {
+		t.Errorf("probe file left behind: %v", ents)
+	}
+}

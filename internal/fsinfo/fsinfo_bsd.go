@@ -19,3 +19,12 @@ func IsFAT(dir string) bool {
 	}
 	return false
 }
+
+// TypeName names the filesystem dir lives on.
+func TypeName(dir string) string {
+	var st unix.Statfs_t
+	if unix.Statfs(dir, &st) != nil {
+		return "unknown"
+	}
+	return unix.ByteSliceToString(st.Fstypename[:])
+}

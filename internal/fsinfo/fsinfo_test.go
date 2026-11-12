@@ -30,3 +30,9 @@ func TestIsFATFalse(t *testing.T) {
 		t.Skip("temp dir is on FAT")
 	}
 }
+
+func TestTypeName(t *testing.T) {
+	if got := TypeName(t.TempDir()); got == "" || got == "unknown" {
+		t.Fatalf("TypeName = %q", got)
+	}
+}

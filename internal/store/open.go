@@ -74,6 +74,25 @@ func openWith(p string, migs fs.FS) (*Store, error) {
 	return s, nil
 }
 
+// SchemaVersion reads the schema version of the database at p read-only,
+// without creating or migrating it.
+func SchemaVersion(p string) (int, error) {
+	p, err := filepath.Abs(p)
+	if err != nil {
+		return 0, err
+	}
+	if _, err := os.Stat(p); err != nil {
+		return 0, err
+	}
+	q := url.Values{"mode": {"ro"}, "_pragma": {"busy_timeout(5000)"}}
+	db, err := sql.Open("sqlite", (&url.URL{Scheme: "file", Path: p, RawQuery: q.Encode()}).String())
+	if err != nil {
+		return 0, err
+	}
+	defer db.Close()
+	return (&Store{db: db}).version()
+}
+
 // Close closes the database.
 func (s *Store) Close() error { return s.db.Close() }
 

@@ -379,3 +379,22 @@ func TestPurgeDone(t *testing.T) {
 		t.Fatal("old still there")
 	}
 }
+
+func TestSchemaVersion(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "l.db")
+	if _, err := SchemaVersion(p); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("missing db: err %v", err)
+	}
+	if _, err := os.Stat(p); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatal("SchemaVersion created the database")
+	}
+	s, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	want, _ := s.version()
+	if got, err := SchemaVersion(p); err != nil || got != want || got == 0 {
+		t.Fatalf("SchemaVersion = %d, %v; want %d", got, err, want)
+	}
+}

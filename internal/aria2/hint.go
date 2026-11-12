@@ -25,14 +25,17 @@ var osRelease = "/etc/os-release"
 
 // InstallHint is the command that installs aria2 on this system, as far as
 // /etc/os-release tells.
-func InstallHint() string {
+func InstallHint() string { return InstallHintFrom(osRelease) }
+
+// InstallHintFrom is InstallHint reading the given os-release file.
+func InstallHintFrom(osReleasePath string) string {
 	switch runtime.GOOS {
 	case "darwin":
 		return "brew install aria2"
 	case "freebsd":
 		return "sudo pkg install aria2"
 	}
-	b, _ := os.ReadFile(osRelease)
+	b, _ := os.ReadFile(osReleasePath)
 	var ids []string
 	for _, l := range strings.Split(string(b), "\n") {
 		k, v, _ := strings.Cut(l, "=")
@@ -43,6 +46,9 @@ func InstallHint() string {
 	for _, id := range ids {
 		if c, ok := installCmds[id]; ok {
 			return c
+		}
+		if strings.HasPrefix(id, "opensuse") { // opensuse-leap, opensuse-tumbleweed
+			return installCmds["opensuse"]
 		}
 	}
 	return "install the aria2 package with your package manager"

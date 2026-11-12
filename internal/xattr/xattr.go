@@ -2,7 +2,10 @@
 // user.xdg.origin.url / user.xdg.referrer.url attributes.
 package xattr
 
-import "net/url"
+import (
+	"net/url"
+	"os"
+)
 
 // StampOrigin sets the origin (and, if non-empty, referrer) attributes on path.
 // Userinfo is stripped from both URLs so credentials never land on disk.
@@ -32,4 +35,16 @@ func stripUserinfo(s string) (string, error) {
 	}
 	u.User = nil
 	return u.String(), nil
+}
+
+// Supported reports whether the filesystem under dir keeps user xattrs,
+// by writing one to a scratch file.
+func Supported(dir string) bool {
+	f, err := os.CreateTemp(dir, ".lazyaria-xattr-*")
+	if err != nil {
+		return false
+	}
+	f.Close()
+	defer os.Remove(f.Name())
+	return setRaw(f.Name(), "lazyaria.probe", "1") == nil
 }
