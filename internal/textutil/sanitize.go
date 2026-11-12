@@ -11,7 +11,8 @@ const maxName = 255
 // SanitizeName makes a server-supplied name safe to use as a single file name.
 func SanitizeName(name string, fat bool) string {
 	name = strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
+		// Cf covers the bidi overrides that can disguise an extension.
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
 			return -1
 		}
 		return r

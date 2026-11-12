@@ -31,8 +31,9 @@ func NormalizeURL(raw string) (string, error) {
 		u.Host = host
 	}
 	u.Fragment = ""
-	if u.RawQuery != "" {
-		u.RawQuery = u.Query().Encode()
+	// A query that does not parse cleanly (a=1;b=2, bare keys) stays as written.
+	if q, err := url.ParseQuery(u.RawQuery); err == nil && wellFormed(u.RawQuery) {
+		u.RawQuery = q.Encode()
 	}
 	return u.String(), nil
 }
@@ -47,4 +48,13 @@ func SplitUserinfo(raw string) (clean string, user, pass string) {
 	pass, _ = u.User.Password()
 	u.User = nil
 	return u.String(), user, pass
+}
+
+func wellFormed(q string) bool {
+	for _, kv := range strings.Split(q, "&") {
+		if kv != "" && !strings.Contains(kv, "=") {
+			return false
+		}
+	}
+	return true
 }
