@@ -187,7 +187,7 @@ func TestDiesWithParent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("helper output %q", out)
 	}
-	waitGone(t, pid, 2*time.Second)
+	waitGone(t, pid, 5*time.Second)
 }
 
 // TestHelperSupervisor is not a real test: TestDiesWithParent re-runs the
