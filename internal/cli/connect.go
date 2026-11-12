@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Pranjal-SB/lazyaria/internal/config"
@@ -54,8 +56,9 @@ func resolveLocal(env []string, flags map[string]string) (*config.Settings, conf
 }
 
 // connect reaches the daemon, starting it when daemon.auto_start allows,
-// and does the version handshake. An older daemon is asked to upgrade and
-// redialled until the new image answers.
+// and does the version handshake. An older daemon is asked, once, to
+// upgrade itself. A call the daemon cuts off while it re-executes is sent
+// again, once, as long as the same daemon process comes back.
 func connect(ctx context.Context) (*ipc.Client, error) {
 	s, p, err := resolveLocal(os.Environ(), nil)
 	if err != nil {
@@ -65,25 +68,66 @@ func connect(ctx context.Context) (*ipc.Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	c, err := handshake(ctx, p, s.Daemon.AutoStart, exe)
+	if err != nil {
+		return nil, err
+	}
+	pid := lockPID(p)
+	c.Redial = func(ctx context.Context) (*ipc.Client, error) {
+		// An upgrade keeps the pid and the socket; anything else is a new
+		// daemon, and the cut-off call may or may not have run there.
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			nc, err := handshake(ctx, p, false, exe)
+			if err == nil && lockPID(p) != pid {
+				nc.Close()
+				return nil, errors.New("the daemon was replaced")
+			}
+			if err == nil || time.Now().After(deadline) {
+				return nc, err
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+	return c, nil
+}
+
+// handshake dials and says hello. A daemon that agreed to upgrade is
+// redialled until it is back. It is not asked again: if the binary at its
+// path is still old, the same version comes back and is used as it is.
+func handshake(ctx context.Context, p config.Paths, autoStart bool, exe string) (*ipc.Client, error) {
+	c, err := ipc.Connect(ctx, p, autoStart, exe)
+	if err != nil {
+		return nil, err
+	}
+	_, upgraded, err := c.Hello(ctx, true)
+	if err == nil && !upgraded {
+		return c, nil
+	}
+	c.Close()
+	if err != nil {
+		return nil, err
+	}
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		c, err := ipc.Connect(ctx, p, s.Daemon.AutoStart, exe)
-		if err != nil {
-			return nil, err
-		}
-		_, upgraded, err := c.Hello(ctx)
-		if err == nil && !upgraded {
-			return c, nil
-		}
-		c.Close()
-		if err != nil {
-			return nil, err
+		time.Sleep(100 * time.Millisecond)
+		if c, err = ipc.Connect(ctx, p, autoStart, exe); err == nil {
+			if _, _, err = c.Hello(ctx, false); err == nil {
+				return c, nil
+			}
+			c.Close()
 		}
 		if time.Now().After(deadline) {
-			return nil, fmt.Errorf("%w (the daemon did not come back after upgrading)", ipc.ErrUnreachable)
+			return nil, fmt.Errorf("%w (the daemon did not come back after upgrading: %w)", ipc.ErrUnreachable, err)
 		}
-		time.Sleep(100 * time.Millisecond)
 	}
+}
+
+// lockPID is the pid in the daemon lock file, or 0.
+func lockPID(p config.Paths) int {
+	b, _ := os.ReadFile(p.Lock)
+	pid, _ := strconv.Atoi(strings.TrimSpace(string(b)))
+	return pid
 }
 
 // exitCode maps an error to the spec §10 exit codes.

@@ -44,7 +44,7 @@ func Status(ctx context.Context, args []string, out, errOut io.Writer) int {
 		return fail(errOut, "status", err)
 	}
 	defer c.Close()
-	h, _, err := c.Hello(ctx)
+	h, _, err := c.Hello(ctx, false)
 	if err != nil {
 		return fail(errOut, "status", err)
 	}

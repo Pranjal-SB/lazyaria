@@ -11,7 +11,7 @@ func TestHelloUpgrade(t *testing.T) {
 	f := newFake()
 	f.version = "0.0.1"
 	c, _ := serve(t, f)
-	res, upgraded, err := c.helloAs(context.Background(), "0.1.0")
+	res, upgraded, err := c.helloAs(context.Background(), "0.1.0", true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,11 +25,24 @@ func TestHelloUpgrade(t *testing.T) {
 	}
 }
 
+// A daemon that refuses to upgrade (its binary is no newer) still speaks
+// our protocol, so the client goes on with it.
+func TestHelloUpgradeRefused(t *testing.T) {
+	f := newFake()
+	f.version = "0.0.1"
+	f.upgradeErr = errors.New("not upgrading: /usr/bin/lazyaria is 0.0.1, not newer")
+	c, _ := serve(t, f)
+	res, upgraded, err := c.helloAs(context.Background(), "0.1.0", true)
+	if err != nil || upgraded || res.DaemonVersion != "0.0.1" {
+		t.Fatalf("upgraded = %v, err = %v, res = %+v; want the old daemon used as is", upgraded, err, res)
+	}
+}
+
 func TestHelloSameVersionNoUpgrade(t *testing.T) {
 	f := newFake()
 	f.version = "0.1.0"
 	c, _ := serve(t, f)
-	if _, upgraded, err := c.helloAs(context.Background(), "0.1.0"); err != nil || upgraded {
+	if _, upgraded, err := c.helloAs(context.Background(), "0.1.0", true); err != nil || upgraded {
 		t.Fatalf("upgraded = %v, err = %v", upgraded, err)
 	}
 }
@@ -45,7 +58,7 @@ func TestHelloProtocolMismatch(t *testing.T) {
 		f := newFake()
 		f.version, f.protocol = "0.0.1", tc.protocol
 		c, _ := serve(t, f)
-		_, _, err := c.Hello(context.Background())
+		_, _, err := c.Hello(context.Background(), true)
 		var pm *ErrProtocolMismatch
 		if !errors.As(err, &pm) || !strings.Contains(err.Error(), tc.banner) {
 			t.Fatalf("protocol %d: err = %v, want banner %q", tc.protocol, err, tc.banner)
@@ -73,8 +86,8 @@ func TestOlder(t *testing.T) {
 		{"1.0.0-rc1", "1.0.0", false}, // pre-release tags are ignored
 		{"garbage", "0.1.0", false},
 	} {
-		if got := older(tc.a, tc.b); got != tc.want {
-			t.Errorf("older(%q, %q) = %v, want %v", tc.a, tc.b, got, tc.want)
+		if got := Older(tc.a, tc.b); got != tc.want {
+			t.Errorf("Older(%q, %q) = %v, want %v", tc.a, tc.b, got, tc.want)
 		}
 	}
 }

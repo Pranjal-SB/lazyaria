@@ -26,32 +26,34 @@ func (e *ErrProtocolMismatch) Error() string {
 		daemonV, e.Protocol, buildinfo.Protocol)
 }
 
-// Hello does the version handshake (spec §17 G4). When the daemon is older
-// but compatible it is asked to upgrade itself, upgraded is true, and the
-// caller should reconnect once the new daemon is up.
-func (c *Client) Hello(ctx context.Context) (res HelloResult, upgraded bool, err error) {
-	return c.helloAs(ctx, buildinfo.Version)
+// Hello does the version handshake (spec §17 G4). With upgrade set, an
+// older but compatible daemon is asked to upgrade itself; upgraded is true
+// when it agreed, and the caller should reconnect. A daemon that refuses
+// (the binary at its path is no newer) is still compatible and is used as
+// it is.
+func (c *Client) Hello(ctx context.Context, upgrade bool) (res HelloResult, upgraded bool, err error) {
+	return c.helloAs(ctx, buildinfo.Version, upgrade)
 }
 
-func (c *Client) helloAs(ctx context.Context, version string) (res HelloResult, upgraded bool, err error) {
+func (c *Client) helloAs(ctx context.Context, version string, upgrade bool) (res HelloResult, upgraded bool, err error) {
 	if err := c.call(ctx, "hello", HelloParams{Client: "lazyaria", Version: version}, &res); err != nil {
 		return res, false, err
 	}
 	if res.Protocol != buildinfo.Protocol {
 		return res, false, &ErrProtocolMismatch{DaemonVersion: res.DaemonVersion, Protocol: res.Protocol}
 	}
-	if !older(res.DaemonVersion, version) {
+	if !upgrade || !Older(res.DaemonVersion, version) {
 		return res, false, nil
 	}
 	if err := c.call(ctx, "daemon.upgrade", nil, nil); err != nil {
-		return res, false, err
+		return res, false, nil
 	}
 	return res, true, nil
 }
 
-// older reports whether version a predates b. "dev" is newer than any
+// Older reports whether version a predates b. "dev" is newer than any
 // release; pre-release suffixes and unparseable versions compare equal.
-func older(a, b string) bool {
+func Older(a, b string) bool {
 	if a == "dev" || a == b {
 		return false
 	}

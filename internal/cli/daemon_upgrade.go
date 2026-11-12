@@ -1,14 +1,17 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"slices"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/Pranjal-SB/lazyaria/internal/buildinfo"
 	"github.com/Pranjal-SB/lazyaria/internal/ipc"
 	"github.com/Pranjal-SB/lazyaria/internal/supervisor"
 )
@@ -35,6 +38,29 @@ func takeHandoff() (*handoff, error) {
 		return nil, fmt.Errorf("unreadable %s from the previous daemon: %w; run `lazyaria doctor`", handoffEnv, err)
 	}
 	return &h, nil
+}
+
+// checkUpgrade refuses an upgrade unless the binary at our path is newer
+// than us. Re-executing the same version would leave every newer client
+// asking again, forever.
+func checkUpgrade(ctx context.Context) error {
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("not upgrading: cannot find the daemon binary: %w; run `lazyaria doctor`", err)
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, exe, "version").Output()
+	if err != nil {
+		return fmt.Errorf("not upgrading: `%s version` failed: %w; reinstall lazyaria or run `lazyaria doctor`", exe, err)
+	}
+	// "lazyaria <version> (protocol <n>)"
+	f := strings.Fields(string(out))
+	if len(f) < 2 || !ipc.Older(buildinfo.Version, f[1]) {
+		return fmt.Errorf("not upgrading: %s is %s, not newer than this daemon (%s); install the new lazyaria at that path, or stop the daemon (kill %d) so the next command starts the new one",
+			exe, strings.TrimSpace(string(out)), buildinfo.Version, os.Getpid())
+	}
+	return nil
 }
 
 // upgradeState is everything the exec needs once serving has stopped.

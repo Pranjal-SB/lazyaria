@@ -100,12 +100,13 @@ type fakeHandler struct {
 	version  string
 	protocol int
 
-	mu        sync.Mutex
-	jobs      []*store.Job
-	addErr    error
-	upgrades  int
-	observers []int
-	clients   []int
+	mu         sync.Mutex
+	jobs       []*store.Job
+	addErr     error
+	upgradeErr error
+	upgrades   int
+	observers  []int
+	clients    []int
 }
 
 func newFake() *fakeHandler {
@@ -124,7 +125,7 @@ func (f *fakeHandler) Upgrade(context.Context) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.upgrades++
-	return nil
+	return f.upgradeErr
 }
 
 func (f *fakeHandler) RestartEngine(context.Context) error { return nil }

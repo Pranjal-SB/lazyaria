@@ -184,10 +184,47 @@ func TestDetachLoserExitsZero(t *testing.T) {
 	}
 }
 
-func TestUpgradeKeepsPidAndAria2(t *testing.T) {
+// The binary at the daemon's path is the same version, as when a newer CLI
+// lives elsewhere: re-executing it would bring back the same old daemon.
+func TestUpgradeRefusedWhenBinaryNotNewer(t *testing.T) {
 	testutil.RequireAria2(t)
 	e := newEnv(t, "")
 	e.start()
+	pid := e.pid()
+	err := e.dial().Upgrade(bg)
+	if err == nil || !strings.Contains(err.Error(), "not newer") {
+		t.Fatalf("daemon.upgrade err = %v, want a refusal saying the binary is not newer", err)
+	}
+	time.Sleep(time.Second)
+	if b, _ := os.ReadFile(fmt.Sprintf("/proc/%d/environ", pid)); strings.Contains(string(b), "LAZYARIA_UPGRADE=") {
+		t.Fatal("the daemon re-executed itself after refusing")
+	}
+	if !alive(pid) {
+		t.Fatal("the daemon exited after refusing")
+	}
+}
+
+func TestUpgradeKeepsPidAndAria2(t *testing.T) {
+	testutil.RequireAria2(t)
+	e := newEnv(t, "")
+	// Run an older build, then put the current one at its path, as a
+	// package upgrade does.
+	e.bin = filepath.Join(e.root, "lazyaria")
+	build := exec.Command("go", "build", "-ldflags", "-X github.com/Pranjal-SB/lazyaria/internal/buildinfo.Version=0.0.1", "-o", e.bin, "../..")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build the old lazyaria: %v\n%s", err, out)
+	}
+	e.start()
+	newer, err := os.ReadFile(bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(e.bin+".new", newer, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(e.bin+".new", e.bin); err != nil {
+		t.Fatal(err)
+	}
 	pid := e.pid()
 	c := e.dial()
 	ariaPID := aria2Child(t, pid)
@@ -216,6 +253,9 @@ func TestUpgradeKeepsPidAndAria2(t *testing.T) {
 	})
 	if st.PID != pid {
 		t.Errorf("pid after upgrade = %d, want %d", st.PID, pid)
+	}
+	if h, _, err := e.dial().Hello(bg, false); err != nil || h.DaemonVersion != "dev" {
+		t.Errorf("version after upgrade = %q (err %v), want the new build's dev", h.DaemonVersion, err)
 	}
 	if got := aria2Child(t, pid); got != ariaPID {
 		t.Errorf("aria2c pid after upgrade = %d, want %d (kept running)", got, ariaPID)

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -35,20 +36,37 @@ type fake struct {
 	pid        int   // reported by Status
 	restartErr error // returned by RestartEngine
 	dropAdded  bool  // Add answers but keeps no row, as if removed at once
+	version    string
+	upgrades   int
+	hangups    int // Snapshot calls that hang up, as a daemon re-executing itself does
+	newPID     int // when set, the daemon after a hang-up is another process
 	stop       func()
+	restart    func(pid int)
 }
 
 func (f *fake) All() (map[string]string, error) { return f.overrides, nil }
 
 func (f *fake) Hello(context.Context, ipc.HelloParams) (ipc.HelloResult, error) {
-	return ipc.HelloResult{DaemonVersion: "dev", Protocol: 1, EngineState: "ready"}, nil
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	v := f.version
+	if v == "" {
+		v = "dev"
+	}
+	return ipc.HelloResult{DaemonVersion: v, Protocol: 1, EngineState: "ready"}, nil
 }
 
 func (f *fake) Status(context.Context) (ipc.Status, error) {
 	return ipc.Status{PID: f.pid, Mode: "on-demand", Uptime: 75, EngineState: "ready", Aria2Version: "1.37.0", DownloadDir: "/dl"}, nil
 }
 
-func (f *fake) Upgrade(context.Context) error { return nil }
+// Upgrade "re-executes" the same old binary: nothing changes.
+func (f *fake) Upgrade(context.Context) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.upgrades++
+	return nil
+}
 
 func (f *fake) RestartEngine(context.Context) error {
 	f.mu.Lock()
@@ -99,9 +117,17 @@ func (f *fake) RefreshURI(context.Context, string, string) (*store.Job, error) {
 func (f *fake) SetLimit(context.Context, string, int64, int64) error { return nil }
 func (f *fake) StopSeeding(context.Context, []string) error          { return nil }
 
-func (f *fake) Snapshot(context.Context, bool, int) (uint64, []*store.Job, []daemon.SpeedSample) {
+func (f *fake) Snapshot(ctx context.Context, _ bool, _ int) (uint64, []*store.Job, []daemon.SpeedSample) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.hangups > 0 {
+		f.hangups--
+		go f.restart(f.newPID)
+		f.mu.Unlock()
+		<-ctx.Done()
+		f.mu.Lock()
+		return 0, nil, nil
+	}
 	js := make([]*store.Job, len(f.jobs))
 	for i, j := range f.jobs {
 		c := *j
@@ -165,15 +191,38 @@ func startFake(t *testing.T) *fake {
 	t.Helper()
 	p := isolate(t)
 	f := &fake{bus: daemon.NewBus(0), overrides: map[string]string{}}
-	l, lock, err := ipc.Listen(p)
-	if err != nil {
-		t.Fatal(err)
+	serve := func(pid int) func() {
+		l, lock, err := ipc.Listen(p)
+		if err != nil {
+			t.Error(err)
+			return func() {}
+		}
+		if pid != 0 {
+			os.WriteFile(p.Lock, []byte(strconv.Itoa(pid)+"\n"), 0o600)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() { ipc.Serve(ctx, l, f); close(done) }()
+		return func() { cancel(); <-done; lock.Close() }
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() { ipc.Serve(ctx, l, f); close(done) }()
+	var mu sync.Mutex
+	stop := serve(0)
+	// restart hangs up on every client and serves again, as the same pid
+	// would after an exec, or as pid when it is set.
+	f.restart = func(pid int) {
+		mu.Lock()
+		defer mu.Unlock()
+		stop()
+		stop = serve(pid)
+	}
 	var once sync.Once
-	f.stop = func() { once.Do(func() { cancel(); <-done; lock.Close() }) }
+	f.stop = func() {
+		once.Do(func() {
+			mu.Lock()
+			defer mu.Unlock()
+			stop()
+		})
+	}
 	t.Cleanup(f.stop)
 	return f
 }

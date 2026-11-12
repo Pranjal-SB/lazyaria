@@ -3,10 +3,14 @@ package ipc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
+	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/channel"
@@ -21,6 +25,13 @@ type Client struct {
 	rpc      *jrpc2.Client
 	events   chan daemon.Event
 	progress chan []daemon.ProgressItem
+
+	// Redial, when set, reconnects after the daemon hung up in the middle
+	// of a call, and the call is sent once more on the new connection. It
+	// is used once, and never after Subscribe: those events died with the
+	// old connection.
+	Redial     func(context.Context) (*Client, error)
+	subscribed bool
 }
 
 var clientPeerUID = peerUID // swapped in tests
@@ -63,6 +74,7 @@ func (c *Client) Subscribe(ctx context.Context, progress bool) (<-chan daemon.Ev
 	if err := c.call(ctx, "jobs.subscribe", SubscribeParams{Progress: progress}, nil); err != nil {
 		return nil, nil, err
 	}
+	c.subscribed = true
 	return c.events, c.progress, nil
 }
 
@@ -70,7 +82,30 @@ func (c *Client) call(ctx context.Context, method string, params, result any) er
 	if result == nil {
 		result = new(json.RawMessage)
 	}
+	err := fromWire(c.rpc.CallResult(ctx, method, params, result))
+	if err == nil || c.Redial == nil || c.subscribed || ctx.Err() != nil || !hungUp(err) {
+		return err
+	}
+	redial := c.Redial
+	c.Redial = nil
+	nc, rerr := redial(ctx)
+	if rerr != nil {
+		return err
+	}
+	c.rpc.Close()
+	c.rpc, c.events, c.progress = nc.rpc, nc.events, nc.progress
 	return fromWire(c.rpc.CallResult(ctx, method, params, result))
+}
+
+// hungUp reports whether err is the connection going away rather than an
+// answer: jrpc2 fails pending calls with context.Canceled when the server
+// closes, and with an internal error on a reset.
+func hungUp(err error) bool {
+	if errors.Is(err, context.Canceled) || errors.Is(err, io.EOF) || errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE) {
+		return true
+	}
+	e, ok := errors.AsType[*jrpc2.Error](err)
+	return ok && e.Code == jrpc2.InternalError && (strings.Contains(e.Message, "connection reset") || strings.Contains(e.Message, "broken pipe"))
 }
 
 // pushChannel takes server notifications off the wire before jrpc2 sees

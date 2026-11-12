@@ -48,6 +48,7 @@ type env struct {
 	root string
 	vars []string
 	p    config.Paths
+	bin  string // the lazyaria binary to run; the shared build when empty
 }
 
 func newEnv(t *testing.T, cfg string) *env {
@@ -97,7 +98,11 @@ func (e *env) writeConfig(body string) {
 }
 
 func (e *env) cmd(args ...string) *exec.Cmd {
-	c := exec.Command(bin, args...)
+	exe := bin
+	if e.bin != "" {
+		exe = e.bin
+	}
+	c := exec.Command(exe, args...)
 	c.Env = e.vars
 	return c
 }

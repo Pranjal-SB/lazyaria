@@ -113,7 +113,7 @@ func checkDaemon(ctx context.Context, p config.Paths, restart bool) (daemonView,
 		rows = append(rows, row)
 	}
 
-	h, _, err := c.Hello(ctx)
+	h, _, err := c.Hello(ctx, false)
 	if err != nil {
 		return daemonView{}, append(rows, checkDoc{Check: "daemon", Detail: err.Error(), Fix: "update lazyaria or let the daemon upgrade when idle"})
 	}

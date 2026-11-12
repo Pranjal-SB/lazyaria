@@ -39,7 +39,11 @@ func (h handler) Status(context.Context) (ipc.Status, error) {
 }
 
 // Upgrade only queues the upgrade, so this call's reply goes out first.
-func (h handler) Upgrade(context.Context) error {
+func (h handler) Upgrade(ctx context.Context) error {
+	if err := checkUpgrade(ctx); err != nil {
+		h.d.log.Warn("upgrade refused", "err", err)
+		return err
+	}
 	select {
 	case h.d.upgradeReq <- struct{}{}:
 	default:
