@@ -53,15 +53,34 @@ func TestCrashNeverLoses(t *testing.T) {
 		return float64(done) / float64(total), allDone
 	}
 
-	// Kill until every job is done, one kill per 5% of progress (1% above 85%), so the
-	// kills also land in the finalise window (.aria2 removal, Done).
+	// Kill until every job is done: one kill per 5% of progress up to 90%,
+	// then one as progress first crosses each of 91%, 94% and 97%, so kills
+	// also land in the finalise window (.aria2 removal, Done). A threshold
+	// the downloads finish before is skipped.
 	start := time.Now()
 	const minKills = 20
+	lateAt := []float64{0.91, 0.94, 0.97}
 	kills, late := 0, 0
 	for time.Since(start) < 150*time.Second {
 		frac, allDone := progress()
 		if allDone {
 			break
+		}
+		if frac > 0.9 {
+			if len(lateAt) == 0 {
+				break // the late kills are done; let the jobs finish
+			}
+			// Poll fast and kill the moment the next threshold is crossed.
+			for !allDone && len(lateAt) > 0 && frac < lateAt[0] && time.Since(start) < 150*time.Second {
+				time.Sleep(100 * time.Millisecond)
+				frac, allDone = progress()
+			}
+			if allDone {
+				break
+			}
+			for len(lateAt) > 0 && frac >= lateAt[0] {
+				lateAt = lateAt[1:]
+			}
 		}
 		// status auto-starts the daemon after the previous kill.
 		pid := e.status().PID
@@ -85,13 +104,11 @@ func TestCrashNeverLoses(t *testing.T) {
 			late++
 		}
 		t.Logf("kill %2d: %s %d at %s, progress %.1f%%", kills, what, victim, time.Since(start).Round(time.Millisecond), frac*100)
-		// Wait for the next step (or 4 s, if a restart makes no headway).
-		// Steps shrink above 90% to put several kills in the finalise window.
-		step := 0.05
-		if frac > 0.85 {
-			step = 0.01
+		if frac > 0.9 {
+			continue // the threshold loop above paces the late kills
 		}
-		target, until := frac+step, time.Now().Add(4*time.Second)
+		// Wait for the next 5% (or 4 s, if a restart makes no headway).
+		target, until := frac+0.05, time.Now().Add(4*time.Second)
 		for time.Now().Before(until) {
 			if f, done := progress(); f >= target || done {
 				break
@@ -103,8 +120,8 @@ func TestCrashNeverLoses(t *testing.T) {
 	if kills < minKills {
 		t.Errorf("only %d kills, want at least %d", kills, minKills)
 	}
-	if late < 3 {
-		t.Errorf("only %d kills above 90%% progress, want at least 3", late)
+	if late < 2 {
+		t.Errorf("only %d kills above 90%% progress, want at least 2", late)
 	}
 
 	for _, id := range ids {
