@@ -169,17 +169,33 @@ func (m *Manager) readd(ctx context.Context, j *store.Job, paused bool, why stri
 	}
 	// A job owns its file only once it has written bytes to it. A file it
 	// does not own is never written into: continue=false makes aria2 rename
-	// beside it, and a partial with its .aria2 still resumes. An owned
-	// partial without a control file (a server without ranges, or an
-	// unknown size) is deleted so it restarts in place; aria2 is never
-	// asked to overwrite.
+	// beside it, and a partial with its .aria2 still resumes.
 	owned := ownsFile(j)
 	req.NoContinue = !owned
-	if owned && j.StartedAt != nil && !isBT(j.Kind) {
-		if p := filepath.Join(j.Dir, *j.Out); !exists(p + ".aria2") {
-			if err := os.Remove(p); err != nil && !errors.Is(err, fs.ErrNotExist) {
-				return j, fmt.Errorf("restart %s from scratch: %w", p, err)
+	disowned := false
+	if owned && j.StartedAt != nil && !isBT(j.Kind) && !exists(filepath.Join(j.Dir, *j.Out)+".aria2") {
+		// No control file (a server without ranges, or an unknown size), so
+		// aria2 cannot resume. A true partial of ours goes to the trash and
+		// the job starts over in place; anything else is left alone and the
+		// new download goes beside it. Nothing is ever deleted.
+		req.NoContinue = true
+		p := filepath.Join(j.Dir, *j.Out)
+		fi, err := os.Lstat(p)
+		switch {
+		case errors.Is(err, fs.ErrNotExist):
+			disowned = true
+		case err == nil && m.ownPartial(j, fi):
+			e, terr := m.trash(p)
+			if terr != nil {
+				m.log.Warn("trash own partial; downloading beside it", "job", j.ID, "err", terr)
+				break
 			}
+			disowned = true
+			if err := m.st.AddEvent(ctx, j.ID, "trashed-partial", e.TrashedPath); err != nil {
+				m.log.Warn("record job event", "job", j.ID, "err", err)
+			}
+		case err == nil && !m.sameDev(j):
+			disowned = true // another drive's file sits at the path, not ours
 		}
 	}
 	ref, err := m.e.Add(ctx, req)
@@ -201,7 +217,23 @@ func (m *Manager) readd(ctx context.Context, j *store.Job, paused bool, why stri
 		if why != "retry" {
 			x.RetryCount = 0
 		}
+		if disowned {
+			zero := int64(0) // no file of ours at Out any more
+			x.DoneBytes = &zero
+		}
 	})
+}
+
+// ownPartial: fi, at j's Out, is the job's own unfinished file, safe to
+// trash for a restart: same drive, a regular file, shorter than the known
+// total. An unknown total cannot tell a partial from a complete file.
+func (m *Manager) ownPartial(j *store.Job, fi os.FileInfo) bool {
+	return m.sameDev(j) && fi.Mode().IsRegular() && j.TotalBytes != nil && *j.TotalBytes > 0 && fi.Size() < *j.TotalBytes
+}
+
+func (m *Manager) sameDev(j *store.Job) bool {
+	d, err := m.dev(j.Dir)
+	return err == nil && j.DirDev != nil && d == *j.DirDev
 }
 
 // ownsFile: the job has written bytes to the file at its Out.

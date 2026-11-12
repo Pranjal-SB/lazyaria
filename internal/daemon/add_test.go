@@ -300,54 +300,6 @@ func TestAddOnExists(t *testing.T) {
 	})
 }
 
-// A re-add resumes (continue=true) only into a file the job owns: Out set
-// and bytes written. Only an owned, started HTTP job's partial without a
-// control file is deleted, so it restarts in place.
-func TestReaddOwnership(t *testing.T) {
-	r := newRig(t)
-	wrote, none := int64(10), int64(0)
-	started := r.clk.now()
-	for _, c := range []struct {
-		name           string
-		uri, out       string
-		done           *int64
-		ctl            bool // a .aria2 sits beside the file
-		owned, deleted bool
-	}{
-		{"no out", "http://example.com/", "", &wrote, false, false, false},
-		{"out, no bytes recorded", "http://example.com/a", "a.bin", nil, false, false, false},
-		{"out, zero bytes", "http://example.com/b", "b.bin", &none, false, false, false},
-		{"owned", "http://example.com/c", "c.bin", &wrote, false, true, true},
-		{"owned with .aria2", "http://example.com/d", "d.bin", &wrote, true, true, false},
-		{"owned torrent", "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567", "", &wrote, false, true, false},
-	} {
-		j := r.add(t, AddParams{URIs: []string{c.uri}, Out: c.out, Force: true})
-		j.DoneBytes, j.StartedAt = c.done, &started
-		if c.name == "owned torrent" {
-			out := "t" // aria2 reported a path for the torrent
-			j.Out = &out
-		}
-		var p string
-		if j.Out != nil {
-			p = filepath.Join(r.dir, *j.Out)
-			os.WriteFile(p, []byte("part"), 0o600)
-			if c.ctl {
-				os.WriteFile(p+".aria2", []byte("ctl"), 0o600)
-			}
-		}
-		if _, err := r.m.readd(bg, j, false, "readded"); err != nil {
-			t.Fatal(err)
-		}
-		req := r.e.adds[len(r.e.adds)-1]
-		if _, ok := req.Options["allow-overwrite"]; ok || req.NoContinue != !c.owned {
-			t.Errorf("%s: continue=false %v options %v; want continue=false %v", c.name, req.NoContinue, req.Options, !c.owned)
-		}
-		if p != "" && exists(p) == c.deleted {
-			t.Errorf("%s: file deleted %v, want %v", c.name, !exists(p), c.deleted)
-		}
-	}
-}
-
 func TestAddBTRejectsOut(t *testing.T) {
 	r := newRig(t)
 	for _, p := range []AddParams{

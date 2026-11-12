@@ -16,6 +16,7 @@ import (
 	"github.com/Pranjal-SB/lazyaria/internal/engine"
 	"github.com/Pranjal-SB/lazyaria/internal/fsinfo"
 	"github.com/Pranjal-SB/lazyaria/internal/store"
+	"github.com/Pranjal-SB/lazyaria/internal/trash"
 )
 
 // Manager owns every job's lifecycle. Each state change is written to the
@@ -38,6 +39,7 @@ type Manager struct {
 	now   func() time.Time
 	free  func(dir string) (uint64, error)
 	dev   func(dir string) (uint64, error)
+	trash func(path string) (trash.Entry, error) // lazyaria never hard-deletes a file
 	alloc func(dir string) string
 	rnd   func() float64
 
@@ -57,7 +59,7 @@ func NewManager(e engine.Engine, st *store.Store, s *config.Settings, bus *Bus, 
 	m := &Manager{
 		e: e, st: st, bus: bus, log: log,
 		Files: &TrashFiles{},
-		now:   time.Now, free: fsinfo.FreeBytes, dev: fsinfo.Dev, alloc: fsinfo.Allocation, rnd: mrand.Float64,
+		now:   time.Now, free: fsinfo.FreeBytes, dev: fsinfo.Dev, trash: trash.Trash, alloc: fsinfo.Allocation, rnd: mrand.Float64,
 		ctx:     context.Background(),
 		retries: map[string]*time.Timer{},
 		undo:    map[string]undoRecord{},

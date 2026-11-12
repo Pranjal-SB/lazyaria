@@ -77,6 +77,13 @@ func (s *Store) PurgeRemoved(ctx context.Context, before time.Time) (int, error)
 	return int(n), err
 }
 
+// DeleteJob removes a job row and its events, for an add undone before it
+// reached the engine.
+func (s *Store) DeleteJob(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM jobs WHERE id=?`, id)
+	return err
+}
+
 // PurgeDone hard-deletes finished jobs that finished before the cutoff.
 func (s *Store) PurgeDone(ctx context.Context, before time.Time) (int, error) {
 	r, err := s.db.ExecContext(ctx, `DELETE FROM jobs WHERE state='done' AND finished_at < ?`, before.UnixMilli())

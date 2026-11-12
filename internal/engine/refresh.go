@@ -145,6 +145,7 @@ func (e *aria2Engine) readd(ctx context.Context, ref EngineRef, s *aria2.Status,
 	if s.CompletedLength == 0 || !derived {
 		opts["continue"] = "false"
 	}
+	opts["allow-overwrite"] = "false" // see Add
 	// A failure here only means the gid is still taken; the add below says so.
 	_ = e.call(ctx, "aria2.removeDownloadResult", nil, string(ref))
 	opts["gid"] = string(ref)

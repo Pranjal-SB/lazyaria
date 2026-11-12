@@ -18,7 +18,6 @@ import (
 	"github.com/Pranjal-SB/lazyaria/internal/fsinfo"
 	"github.com/Pranjal-SB/lazyaria/internal/store"
 	"github.com/Pranjal-SB/lazyaria/internal/textutil"
-	"github.com/Pranjal-SB/lazyaria/internal/trash"
 )
 
 type AddParams struct {
@@ -94,6 +93,9 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 			// Another live job writes this name; any .aria2 there is its own.
 			onExists = "rename"
 		}
+		if fi, err := os.Lstat(target); onExists == "overwrite" && (err != nil || !fi.Mode().IsRegular()) {
+			onExists = "rename" // only a regular file goes to the trash
+		}
 		switch onExists {
 		case "overwrite":
 			overwrite = true
@@ -110,32 +112,29 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 	if ns := m.noSpace(dir, p.Total, 0); ns != nil {
 		return nil, ns
 	}
-	// Overwrite never reaches aria2 (allow-overwrite would pass on to a
-	// torrent a link turns into, probe p6): the old file goes to the trash,
-	// where the user can restore it, and the add is a plain one.
-	var trashed *trash.Entry
-	if overwrite {
-		e, err := trash.Trash(target)
-		if err != nil {
-			return nil, fmt.Errorf("move %s to the trash before overwriting it: %w; nothing was added. Move it aside, or set downloads.on_exists to rename", target, err)
-		}
-		trashed = &e
-	}
 	paused := p.StartPaused || m.s.Load().Downloads.StartPaused
 	j := m.newJob(dir, p, paused)
 	if err := m.st.InsertJob(ctx, j); err != nil {
-		if trashed != nil {
-			err = errors.Join(err, trash.Restore(*trashed))
-		}
 		return nil, fmt.Errorf("save the new job: %w", err)
+	}
+	// Overwrite never reaches aria2 (allow-overwrite would pass on to a
+	// torrent a link turns into, probe p6): the old file goes to the trash,
+	// where the user can restore it, and the add is a plain one. The row
+	// comes first, so a crash right after the trash still leaves the job.
+	if overwrite {
+		e, err := m.trash(target)
+		if err != nil {
+			if derr := m.st.DeleteJob(ctx, j.ID); derr != nil {
+				err = errors.Join(err, derr)
+			}
+			return nil, fmt.Errorf("move %s to the trash before overwriting it: %w; nothing was added. Move it aside, or set downloads.on_exists to rename", target, err)
+		}
+		if err := m.st.AddEvent(ctx, j.ID, "trashed-existing", e.TrashedPath); err != nil {
+			m.log.Warn("record job event", "job", j.ID, "err", err)
+		}
 	}
 	if err := m.st.AddEvent(ctx, j.ID, "added", ""); err != nil {
 		m.log.Warn("record job event", "job", j.ID, "err", err)
-	}
-	if trashed != nil {
-		if err := m.st.AddEvent(ctx, j.ID, "trashed-existing", trashed.TrashedPath); err != nil {
-			m.log.Warn("record job event", "job", j.ID, "err", err)
-		}
 	}
 	m.bus.Publish(Event{Type: "job.added", Job: j})
 	req := m.request(j, paused)

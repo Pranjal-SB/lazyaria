@@ -173,7 +173,7 @@ func TestReaddFallsBackOnRefusal(t *testing.T) {
 	}
 	var opts map[string]string
 	json.Unmarshal(f.paramsOf("aria2.addUri", 2)[1], &opts)
-	if _, has := opts["gid"]; has || opts["out"] != "f" || opts["dir"] != "/d" {
+	if _, has := opts["gid"]; has || opts["out"] != "f" || opts["dir"] != "/d" || opts["allow-overwrite"] != "false" {
 		t.Fatalf("fallback options %v", opts)
 	}
 }
@@ -262,8 +262,8 @@ func TestAddGIDAndFallback(t *testing.T) {
 	if first["gid"] != "00000000000000aa" || first["continue"] != "false" {
 		t.Fatalf("first add options %v", first)
 	}
-	if _, ok := first["allow-overwrite"]; ok {
-		t.Fatalf("allow-overwrite sent: %v", first)
+	if first["allow-overwrite"] != "false" {
+		t.Fatalf("allow-overwrite not pinned to false: %v", first)
 	}
 	if _, ok := second["gid"]; ok {
 		t.Fatalf("fallback kept the refused gid: %v", second)

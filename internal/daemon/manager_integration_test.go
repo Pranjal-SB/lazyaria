@@ -90,7 +90,7 @@ func waitJob(t *testing.T, st *store.Store, id string, d time.Duration, ok func(
 	}
 }
 
-func TestUnknownSize_NoPrecheck_RestartFromZero(t *testing.T) {
+func TestUnknownSize_NoPrecheck_RestartBeside(t *testing.T) {
 	testutil.RequireAria2(t)
 	data := testutil.RandBytes(2 << 20)
 	srv := testutil.NewFaultServer(t, map[string][]byte{"norange.bin": data})
@@ -127,11 +127,13 @@ func TestUnknownSize_NoPrecheck_RestartFromZero(t *testing.T) {
 	if n := srv.Served("norange.bin"); n <= int64(len(data)) {
 		t.Fatalf("served %d bytes; the download did not start over", n)
 	}
-	if *got.Out != "norange.bin" {
-		t.Fatalf("finished as %s, want norange.bin restarted in place", *got.Out)
+	// An unknown size cannot tell the partial from a complete file, so it
+	// is left alone and the restart goes beside it.
+	if *got.Out != "norange.1.bin" {
+		t.Fatalf("finished as %s, want norange.1.bin beside the partial", *got.Out)
 	}
-	if _, err := os.Stat(filepath.Join(got.Dir, "norange.1.bin")); err == nil {
-		t.Fatal("restart wrote norange.1.bin beside the partial file")
+	if fi, err := os.Stat(filepath.Join(got.Dir, "norange.bin")); err != nil || fi.Size() >= int64(len(data)) {
+		t.Fatalf("the partial norange.bin was not left alone: %v", err)
 	}
 	path := filepath.Join(got.Dir, *got.Out)
 	want := testutil.SHA256File(t, writeFile(t, data))
