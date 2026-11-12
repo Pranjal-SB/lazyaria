@@ -1,0 +1,11 @@
+{
+  "daemon_version": "dev",
+  "protocol": 1,
+  "pid": 0,
+  "mode": "on-demand",
+  "uptime": 75,
+  "engine_state": "ready",
+  "aria2_version": "1.37.0",
+  "download_dir": "/dl",
+  "inhibiting_sleep": false
+}

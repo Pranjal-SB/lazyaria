@@ -1,0 +1,1039 @@
+[
+  {
+    "key": "version",
+    "type": "int",
+    "value": 1,
+    "default": 1,
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Config file format version."
+  },
+  {
+    "key": "downloads.dir",
+    "type": "string",
+    "value": "",
+    "default": "",
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Download directory; empty uses the XDG download dir or ~/Downloads."
+  },
+  {
+    "key": "downloads.remember_last_dir",
+    "type": "bool",
+    "value": true,
+    "default": true,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Offer the last used directory for new jobs."
+  },
+  {
+    "key": "downloads.max_concurrent",
+    "type": "int",
+    "value": 5,
+    "default": 5,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Maximum downloads running at once."
+  },
+  {
+    "key": "downloads.connections_per_server",
+    "type": "int",
+    "value": 16,
+    "default": 16,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Connections per server (aria2 caps this at 16)."
+  },
+  {
+    "key": "downloads.split",
+    "type": "int",
+    "value": 16,
+    "default": 16,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Pieces a file is split into."
+  },
+  {
+    "key": "downloads.min_split_size",
+    "type": "string",
+    "value": "4M",
+    "default": "4M",
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Do not split pieces smaller than this."
+  },
+  {
+    "key": "downloads.start_paused",
+    "type": "bool",
+    "value": false,
+    "default": false,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Add new jobs in the paused state."
+  },
+  {
+    "key": "downloads.on_exists",
+    "type": "string",
+    "value": "rename",
+    "default": "rename",
+    "source": "default",
+    "live": true,
+    "enum": [
+      "rename",
+      "overwrite",
+      "ask"
+    ],
+    "help": "What to do when the target file exists."
+  },
+  {
+    "key": "downloads.file_allocation",
+    "type": "string",
+    "value": "auto",
+    "default": "auto",
+    "source": "default",
+    "live": false,
+    "enum": [
+      "auto",
+      "falloc",
+      "prealloc",
+      "trunc",
+      "none"
+    ],
+    "help": "File allocation method; auto picks per filesystem."
+  },
+  {
+    "key": "downloads.user_agent",
+    "type": "string",
+    "value": "",
+    "default": "",
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "HTTP user agent; empty uses the aria2 default."
+  },
+  {
+    "key": "downloads.lowest_speed_limit",
+    "type": "string",
+    "value": "0",
+    "default": "0",
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Abort connections slower than this (bytes/s); 0 disables."
+  },
+  {
+    "key": "downloads.connect_timeout",
+    "type": "string",
+    "value": "60s",
+    "default": "60s",
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Connection timeout."
+  },
+  {
+    "key": "downloads.timeout",
+    "type": "string",
+    "value": "60s",
+    "default": "60s",
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Transfer timeout."
+  },
+  {
+    "key": "limits.global_down",
+    "type": "string",
+    "value": "0",
+    "default": "0",
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Global download limit (bytes/s); 0 is unlimited."
+  },
+  {
+    "key": "limits.global_up",
+    "type": "string",
+    "value": "0",
+    "default": "0",
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Global upload limit (bytes/s); 0 is unlimited."
+  },
+  {
+    "key": "network.all_proxy",
+    "type": "string",
+    "value": "",
+    "default": "",
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "HTTP(S) proxy URL; empty falls back to environment variables."
+  },
+  {
+    "key": "network.no_proxy",
+    "type": "string",
+    "value": "",
+    "default": "",
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Comma separated hosts that bypass the proxy."
+  },
+  {
+    "key": "network.check_certificate",
+    "type": "bool",
+    "value": true,
+    "default": true,
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Verify TLS certificates; a warning is shown when off."
+  },
+  {
+    "key": "network.ca_certificate",
+    "type": "string",
+    "value": "",
+    "default": "",
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Path to a custom CA bundle."
+  },
+  {
+    "key": "network.interface",
+    "type": "string",
+    "value": "",
+    "default": "",
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Bind to this network interface or IP."
+  },
+  {
+    "key": "network.disable_ipv6",
+    "type": "bool",
+    "value": false,
+    "default": false,
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Disable IPv6."
+  },
+  {
+    "key": "retry.max_tries",
+    "type": "int",
+    "value": 5,
+    "default": 5,
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "aria2 tries per connection."
+  },
+  {
+    "key": "retry.retry_wait",
+    "type": "string",
+    "value": "10s",
+    "default": "10s",
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Wait between aria2 retries."
+  },
+  {
+    "key": "retry.max_file_not_found",
+    "type": "int",
+    "value": 3,
+    "default": 3,
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Give up after this many file-not-found replies."
+  },
+  {
+    "key": "retry.auto_retry",
+    "type": "list",
+    "value": [
+      "429"
+    ],
+    "default": [
+      "429"
+    ],
+    "source": "default",
+    "live": true,
+    "enum": [
+      "429",
+      "503",
+      "network",
+      "timeout"
+    ],
+    "help": "Failure kinds retried automatically."
+  },
+  {
+    "key": "retry.backoff_base",
+    "type": "string",
+    "value": "30s",
+    "default": "30s",
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "First automatic retry delay."
+  },
+  {
+    "key": "retry.backoff_factor",
+    "type": "float",
+    "value": 2,
+    "default": 2,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Multiplier applied to the delay on each retry."
+  },
+  {
+    "key": "retry.backoff_max_attempts",
+    "type": "int",
+    "value": 5,
+    "default": 5,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Maximum automatic retries per job."
+  },
+  {
+    "key": "bt.seed_ratio",
+    "type": "float",
+    "value": 0,
+    "default": 0,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Seed until this share ratio; 0 means no ratio target."
+  },
+  {
+    "key": "bt.seed_minutes",
+    "type": "int",
+    "value": 0,
+    "default": 0,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Seed for this many minutes; 0 means do not seed."
+  },
+  {
+    "key": "bt.listen_port",
+    "type": "string",
+    "value": "6881-6999",
+    "default": "6881-6999",
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "BitTorrent listen port or range."
+  },
+  {
+    "key": "bt.dht_listen_port",
+    "type": "string",
+    "value": "6881-6999",
+    "default": "6881-6999",
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "DHT listen port or range."
+  },
+  {
+    "key": "bt.enable_dht",
+    "type": "bool",
+    "value": true,
+    "default": true,
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Enable DHT."
+  },
+  {
+    "key": "bt.enable_peer_exchange",
+    "type": "bool",
+    "value": true,
+    "default": true,
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Enable peer exchange."
+  },
+  {
+    "key": "bt.max_peers",
+    "type": "int",
+    "value": 55,
+    "default": 55,
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Maximum peers per torrent."
+  },
+  {
+    "key": "bt.extra_trackers",
+    "type": "list",
+    "value": [],
+    "default": [],
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Trackers appended to every torrent."
+  },
+  {
+    "key": "bt.require_crypto",
+    "type": "bool",
+    "value": false,
+    "default": false,
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Require encrypted peer connections."
+  },
+  {
+    "key": "bt.save_metadata",
+    "type": "bool",
+    "value": true,
+    "default": true,
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Keep the .torrent for magnets (needed to resume)."
+  },
+  {
+    "key": "daemon.mode",
+    "type": "string",
+    "value": "on-demand",
+    "default": "on-demand",
+    "source": "default",
+    "live": false,
+    "enum": [
+      "on-demand",
+      "always"
+    ],
+    "help": "Run the daemon on demand or keep it always running."
+  },
+  {
+    "key": "daemon.idle_exit",
+    "type": "string",
+    "value": "30s",
+    "default": "30s",
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Exit after this long with no clients and no work."
+  },
+  {
+    "key": "daemon.auto_start",
+    "type": "bool",
+    "value": true,
+    "default": true,
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Clients start the daemon when it is missing."
+  },
+  {
+    "key": "engine.aria2c_path",
+    "type": "string",
+    "value": "aria2c",
+    "default": "aria2c",
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Path or name of the aria2c binary."
+  },
+  {
+    "key": "engine.attach_url",
+    "type": "string",
+    "value": "",
+    "default": "",
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Attach to an existing aria2 RPC endpoint instead of spawning one."
+  },
+  {
+    "key": "engine.attach_secret_file",
+    "type": "string",
+    "value": "",
+    "default": "",
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "File holding the secret for the attached endpoint."
+  },
+  {
+    "key": "engine.aria2_extra_args",
+    "type": "list",
+    "value": [],
+    "default": [],
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Extra aria2c arguments; rpc-* options are rejected."
+  },
+  {
+    "key": "engine.disk_cache",
+    "type": "string",
+    "value": "64M",
+    "default": "64M",
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "aria2 disk cache size."
+  },
+  {
+    "key": "engine.auto_save_interval",
+    "type": "string",
+    "value": "10s",
+    "default": "10s",
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "How often aria2 saves its session."
+  },
+  {
+    "key": "engine.restart_max_backoff",
+    "type": "string",
+    "value": "30s",
+    "default": "30s",
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Longest wait between aria2 restarts."
+  },
+  {
+    "key": "engine.crash_loop_exits",
+    "type": "int",
+    "value": 5,
+    "default": 5,
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Exits within the window that count as a crash loop."
+  },
+  {
+    "key": "engine.crash_loop_window",
+    "type": "string",
+    "value": "3s",
+    "default": "3s",
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Window used to detect a crash loop."
+  },
+  {
+    "key": "reliability.inhibit_sleep",
+    "type": "bool",
+    "value": true,
+    "default": true,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Keep the system awake while downloading."
+  },
+  {
+    "key": "reliability.inhibit_mode",
+    "type": "string",
+    "value": "block",
+    "default": "block",
+    "source": "default",
+    "live": true,
+    "enum": [
+      "block",
+      "delay"
+    ],
+    "help": "Sleep inhibit mode."
+  },
+  {
+    "key": "reliability.disk_precheck",
+    "type": "bool",
+    "value": true,
+    "default": true,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Check free space before starting a job."
+  },
+  {
+    "key": "reliability.disk_margin_percent",
+    "type": "int",
+    "value": 1,
+    "default": 1,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Extra free space required, in percent."
+  },
+  {
+    "key": "reliability.duplicates",
+    "type": "string",
+    "value": "ask",
+    "default": "ask",
+    "source": "default",
+    "live": true,
+    "enum": [
+      "ask",
+      "allow",
+      "skip"
+    ],
+    "help": "How to handle a URL that is already queued."
+  },
+  {
+    "key": "reliability.unmounted_guard",
+    "type": "bool",
+    "value": true,
+    "default": true,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Refuse to write when the target mount is missing."
+  },
+  {
+    "key": "remove.default_action",
+    "type": "string",
+    "value": "ask",
+    "default": "ask",
+    "source": "default",
+    "live": true,
+    "enum": [
+      "ask",
+      "list-only",
+      "trash"
+    ],
+    "help": "Default action when removing a job."
+  },
+  {
+    "key": "remove.undo_seconds",
+    "type": "int",
+    "value": 10,
+    "default": 10,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Seconds an undo stays available; 0 disables undo."
+  },
+  {
+    "key": "remove.confirm",
+    "type": "bool",
+    "value": true,
+    "default": true,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Ask before removing."
+  },
+  {
+    "key": "privacy.stamp_origin_xattr",
+    "type": "bool",
+    "value": true,
+    "default": true,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Write user.xdg.origin.url on finished files."
+  },
+  {
+    "key": "privacy.redact_logs",
+    "type": "bool",
+    "value": true,
+    "default": true,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Strip query strings and credentials from logs."
+  },
+  {
+    "key": "history.keep_days",
+    "type": "int",
+    "value": 0,
+    "default": 0,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Days of history to keep; 0 keeps everything."
+  },
+  {
+    "key": "history.purge_removed_after_days",
+    "type": "int",
+    "value": 30,
+    "default": 30,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Days before removed jobs are purged."
+  },
+  {
+    "key": "history.show_in_list",
+    "type": "bool",
+    "value": true,
+    "default": true,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Show finished jobs in the main list."
+  },
+  {
+    "key": "history.list_limit",
+    "type": "int",
+    "value": 200,
+    "default": 200,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "History page size."
+  },
+  {
+    "key": "ui.mouse",
+    "type": "string",
+    "value": "all",
+    "default": "all",
+    "source": "default",
+    "live": true,
+    "enum": [
+      "all",
+      "cell",
+      "off"
+    ],
+    "help": "Mouse reporting mode."
+  },
+  {
+    "key": "ui.double_click_ms",
+    "type": "int",
+    "value": 400,
+    "default": 400,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Double click interval in milliseconds."
+  },
+  {
+    "key": "ui.glyphs",
+    "type": "string",
+    "value": "unicode",
+    "default": "unicode",
+    "source": "default",
+    "live": true,
+    "enum": [
+      "unicode",
+      "ascii"
+    ],
+    "help": "Glyph set."
+  },
+  {
+    "key": "ui.units",
+    "type": "string",
+    "value": "iec",
+    "default": "iec",
+    "source": "default",
+    "live": true,
+    "enum": [
+      "iec",
+      "si"
+    ],
+    "help": "Size units (1024 or 1000 based)."
+  },
+  {
+    "key": "ui.speed_unit",
+    "type": "string",
+    "value": "bytes",
+    "default": "bytes",
+    "source": "default",
+    "live": true,
+    "enum": [
+      "bytes",
+      "bits"
+    ],
+    "help": "Show speeds in bytes or bits."
+  },
+  {
+    "key": "ui.time_format",
+    "type": "string",
+    "value": "relative",
+    "default": "relative",
+    "source": "default",
+    "live": true,
+    "enum": [
+      "relative",
+      "24h",
+      "12h",
+      "iso"
+    ],
+    "help": "Timestamp format."
+  },
+  {
+    "key": "ui.details_position",
+    "type": "string",
+    "value": "auto",
+    "default": "auto",
+    "source": "default",
+    "live": true,
+    "enum": [
+      "auto",
+      "right",
+      "bottom",
+      "hidden"
+    ],
+    "help": "Where the details pane goes."
+  },
+  {
+    "key": "ui.details_width_percent",
+    "type": "int",
+    "value": 34,
+    "default": 34,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Details pane width in percent."
+  },
+  {
+    "key": "ui.wide_breakpoint",
+    "type": "int",
+    "value": 100,
+    "default": 100,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Columns at which the wide layout starts."
+  },
+  {
+    "key": "ui.sort",
+    "type": "string",
+    "value": "smart",
+    "default": "smart",
+    "source": "default",
+    "live": true,
+    "enum": [
+      "smart",
+      "added",
+      "name",
+      "progress",
+      "speed",
+      "size"
+    ],
+    "help": "Default list sort."
+  },
+  {
+    "key": "ui.paste_detection",
+    "type": "bool",
+    "value": true,
+    "default": true,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Offer to add URLs found in pasted text."
+  },
+  {
+    "key": "ui.toast_seconds",
+    "type": "int",
+    "value": 4,
+    "default": 4,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Seconds a toast stays visible."
+  },
+  {
+    "key": "ui.sparkline_seconds",
+    "type": "int",
+    "value": 60,
+    "default": 60,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Seconds of speed history in sparklines."
+  },
+  {
+    "key": "ui.window_title",
+    "type": "bool",
+    "value": true,
+    "default": true,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Set the terminal window title."
+  },
+  {
+    "key": "ui.title_format",
+    "type": "string",
+    "value": "lazyaria ↓ {down} · {active} active",
+    "default": "lazyaria ↓ {down} · {active} active",
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Window title template."
+  },
+  {
+    "key": "ui.osc_links",
+    "type": "bool",
+    "value": true,
+    "default": true,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Use OSC 8 hyperlinks."
+  },
+  {
+    "key": "ui.clipboard",
+    "type": "string",
+    "value": "auto",
+    "default": "auto",
+    "source": "default",
+    "live": true,
+    "enum": [
+      "auto",
+      "osc52",
+      "wl-copy",
+      "xclip",
+      "off"
+    ],
+    "help": "Clipboard backend."
+  },
+  {
+    "key": "ui.open_command",
+    "type": "string",
+    "value": "xdg-open",
+    "default": "xdg-open",
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Command used to open files."
+  },
+  {
+    "key": "ui.open_folder_command",
+    "type": "string",
+    "value": "",
+    "default": "",
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Command used to open folders; empty uses open_command."
+  },
+  {
+    "key": "ui.reduced_motion",
+    "type": "bool",
+    "value": false,
+    "default": false,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Turn off animation."
+  },
+  {
+    "key": "ui.first_run",
+    "type": "bool",
+    "value": true,
+    "default": true,
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Show the first-run screen; cleared after it is shown."
+  },
+  {
+    "key": "log.level",
+    "type": "string",
+    "value": "info",
+    "default": "info",
+    "source": "default",
+    "live": true,
+    "enum": [
+      "debug",
+      "info",
+      "warn",
+      "error"
+    ],
+    "help": "Log level."
+  },
+  {
+    "key": "log.file",
+    "type": "string",
+    "value": "",
+    "default": "",
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Log file path; empty uses the state dir."
+  },
+  {
+    "key": "log.max_size",
+    "type": "string",
+    "value": "5M",
+    "default": "5M",
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Rotate the log at this size."
+  },
+  {
+    "key": "log.keep",
+    "type": "int",
+    "value": 3,
+    "default": 3,
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Rotated log files to keep."
+  },
+  {
+    "key": "advanced.progress_hz",
+    "type": "int",
+    "value": 4,
+    "default": 4,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Maximum progress pushes per second per client."
+  },
+  {
+    "key": "advanced.poll_interval",
+    "type": "string",
+    "value": "1s",
+    "default": "1s",
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "aria2 poll interval while observed."
+  },
+  {
+    "key": "advanced.sentinel_interval",
+    "type": "string",
+    "value": "15s",
+    "default": "15s",
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "aria2 poll interval while unobserved."
+  },
+  {
+    "key": "advanced.socket_path",
+    "type": "string",
+    "value": "",
+    "default": "",
+    "source": "default",
+    "live": false,
+    "enum": [],
+    "help": "Override the socket location."
+  },
+  {
+    "key": "keys.preset",
+    "type": "string",
+    "value": "default",
+    "default": "default",
+    "source": "default",
+    "live": true,
+    "enum": [
+      "default",
+      "vim"
+    ],
+    "help": "Keymap preset."
+  }
+]

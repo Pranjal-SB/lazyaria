@@ -1,0 +1,183 @@
+package cli
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/Pranjal-SB/lazyaria/internal/config"
+	"github.com/Pranjal-SB/lazyaria/internal/daemon"
+	"github.com/Pranjal-SB/lazyaria/internal/ipc"
+	"github.com/Pranjal-SB/lazyaria/internal/store"
+)
+
+// fake is an in-process daemon behind a real socket.
+type fake struct {
+	bus *daemon.Bus
+
+	mu        sync.Mutex
+	jobs      []*store.Job
+	adds      []daemon.AddParams
+	addErr    error
+	paused    []string
+	removed   []string
+	deleted   bool
+	overrides map[string]string
+	restarts  int
+}
+
+func (f *fake) All() (map[string]string, error) { return f.overrides, nil }
+
+func (f *fake) Hello(context.Context, ipc.HelloParams) (ipc.HelloResult, error) {
+	return ipc.HelloResult{DaemonVersion: "dev", Protocol: 1, EngineState: "ready"}, nil
+}
+
+func (f *fake) Status(context.Context) (ipc.Status, error) {
+	return ipc.Status{PID: 0, Mode: "on-demand", Uptime: 75, EngineState: "ready", Aria2Version: "1.37.0", DownloadDir: "/dl"}, nil
+}
+
+func (f *fake) Upgrade(context.Context) error { return nil }
+
+func (f *fake) RestartEngine(context.Context) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.restarts++
+	return nil
+}
+
+func (f *fake) Add(_ context.Context, p daemon.AddParams) (*store.Job, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.adds = append(f.adds, p)
+	if f.addErr != nil {
+		if sk, ok := errors.AsType[*daemon.SkippedError](f.addErr); ok {
+			return sk.Existing, f.addErr
+		}
+		return nil, f.addErr
+	}
+	j := &store.Job{ID: store.NewID(), Kind: "http", State: store.Queued, URIs: p.URIs, Name: "file", Dir: p.Dir}
+	f.jobs = append(f.jobs, j)
+	return j, nil
+}
+
+func (f *fake) Pause(_ context.Context, ids []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.paused = append(f.paused, ids...)
+	return nil
+}
+
+func (f *fake) Resume(context.Context, []string) error { return nil }
+func (f *fake) PauseAll(context.Context) error         { return nil }
+func (f *fake) ResumeAll(context.Context) error        { return nil }
+
+func (f *fake) Remove(_ context.Context, ids []string, del bool) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.removed, f.deleted = append(f.removed, ids...), del
+	return "tok", nil
+}
+
+func (f *fake) Undo(context.Context, string) error { return nil }
+func (f *fake) RefreshURI(context.Context, string, string) (*store.Job, error) {
+	return nil, nil
+}
+func (f *fake) SetLimit(context.Context, string, int64, int64) error { return nil }
+func (f *fake) StopSeeding(context.Context, []string) error          { return nil }
+
+func (f *fake) Snapshot(context.Context, bool, int) (uint64, []*store.Job, []daemon.SpeedSample) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	js := make([]*store.Job, len(f.jobs))
+	for i, j := range f.jobs {
+		c := *j
+		js[i] = &c
+	}
+	return 0, js, nil
+}
+
+func (f *fake) Search(context.Context, string, int, int) ([]*store.Job, error) { return nil, nil }
+func (f *fake) Subscribe(progress bool) *daemon.Sub                            { return f.bus.Subscribe(progress) }
+func (f *fake) SetObservers(int)                                               {}
+func (f *fake) SetClients(int)                                                 {}
+
+func (f *fake) ConfigList(context.Context) ([]config.Entry, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	_, ents, _, err := config.Load("", nil, f, nil)
+	return ents, err
+}
+
+func (f *fake) ConfigSet(_ context.Context, key, value string) error {
+	if err := config.Set(&config.Settings{Keys: map[string][]string{}, Theme: map[string]string{}}, key, value); err != nil {
+		return err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.overrides[key] = value
+	return nil
+}
+
+func (f *fake) ConfigReset(_ context.Context, key string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.overrides, key)
+	return nil
+}
+
+// isolate points every XDG dir at a fresh short temp dir (sockets have a
+// 104-byte path limit) and turns daemon auto-start off.
+func isolate(t *testing.T) config.Paths {
+	t.Helper()
+	root, err := os.MkdirTemp("", "lac")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(root) })
+	t.Setenv("HOME", root)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "c"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(root, "s"))
+	t.Setenv("XDG_RUNTIME_DIR", filepath.Join(root, "r"))
+	t.Setenv("LAZYARIA_DAEMON_AUTO_START", "false")
+	_, p, err := resolveLocal(os.Environ(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+// startFake serves a fake daemon where the CLI will look for one.
+func startFake(t *testing.T) *fake {
+	t.Helper()
+	p := isolate(t)
+	f := &fake{bus: daemon.NewBus(0), overrides: map[string]string{}}
+	l, lock, err := ipc.Listen(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { ipc.Serve(ctx, l, f); close(done) }()
+	t.Cleanup(func() { cancel(); <-done; lock.Close() })
+	return f
+}
+
+// run calls a command with in as its stdin.
+func run(t *testing.T, cmd func(context.Context, []string, io.Writer, io.Writer) int, in string, args ...string) (int, string, string) {
+	t.Helper()
+	old := stdin
+	stdin = strings.NewReader(in)
+	t.Cleanup(func() { stdin = old })
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	var out, errOut bytes.Buffer
+	code := cmd(ctx, args, &out, &errOut)
+	return code, out.String(), errOut.String()
+}

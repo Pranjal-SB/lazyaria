@@ -1,0 +1,70 @@
+{
+  "jobs": [
+    {
+      "id": "01JC0000000000000000000001",
+      "kind": "http",
+      "engine": "aria2",
+      "engine_ref": "2089b05ecca3d829",
+      "state": "active",
+      "error_kind": null,
+      "error_code": null,
+      "error_msg": null,
+      "name": "debian.iso",
+      "uris": [
+        "https://example.com/debian.iso"
+      ],
+      "dir": "/dl",
+      "out": null,
+      "dir_dev": null,
+      "total_bytes": 4294967296,
+      "done_bytes": 1073741824,
+      "options": {
+        "header": "***"
+      },
+      "limit_down": 0,
+      "limit_up": 0,
+      "category": null,
+      "queue": "default",
+      "priority": 0,
+      "retry_count": 0,
+      "retry_at": null,
+      "referrer": null,
+      "created_at": "2026-11-07T10:00:00Z",
+      "started_at": null,
+      "finished_at": null,
+      "removed_at": null
+    },
+    {
+      "id": "01JC0000000000000000000002",
+      "kind": "magnet",
+      "engine": "aria2",
+      "engine_ref": null,
+      "state": "error",
+      "error_kind": "not-found",
+      "error_code": 3,
+      "error_msg": "404",
+      "name": "x",
+      "uris": [
+        "magnet:?xt=urn:btih:abc"
+      ],
+      "dir": "/dl",
+      "out": null,
+      "dir_dev": null,
+      "total_bytes": null,
+      "done_bytes": null,
+      "options": {},
+      "limit_down": 0,
+      "limit_up": 0,
+      "category": null,
+      "queue": "default",
+      "priority": 0,
+      "retry_count": 0,
+      "retry_at": null,
+      "referrer": null,
+      "created_at": "2026-11-07T10:00:00Z",
+      "started_at": null,
+      "finished_at": null,
+      "removed_at": null
+    }
+  ]
+}

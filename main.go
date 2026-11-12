@@ -19,16 +19,42 @@ var commands = map[string]func(ctx context.Context, args []string, out, errOut i
 	"version": cmdVersion,
 	"help":    cmdHelp,
 	"daemon":  cli.Daemon,
+	"add":     cli.Add,
+	"list":    cli.List,
+	"status":  cli.Status,
+	"pause":   cli.Pause,
+	"resume":  cli.Resume,
+	"remove":  cli.Remove,
+	"config":  cli.Config,
+	"doctor":  cli.Doctor,
+	"logs":    cli.Logs,
+	"service": cli.Service,
 }
 
 const usage = `usage: lazyaria <command> [args]
 
 commands:
-  daemon    run the daemon (normally started automatically)
-            --detach  run in the background
-            --mode    on-demand or always
+  add [--dir D] [--out F] [--paused] [--wait] <link|file.torrent|->...
+            queue downloads; - reads links from stdin; --wait exits 0
+            when all finish, 1 if any fails
+  list [--json] [--all]
+            show jobs; --all includes finished and removed ones
+  status [--json]
+            daemon and engine status
+  pause|resume <id-prefix>...
+  remove [--delete-files] <id-prefix>...
+  config list [--json] | get KEY | set KEY VALUE | reset KEY | edit | path | keys
+  doctor [--json] [--restart-engine]
+            check the setup and say how to fix what is wrong
+  logs [-f]  show the daemon log; -f keeps following it
+  service install|uninstall
+            run the daemon as a systemd user service
+  daemon [--detach] [--mode on-demand|always]
+            run the daemon (normally started automatically)
   version   print the version and IPC protocol
   help      show this help
+
+exit codes: 0 ok, 1 error, 2 usage, 3 daemon unreachable, 4 duplicate or refused
 `
 
 func main() {

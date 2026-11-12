@@ -162,19 +162,11 @@ func (d *daemonProc) run(ctx context.Context, ready func()) (int, error) {
 // flags (the runtime overrides live in the DB, which needs the paths) and
 // creates the state and runtime dirs.
 func (d *daemonProc) resolve() (*config.Settings, error) {
-	s, _, _, err := config.Load("", d.env, nil, d.flags)
+	s, p, err := resolveLocal(d.env, d.flags)
 	if err != nil {
 		return nil, err
 	}
-	if d.paths, err = config.ResolvePaths(s, os.Getenv); err != nil {
-		return nil, err
-	}
-	if s, _, _, err = config.Load(d.paths.ConfigFile, d.env, nil, d.flags); err != nil {
-		return nil, err
-	}
-	if d.paths, err = config.ResolvePaths(s, os.Getenv); err != nil {
-		return nil, err
-	}
+	d.paths = p
 	return s, config.EnsureDirs(d.paths)
 }
 

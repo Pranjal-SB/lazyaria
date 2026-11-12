@@ -1,0 +1,109 @@
+package cli
+
+import (
+	"encoding/json"
+	"flag"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/Pranjal-SB/lazyaria/internal/store"
+)
+
+var update = flag.Bool("update", false, "rewrite golden files")
+
+func golden(t *testing.T, name, got string) {
+	t.Helper()
+	path := "../../testdata/cli/" + name
+	if *update {
+		os.MkdirAll("../../testdata/cli", 0o755)
+		os.WriteFile(path, []byte(got), 0o644)
+	}
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != string(want) {
+		t.Errorf("output differs from %s (run with -update to accept):\n%s", path, got)
+	}
+}
+
+func ptr[T any](v T) *T { return &v }
+
+func sampleJobs() []*store.Job {
+	at := time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC)
+	return []*store.Job{
+		{ID: "01JC0000000000000000000001", Kind: "http", Engine: "aria2", EngineRef: ptr("2089b05ecca3d829"), State: store.Active,
+			Name: "debian.iso", URIs: []string{"https://example.com/debian.iso"}, Dir: "/dl", TotalBytes: ptr(int64(4 << 30)),
+			DoneBytes: ptr(int64(1 << 30)), Options: map[string]string{"header": "***"}, Queue: "default", CreatedAt: at},
+		{ID: "01JC0000000000000000000002", Kind: "magnet", Engine: "aria2", State: store.Error, ErrorKind: ptr("not-found"),
+			ErrorCode: ptr(3), ErrorMsg: ptr("404"), Name: "x", URIs: []string{"magnet:?xt=urn:btih:abc"}, Dir: "/dl",
+			Options: map[string]string{}, Queue: "default", CreatedAt: at},
+	}
+}
+
+func TestListJSONGolden(t *testing.T) {
+	f := startFake(t)
+	f.jobs = sampleJobs()
+	code, out, errOut := run(t, List, "", "--json")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if !json.Valid([]byte(out)) {
+		t.Fatalf("not JSON: %s", out)
+	}
+	golden(t, "list.golden", out)
+}
+
+func TestListHuman(t *testing.T) {
+	f := startFake(t)
+	f.jobs = sampleJobs()
+	code, out, _ := run(t, List, "")
+	if code != 0 {
+		t.Fatal(code)
+	}
+	for _, want := range []string{"debian.iso", "25%", "4.0 GiB", "error", "404"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("list output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestStatusJSON(t *testing.T) {
+	startFake(t)
+	code, out, _ := run(t, Status, "", "--json")
+	if code != 0 {
+		t.Fatal(code)
+	}
+	golden(t, "status.golden", out)
+}
+
+func TestIDPrefixAmbiguous(t *testing.T) {
+	f := startFake(t)
+	f.jobs = sampleJobs()
+	code, _, errOut := run(t, Pause, "", "01JC0")
+	if code != 2 {
+		t.Fatalf("exit %d, want 2", code)
+	}
+	for _, j := range f.jobs {
+		if !strings.Contains(errOut, j.ID) {
+			t.Errorf("stderr %q should list %s", errOut, j.ID)
+		}
+	}
+	if code, _, _ := run(t, Pause, "", "01J"); code != 2 {
+		t.Errorf("3-char prefix: exit %d, want 2", code)
+	}
+	if code, _, errOut := run(t, Pause, "", "01jc0000000000000000000002"); code != 0 || len(f.paused) != 1 || f.paused[0] != f.jobs[1].ID {
+		t.Errorf("unique prefix: exit %d paused %v: %s", code, f.paused, errOut)
+	}
+}
+
+func TestRemoveDeleteFilesAfterIDs(t *testing.T) {
+	f := startFake(t)
+	f.jobs = sampleJobs()
+	code, _, errOut := run(t, Remove, "", "01JC0000000000000000000001", "--delete-files")
+	if code != 0 || !f.deleted || len(f.removed) != 1 {
+		t.Fatalf("exit %d removed %v deleted %v: %s", code, f.removed, f.deleted, errOut)
+	}
+}
