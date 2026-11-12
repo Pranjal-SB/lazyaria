@@ -111,3 +111,35 @@ func stopDaemon(t *testing.T, p config.Paths) {
 	}
 	syscall.Kill(pid, syscall.SIGKILL)
 }
+
+// A daemon that is idle-exiting has already unlinked its socket but still
+// holds the lock while aria2 shuts down. The daemon we spawn then backs off
+// and exits 0; Connect must spawn again instead of waiting out the budget.
+func TestConnectRespawnsWhileOldDaemonExits(t *testing.T) {
+	dir := shortDir(t)
+	p := testPaths(dir)
+	t.Setenv("LAZYARIA_TEST_FAKE_DAEMON", "1")
+	t.Setenv("LAZYARIA_TEST_DIR", dir)
+	if err := os.MkdirAll(p.RuntimeDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	old, err := takeLock(p.Lock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.AfterFunc(500*time.Millisecond, func() { old.Close() })
+	t.Cleanup(func() {
+		if pid := lockPID(t, p); pid != os.Getpid() {
+			stopDaemon(t, p)
+		}
+	})
+
+	c, err := Connect(context.Background(), p, true, os.Args[0])
+	if err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	defer c.Close()
+	if _, err := c.Status(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}

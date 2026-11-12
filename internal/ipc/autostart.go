@@ -26,6 +26,10 @@ const (
 // here both start a daemon; the daemon lock lets only one of them live,
 // and the other exits 0. A non-zero exit means the daemon could not start,
 // and its stderr (say, how to install aria2) is passed on to the user.
+//
+// A daemon on its way out has already removed its socket but holds the
+// lock until aria2 is down, so the one we start also exits 0. Then we
+// start another, until one gets the lock or the time runs out.
 func Connect(ctx context.Context, p config.Paths, autoStart bool, exe string) (*Client, error) {
 	c, err := Dial(ctx, p)
 	if err == nil {
@@ -34,26 +38,24 @@ func Connect(ctx context.Context, p config.Paths, autoStart bool, exe string) (*
 	if _, foreign := errors.AsType[*ErrForeignDaemon](err); foreign || !autoStart {
 		return nil, fmt.Errorf("%w (%w)", ErrUnreachable, err)
 	}
-	var stderr tailBuf
-	cmd := exec.Command(exe, "daemon", "--detach")
-	cmd.Stderr = &stderr
-	cmd.WaitDelay = 100 * time.Millisecond // a detached daemon must not keep Wait open
-	if serr := cmd.Start(); serr != nil {
-		return nil, fmt.Errorf("%w (start daemon: %v)", ErrUnreachable, serr)
-	}
-	exited := make(chan error, 1)
-	go func() { exited <- cmd.Wait() }()
-
 	ctx, cancel := context.WithTimeout(ctx, startTimeout)
 	defer cancel()
+	var stderr tailBuf
+	var exited chan error
 	tick := time.NewTicker(startPoll)
 	defer tick.Stop()
 	for {
+		if exited == nil {
+			var serr error
+			if exited, serr = spawn(exe, &stderr); serr != nil {
+				return nil, fmt.Errorf("%w (start daemon: %v)", ErrUnreachable, serr)
+			}
+		}
 		select {
 		case <-ctx.Done():
 			return nil, fmt.Errorf("%w (%v)", ErrUnreachable, err)
 		case werr := <-exited:
-			exited = nil
+			exited = nil // it lost the lock: spawn again after this dial
 			if werr != nil {
 				return nil, fmt.Errorf("%w: the daemon exited (%v): %s", ErrUnreachable, werr, stderr.String())
 			}
@@ -63,6 +65,19 @@ func Connect(ctx context.Context, p config.Paths, autoStart bool, exe string) (*
 			return c, nil
 		}
 	}
+}
+
+// spawn starts `exe daemon --detach`; the channel gets its exit status.
+func spawn(exe string, stderr *tailBuf) (chan error, error) {
+	cmd := exec.Command(exe, "daemon", "--detach")
+	cmd.Stderr = stderr
+	cmd.WaitDelay = 100 * time.Millisecond // a detached daemon must not keep Wait open
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	exited := make(chan error, 1)
+	go func() { exited <- cmd.Wait() }()
+	return exited, nil
 }
 
 // tailBuf keeps the last 2 KiB written to it.

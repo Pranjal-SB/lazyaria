@@ -68,3 +68,22 @@ func TestIdleZeroProcesses(t *testing.T) {
 		t.Errorf("socket left behind after idle exit: %v", err)
 	}
 }
+
+// TestCallsDuringIdleExit fires CLI calls at a daemon with a 1 s idle_exit,
+// spaced so many of them land while it is shutting down: socket gone, lock
+// still held. Every call must reach a daemon, old or new.
+func TestCallsDuringIdleExit(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t, "[daemon]\nidle_exit = \"1s\"\n")
+	failed := 0
+	for i := range 60 {
+		if out, errOut, code := e.run("list", "--all"); code != 0 {
+			failed++
+			t.Logf("call %d exited %d: %s%s", i, code, out, errOut)
+		}
+		time.Sleep(time.Second + time.Duration(i%10)*60*time.Millisecond)
+	}
+	if failed > 0 {
+		t.Fatalf("%d of 60 calls failed during idle exit", failed)
+	}
+}
