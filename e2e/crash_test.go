@@ -55,7 +55,7 @@ func TestCrashNeverLoses(t *testing.T) {
 		return float64(done) / float64(total), allDone
 	}
 
-	// Kill until every job is done: one kill per 5% of progress up to 90%,
+	// Kill until every job is done: one kill per 4% of progress up to 90%,
 	// then one as progress first crosses each of 91%, 94% and 97%, so kills
 	// also land in the finalise window (.aria2 removal, Done). A threshold
 	// the downloads finish before is skipped.
@@ -109,8 +109,8 @@ func TestCrashNeverLoses(t *testing.T) {
 		if frac > 0.9 {
 			continue // the threshold loop above paces the late kills
 		}
-		// Wait for the next 5% (or 4 s, if a restart makes no headway).
-		target, until := frac+0.05, time.Now().Add(4*time.Second)
+		// Wait for the next 4% (or 4 s, if a restart makes no headway).
+		target, until := frac+0.04, time.Now().Add(4*time.Second)
 		for time.Now().Before(until) {
 			if f, done := progress(); f >= target || done {
 				break

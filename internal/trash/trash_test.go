@@ -319,3 +319,18 @@ func TestTrashNeverReplacesRacingName(t *testing.T) {
 		t.Fatalf("trashed at %s: %q", e.TrashedPath, b)
 	}
 }
+
+// The move into the trash must never replace what is already at the
+// destination; a plain os.Rename as the default would.
+func TestDefaultRenameNeverReplaces(t *testing.T) {
+	dir := t.TempDir()
+	src, dst := filepath.Join(dir, "src"), filepath.Join(dir, "dst")
+	os.WriteFile(src, []byte("src"), 0o600)
+	os.WriteFile(dst, []byte("dst"), 0o600)
+	if err := renameFn(src, dst); !errors.Is(err, os.ErrExist) {
+		t.Fatalf("renameFn onto an existing file: err = %v, want ErrExist", err)
+	}
+	if b, _ := os.ReadFile(dst); string(b) != "dst" {
+		t.Fatalf("destination replaced: %q", b)
+	}
+}
