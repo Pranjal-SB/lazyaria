@@ -20,10 +20,15 @@ func waitJobs(ctx context.Context, c *ipc.Client, events <-chan daemon.Event, id
 		pending[id] = true
 	}
 	code := exitOK
+	paused := map[string]*store.Job{} // pending jobs last seen paused
 	// settle reports a job once it reaches a final state.
 	settle := func(j *store.Job, removed bool) {
 		if !pending[j.ID] {
 			return
+		}
+		delete(paused, j.ID)
+		if j.State == store.Paused {
+			paused[j.ID] = j
 		}
 		switch {
 		case removed || j.State == store.Removed:
@@ -43,6 +48,26 @@ func waitJobs(ctx context.Context, c *ipc.Client, events <-chan daemon.Event, id
 		}
 		code = exitRuntime
 		delete(pending, j.ID)
+	}
+	// A pause by the daemon itself (no space, disk full) never ends on its
+	// own; its banner follows the paused row. A user's pause keeps waiting.
+	systemPause := func(data map[string]any) {
+		kind, _ := data["kind"].(string)
+		for id, j := range paused {
+			var why string
+			switch {
+			case kind == "no_space" && data["job"] == id:
+				why = "not enough free space in " + j.Dir
+			case kind == "disk_full" && data["dir"] == j.Dir:
+				why = "the disk holding " + j.Dir + " is full"
+			default:
+				continue
+			}
+			fmt.Fprintf(errOut, "lazyaria add: %s %s was paused: %s; free some space, then run `lazyaria resume %s`\n", id, j.Name, why, id)
+			code = exitRuntime
+			delete(paused, id)
+			delete(pending, id)
+		}
 	}
 	snapshot := func() (uint64, error) {
 		r, err := c.List(ctx, true, 0)
@@ -81,6 +106,9 @@ func waitJobs(ctx context.Context, c *ipc.Client, events <-chan daemon.Event, id
 				if seq, err = snapshot(); err != nil {
 					return fail(errOut, "add", err)
 				}
+			case ev.Type == "banner":
+				// Not dropped by seq: the paused row may be in the snapshot.
+				systemPause(ev.Data)
 			case ev.Seq <= seq || ev.Job == nil:
 			default:
 				settle(ev.Job, ev.Type == "job.removed")

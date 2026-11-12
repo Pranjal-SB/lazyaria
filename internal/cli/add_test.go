@@ -104,6 +104,35 @@ func TestAddWaitFake(t *testing.T) {
 	}
 }
 
+// A job the daemon pauses (no space, disk full) will not finish by itself,
+// so --wait ends with the reason and exit 1.
+func TestAddWaitEndsOnSystemPause(t *testing.T) {
+	for _, kind := range []string{"no_space", "disk_full"} {
+		f := startFake(t)
+		go func() {
+			for {
+				time.Sleep(20 * time.Millisecond)
+				f.mu.Lock()
+				if len(f.jobs) == 0 {
+					f.mu.Unlock()
+					continue
+				}
+				j := *f.jobs[0]
+				j.State = store.Paused
+				f.jobs[0] = &j
+				f.mu.Unlock()
+				f.bus.Publish(daemon.Event{Type: "job.updated", Job: &j})
+				f.bus.Publish(daemon.Event{Type: "banner", Data: map[string]any{"kind": kind, "job": j.ID, "dir": j.Dir}})
+				return
+			}
+		}()
+		code, _, errOut := run(t, Add, "", "--wait", "https://a/b")
+		if code != exitRuntime || !strings.Contains(errOut, "paused") || !strings.Contains(errOut, "space") {
+			t.Errorf("%s: exit %d, stderr %q; want 1 with the reason", kind, code, errOut)
+		}
+	}
+}
+
 func TestDaemonUnreachableExit3(t *testing.T) {
 	isolate(t)
 	code, _, errOut := run(t, List, "")
