@@ -159,12 +159,33 @@ func (m *Manager) learnTotal(ctx context.Context, j *store.Job, st engine.Engine
 }
 
 // adopt moves a magnet job onto the torrent its metadata download started
-// (spec §4.4). The row points at the child before the parent is dropped,
+// (spec §4.4), and a link to a .torrent or metalink onto what aria2 started
+// from that file. The row points at the child before the parent is dropped,
 // so a crash in between leaves at worst a stale finished result.
+// shortcut: a metalink with several files starts several downloads and the
+// job follows only the first (one engine ref per job); the others run in
+// aria2 unseen. Following all needs one job per child.
 func (m *Manager) adopt(ctx context.Context, j *store.Job, st engine.EngineStatus) *store.Job {
 	parent := refOf(j)
 	child := string(st.FollowedBy)
-	j2, err := m.change(ctx, j.ID, "adopted", child, func(x *store.Job) { x.EngineRef = &child })
+	// A link's Out, name and byte counts were the .torrent or metalink
+	// file's. The child's status names the payload on the next read.
+	link := !isBT(j.Kind)
+	bt := false
+	if link {
+		if sts, err := m.e.Status(ctx, []engine.EngineRef{st.FollowedBy}); err == nil {
+			bt = sts[0].IsBT
+		}
+	}
+	j2, err := m.change(ctx, j.ID, "adopted", child, func(x *store.Job) {
+		x.EngineRef = &child
+		if link {
+			x.Out, x.Name, x.TotalBytes, x.DoneBytes = nil, "download", nil, nil
+		}
+		if bt {
+			x.Kind = "torrent"
+		}
+	})
 	if err != nil {
 		m.log.Error("adopt torrent", "job", j.ID, "err", err)
 		return j

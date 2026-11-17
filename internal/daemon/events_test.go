@@ -190,6 +190,31 @@ func TestMagnetAdoption(t *testing.T) {
 	}
 }
 
+// An HTTP link to a .torrent becomes a torrent job: Out, the name and the
+// byte counts of the .torrent file are dropped, and the torrent's name is
+// learned, so remove and the origin stamp reach the payload.
+func TestHTTPTorrentAdoption(t *testing.T) {
+	r := newRig(t)
+	j := r.add(t, AddParams{URIs: []string{"http://example.com/x.torrent"}})
+	parent := r.ref(t, j.ID)
+	r.e.set(parent, func(s *engine.EngineStatus) {
+		s.State, s.Path, s.Total, s.Done = "active", filepath.Join(r.dir, "x.torrent"), 900, 900
+	})
+	r.event(parent, engine.KindStart)
+	r.e.set("X", func(s *engine.EngineStatus) { s.State, s.IsBT, s.Name = "active", true, "Music" })
+	r.e.set(parent, func(s *engine.EngineStatus) { s.State, s.FollowedBy = "complete", "X" })
+	r.event(parent, engine.KindComplete)
+	got := r.get(t, j.ID)
+	if *got.EngineRef != "X" || got.Kind != "torrent" || got.Out != nil || got.TotalBytes != nil || got.DoneBytes != nil {
+		t.Fatalf("ref %s kind %q out %v total %v done %v; want a torrent job with no file of its own yet",
+			*got.EngineRef, got.Kind, got.Out, got.TotalBytes, got.DoneBytes)
+	}
+	r.event("X", engine.KindStart)
+	if got := r.get(t, j.ID); got.Name != "Music" {
+		t.Fatalf("name %q, want the torrent's", got.Name)
+	}
+}
+
 func TestExistsHints(t *testing.T) {
 	for _, c := range []struct {
 		code      int
