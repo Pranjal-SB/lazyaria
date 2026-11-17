@@ -1,7 +1,9 @@
 package engine
 
 import (
+	"bytes"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -36,6 +38,53 @@ func TestChangeURIOnPaused(t *testing.T) {
 	checkSHA(t, status(t, e, ref).Path)
 	if fs.Hits("new.bin") == 0 {
 		t.Fatal("new uri was never fetched")
+	}
+}
+
+// A paused download that has already started must survive a refresh: a
+// plain changeUri makes aria2 open connections for it while its file is
+// closed, and a few seconds later it fails with error 17 (Write disk cache
+// flush failure).
+func TestChangeURIOnStartedPausedStaysPaused(t *testing.T) {
+	t.Parallel()
+	e, _ := startEngine(t)
+	big := testutil.RandBytes(200 << 20) // several segments; a small file does not show it
+	fs := testutil.NewFaultServer(t, map[string][]byte{"old.bin": big, "new.bin": big})
+	ref := add(t, e, AddRequest{URIs: []string{fs.URL("old.bin", testutil.ModeOK)}, Options: map[string]string{"max-download-limit": "3M"}})
+	waitStatus(t, e, ref, 15*time.Second, func(s EngineStatus) bool { return s.Done > 12<<20 })
+	if err := e.Pause(ctxT(t, 5*time.Second), ref); err != nil {
+		t.Fatal(err)
+	}
+	waitStatus(t, e, ref, 5*time.Second, func(s EngineStatus) bool { return s.State == "paused" })
+	got, err := e.ChangeURI(ctxT(t, 10*time.Second), ref, fs.URL("new.bin", testutil.ModeOK))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != ref {
+		t.Fatalf("ref changed: %s -> %s", ref, got)
+	}
+	served := fs.Served("new.bin")
+	for end := time.Now().Add(8 * time.Second); time.Now().Before(end); time.Sleep(200 * time.Millisecond) {
+		if st := status(t, e, ref); st.State != "paused" {
+			t.Fatalf("refreshed paused download is %s (%d %s), want it still paused", st.State, st.ErrorCode, st.ErrorMsg)
+		}
+	}
+	if fs.Served("new.bin") != served {
+		t.Fatal("a paused download fetched from the new link")
+	}
+	rawCall(t, e, "aria2.changeOption", nil, string(ref), map[string]string{"max-download-limit": "0"})
+	if err := e.Resume(ctxT(t, 5*time.Second), ref); err != nil {
+		t.Fatal(err)
+	}
+	st := waitStatus(t, e, ref, 30*time.Second, func(s EngineStatus) bool { return s.State == "complete" || s.State == "error" })
+	if st.State != "complete" {
+		t.Fatalf("after resume: %s (%d %s)", st.State, st.ErrorCode, st.ErrorMsg)
+	}
+	if b, err := os.ReadFile(st.Path); err != nil || !bytes.Equal(b, big) {
+		t.Fatalf("payload differs after refresh and resume (%v)", err)
+	}
+	if fs.Served("new.bin") >= int64(len(big)) {
+		t.Fatal("the download started over instead of resuming")
 	}
 }
 

@@ -16,10 +16,11 @@ import (
 // the pause; it is refreshed by re-adding instead.
 var errStopped = errors.New("download stopped during refresh")
 
-// ChangeURI points ref at a fresh link. A live download keeps its ref and
-// switches URI in place; a stopped one is re-added under the same gid, and
-// its .aria2 control file makes it resume. Only if aria2 refuses the old gid
-// does the download come back under a new ref.
+// ChangeURI points ref at a fresh link. A running download keeps its ref
+// and switches URI in place; a paused or stopped one is re-added under the
+// same gid (a paused one stays paused), and its .aria2 control file makes
+// it resume. Only if aria2 refuses the old gid does the download come back
+// under a new ref.
 func (e *aria2Engine) ChangeURI(ctx context.Context, ref EngineRef, uri string) (EngineRef, error) {
 	if err := checkRefreshURI(uri); err != nil {
 		return "", err
@@ -35,8 +36,23 @@ func (e *aria2Engine) ChangeURI(ctx context.Context, ref EngineRef, uri string) 
 			return "", ErrNotSupported
 		}
 		switch s.Status {
-		case "active", "waiting", "paused":
-			err := e.swapURI(ctx, ref, s.Status, clean, auth)
+		case "paused":
+			// changeUri on a paused download that has started makes aria2
+			// open connections for it while its file is closed; seconds
+			// later it fails with error 17 "Write disk cache flush failure"
+			// (aria2 1.37). Removing and re-adding it paused avoids that.
+			// Its options are read first: aria2 may forget it on remove.
+			opts := e.keptOptions(ctx, ref)
+			opts["pause"] = "true"
+			if err := e.call(ctx, "aria2.remove", nil, string(ref)); err != nil {
+				return "", fmt.Errorf("refresh %s: %w", ref, err)
+			}
+			if _, err := e.waitState(ctx, ref, stopped...); err != nil && !isNotFound(err) {
+				return "", fmt.Errorf("refresh %s: %w", ref, err)
+			}
+			return e.readd(ctx, ref, &s, clean, auth, opts)
+		case "active", "waiting":
+			err := e.swapURI(ctx, ref, clean, auth)
 			if errors.Is(err, errStopped) {
 				continue // reread dir and files, then take the re-add path
 			}
@@ -48,7 +64,7 @@ func (e *aria2Engine) ChangeURI(ctx context.Context, ref EngineRef, uri string) 
 			}
 			return ref, nil
 		case "error":
-			return e.readd(ctx, ref, &s, clean, auth)
+			return e.readd(ctx, ref, &s, clean, auth, e.keptOptions(ctx, ref))
 		case "removed":
 			return "", fmt.Errorf("refresh %s: the download was removed; add the link again", ref)
 		}
@@ -56,38 +72,36 @@ func (e *aria2Engine) ChangeURI(ctx context.Context, ref EngineRef, uri string) 
 	}
 }
 
-// swapURI does pause, changeUri, unpause. A user-paused download stays paused.
-func (e *aria2Engine) swapURI(ctx context.Context, ref EngineRef, state, uri string, auth map[string]string) (err error) {
-	if state != "paused" {
-		if err := e.call(ctx, "aria2.pause", nil, string(ref)); err != nil {
-			return err
+// swapURI does pause, changeUri, unpause on a running download.
+func (e *aria2Engine) swapURI(ctx context.Context, ref EngineRef, uri string, auth map[string]string) (err error) {
+	if err := e.call(ctx, "aria2.pause", nil, string(ref)); err != nil {
+		return err
+	}
+	// Never leave a download we paused stuck paused, even on failure.
+	// Only a download that finished or failed meanwhile is left alone.
+	keepStopped := false
+	defer func() {
+		if keepStopped {
+			return
 		}
-		// Never leave a download we paused stuck paused, even on failure.
-		// Only a download that finished or failed meanwhile is left alone.
-		keepStopped := false
-		defer func() {
-			if keepStopped {
-				return
-			}
-			if uerr := e.call(context.WithoutCancel(ctx), "aria2.unpause", nil, string(ref)); err == nil {
-				err = uerr
-			}
-		}()
-		// unpause only works once the pause has finished; the download may
-		// also finish or fail first.
-		st, werr := e.waitState(ctx, ref, "paused", "complete", "error", "removed")
-		switch {
-		case werr != nil:
-			return werr
-		case st == "complete":
-			keepStopped = true
-			return ErrAlreadyComplete
-		case st == "error":
-			keepStopped = true
-			return errStopped
-		case st == "removed":
-			return errors.New("the download was removed while refreshing")
+		if uerr := e.call(context.WithoutCancel(ctx), "aria2.unpause", nil, string(ref)); err == nil {
+			err = uerr
 		}
+	}()
+	// unpause only works once the pause has finished; the download may
+	// also finish or fail first.
+	st, werr := e.waitState(ctx, ref, "paused", "complete", "error", "removed")
+	switch {
+	case werr != nil:
+		return werr
+	case st == "complete":
+		keepStopped = true
+		return ErrAlreadyComplete
+	case st == "error":
+		keepStopped = true
+		return errStopped
+	case st == "removed":
+		return errors.New("the download was removed while refreshing")
 	}
 	// Read the list only now: aria2 repeats a URI to fill split and returns
 	// in-use copies to the list on pause, so an earlier read misses some.
@@ -111,11 +125,12 @@ func (e *aria2Engine) swapURI(ctx context.Context, ref EngineRef, state, uri str
 // alwaysCopy are kept on re-add even when they equal the global value.
 var alwaysCopy = []string{"header", "http-user", "http-passwd", "ftp-user", "ftp-passwd"}
 
-func (e *aria2Engine) readd(ctx context.Context, ref EngineRef, s *aria2.Status, uri string, auth map[string]string) (EngineRef, error) {
+// keptOptions are the options ref's download set itself, to carry over to
+// a re-add. A value equal to the global one came from aria2's defaults and
+// must keep following them. aria2 returns list-valued options like header
+// as arrays, which addUri accepts as is.
+func (e *aria2Engine) keptOptions(ctx context.Context, ref EngineRef) map[string]any {
 	opts := map[string]any{}
-	// Keep only what this job set itself: a value equal to the global one
-	// came from aria2's defaults and must keep following them. aria2 returns
-	// list-valued options like header as arrays, which addUri accepts as is.
 	var cur, global map[string]any
 	// Without the globals every allowed option is kept, which is still correct.
 	_ = e.call(ctx, "aria2.getGlobalOption", &global)
@@ -129,6 +144,12 @@ func (e *aria2Engine) readd(ctx context.Context, ref EngineRef, s *aria2.Status,
 			}
 		}
 	}
+	return opts
+}
+
+// readd adds ref's download again from s with opts (see keptOptions), under
+// the same gid when aria2 allows it.
+func (e *aria2Engine) readd(ctx context.Context, ref EngineRef, s *aria2.Status, uri string, auth map[string]string, opts map[string]any) (EngineRef, error) {
 	for k, v := range auth {
 		opts[k] = v
 	}

@@ -48,7 +48,9 @@ which the shell would otherwise read as its own syntax.
 - The new link must point at the same file. lazyaria carries on writing
   the file it has, so a link to a different file gives you a broken
   result.
-- You can refresh a job while it runs or after it failed.
+- You can refresh a job while it runs, while it is paused, or after it
+  failed. A paused job stays paused; `lazyaria resume` continues it from
+  the new link.
 - The new link must be an HTTP, HTTPS, FTP or SFTP link. Anything else is
   refused before it reaches the daemon, with exit code 2. A magnet link,
   for example, gives:
