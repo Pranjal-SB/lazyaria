@@ -72,12 +72,10 @@ func (s *server) serveConn(ctx context.Context, c net.Conn) {
 	srv := jrpc2.NewServer(cc.methods(), &jrpc2.ServerOptions{AllowPush: true})
 	cc.srv = srv
 	srv.Start(lineChannel(deadlineConn{c}))
-	// Close the socket before Stop: a push stuck writing to a client that
-	// stopped reading holds the server lock Stop needs.
-	stop := context.AfterFunc(ctx, func() {
-		c.Close()
-		srv.Stop()
-	})
+	// Closing the socket ends the server from its own reader, which also
+	// unblocks a push stuck writing to a client that stopped reading.
+	// srv.Stop here would race a request being read and panic in jrpc2.
+	stop := context.AfterFunc(ctx, func() { c.Close() })
 	srv.Wait()
 	stop()
 	cc.unsubscribe()

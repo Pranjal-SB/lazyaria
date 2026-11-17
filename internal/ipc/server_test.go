@@ -62,6 +62,51 @@ func TestStalledClientDoesNotBlockShutdown(t *testing.T) {
 	}
 }
 
+// Clients still sending while the daemon shuts down, as during an idle
+// exit, must not crash it: jrpc2 panics when Stop races a request it is
+// reading.
+func TestShutdownWhileClientsSend(t *testing.T) {
+	f := newFake()
+	p := testPaths(shortDir(t))
+	hello := []byte(`{"jsonrpc":"2.0","id":1,"method":"hello","params":{"client":"t","version":"dev"}}` + "\n")
+	for range 30 {
+		l, lock, err := Listen(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan error, 1)
+		go func() { done <- Serve(ctx, l, f) }()
+		var conns []net.Conn
+		for range 20 {
+			c, err := net.Dial("unix", p.Socket)
+			if err != nil {
+				t.Fatal(err)
+			}
+			conns = append(conns, c)
+			go io.Copy(io.Discard, c)
+			go func() {
+				for {
+					if _, err := c.Write(hello); err != nil {
+						return
+					}
+				}
+			}()
+		}
+		time.Sleep(5 * time.Millisecond)
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("Serve did not return")
+		}
+		for _, c := range conns {
+			c.Close()
+		}
+		lock.Close()
+	}
+}
+
 func TestPeerUIDSelf(t *testing.T) {
 	p := testPaths(shortDir(t))
 	l, lock, err := Listen(p)
