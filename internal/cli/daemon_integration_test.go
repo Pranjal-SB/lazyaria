@@ -154,6 +154,26 @@ func TestConfigSetLiveApplies(t *testing.T) {
 	}
 }
 
+// jobs.set_limit with no id is the global limit: applied and saved like
+// config set limits.global_down.
+func TestGlobalSetLimitIsSaved(t *testing.T) {
+	testutil.RequireAria2(t)
+	e := newEnv(t, "")
+	e.start()
+	c := e.dial()
+	if err := c.SetLimit(bg, "", 1<<20, 2048); err != nil {
+		t.Fatal(err)
+	}
+	if got := globalDown(t, e.aria2Client()); got != "1048576" {
+		t.Errorf("aria2 global limit = %q, want 1048576", got)
+	}
+	for k, want := range map[string]string{"limits.global_down": "1048576", "limits.global_up": "2048"} {
+		if ent, err := c.ConfigGet(bg, k); err != nil || ent.Value != want || ent.Source != "override" {
+			t.Errorf("config.get %s = %+v, %v; want %s from override", k, ent, err, want)
+		}
+	}
+}
+
 func TestDaemonAria2MissingMessage(t *testing.T) {
 	e := newEnv(t, "[engine]\naria2c_path = \"/nonexistent\"\n")
 	for _, kv := range e.vars {

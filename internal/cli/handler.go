@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/Pranjal-SB/lazyaria/internal/buildinfo"
@@ -62,6 +63,18 @@ func (h handler) Subscribe(progress bool) *daemon.Sub { return h.d.bus.Subscribe
 func (h handler) SetClients(n int) {
 	h.d.clients.Store(int64(n))
 	h.d.kick()
+}
+
+// SetLimit with no id sets the global limits as runtime settings, the way
+// config set limits.global_down does, so they outlive an aria2 restart.
+func (h handler) SetLimit(ctx context.Context, id string, down, up int64) error {
+	if id != "" || down < 0 || up < 0 {
+		return h.Manager.SetLimit(ctx, id, down, up) // also rejects negatives
+	}
+	if err := h.d.setSetting(ctx, "limits.global_down", strconv.FormatInt(down, 10)); err != nil {
+		return err
+	}
+	return h.d.setSetting(ctx, "limits.global_up", strconv.FormatInt(up, 10))
 }
 
 func (h handler) ConfigList(context.Context) ([]config.Entry, error) { return *h.d.entries.Load(), nil }
