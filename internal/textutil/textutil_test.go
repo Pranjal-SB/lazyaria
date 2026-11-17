@@ -29,6 +29,24 @@ func TestSanitizeName(t *testing.T) {
 	}
 }
 
+// A long name is cut in its stem, so its extension survives.
+func TestSanitizeName_LongKeepsExtension(t *testing.T) {
+	long := strings.Repeat("a", 300)
+	for in, suffix := range map[string]string{
+		long + ".mkv":                         ".mkv",
+		long + ".tar.gz":                      ".tar.gz",
+		strings.Repeat("é", 150) + ".mkv":     ".mkv",
+		long:                                  "aaaa",
+		"x." + long:                           "aaaa", // no extension that long
+		"show.s01e02.1080p." + long + ".webm": ".webm",
+	} {
+		got := SanitizeName(in, false)
+		if len(got) > MaxName || len(got) < MaxName-1 || !utf8.ValidString(got) || !strings.HasSuffix(got, suffix) {
+			t.Errorf("SanitizeName(%.20q...) = %.20q...%q (len %d); want <= %d bytes ending %q", in, got, got[max(0, len(got)-10):], len(got), MaxName, suffix)
+		}
+	}
+}
+
 func TestSanitizeName_LongUnicode(t *testing.T) {
 	got := SanitizeName(strings.Repeat("é", 150), false)
 	if len(got) != MaxName-1 || !utf8.ValidString(got) { // 249 cuts an é in half

@@ -35,15 +35,32 @@ func SanitizeName(name string, fat bool) string {
 		}, name)
 	}
 	if len(name) > MaxName {
-		name = name[:MaxName]
+		stem, ext := splitExt(name)
+		name = stem[:MaxName-len(ext)]
 		for !utf8.ValidString(name) {
 			name = name[:len(name)-1]
 		}
+		name += ext
 	}
 	if name == "" {
 		return "download"
 	}
 	return name
+}
+
+// splitExt splits off the extension a cut must keep: the last dot suffix
+// of at most 32 bytes, with the one before it when both are short
+// (".tar.gz"). A name with no such suffix has no extension.
+func splitExt(name string) (stem, ext string) {
+	i := strings.LastIndexByte(name, '.')
+	if i <= 0 || len(name)-i > 32 {
+		return name, ""
+	}
+	stem, ext = name[:i], name[i:]
+	if j := strings.LastIndexByte(stem, '.'); j > 0 && len(stem)-j <= 5 && len(ext) <= 5 {
+		stem, ext = stem[:j], stem[j:]+ext
+	}
+	return stem, ext
 }
 
 // isBidi matches the direction controls (and the BOM) that can disguise an
