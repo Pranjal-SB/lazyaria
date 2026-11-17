@@ -72,6 +72,7 @@ func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (s
 		now := m.now()
 		_, err := m.changeAs(ctx, "job.removed", j.ID, "removed", "", func(x *store.Job) {
 			x.State, x.RemovedAt, x.RetryAt = store.Removed, &now, nil
+			x.DoneBytes = j.DoneBytes // so a row brought back by Undo still owns its file
 		})
 		if err != nil {
 			if rerr := m.Files.RestoreFiles(ctx, es); rerr != nil {
