@@ -30,6 +30,7 @@ type fake struct {
 	paused    []string
 	removed   []string
 	deleted   bool
+	refreshed []string // id, link of each RefreshURI
 	overrides map[string]string
 	restarts  int
 
@@ -116,7 +117,10 @@ func (f *fake) Remove(_ context.Context, ids []string, del bool) (string, error)
 }
 
 func (f *fake) Undo(context.Context, string) error { return nil }
-func (f *fake) RefreshURI(context.Context, string, string) (*store.Job, error) {
+func (f *fake) RefreshURI(_ context.Context, id, uri string) (*store.Job, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.refreshed = append(f.refreshed, id, uri)
 	return nil, nil
 }
 func (f *fake) SetLimit(context.Context, string, int64, int64) error { return nil }

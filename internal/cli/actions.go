@@ -39,6 +39,22 @@ func Remove(ctx context.Context, args []string, out, errOut io.Writer) int {
 		})
 }
 
+// Refresh runs `lazyaria refresh <id-prefix> <link>`: the job carries on
+// from a fresh link and keeps what it has downloaded.
+func Refresh(ctx context.Context, args []string, out, errOut io.Writer) int {
+	pos, err := parseArgs(newFlags("refresh", errOut), args)
+	if err != nil {
+		return flagExit(err)
+	}
+	if len(pos) != 2 {
+		return fail(errOut, "refresh", usagef("give one job id and its new link: lazyaria refresh <id-prefix> <link>"))
+	}
+	return jobAction(ctx, "refresh", pos[:1], out, errOut, nil, func(c *ipc.Client, ids []string) error {
+		_, err := c.Refresh(ctx, ids[0], pos[1])
+		return err
+	})
+}
+
 // jobAction resolves id prefixes and applies do to the matching jobs.
 func jobAction(ctx context.Context, name string, args []string, out, errOut io.Writer, flags func(*flag.FlagSet), do func(*ipc.Client, []string) error) int {
 	fs := newFlags(name, errOut)
@@ -74,7 +90,7 @@ func jobAction(ctx context.Context, name string, args []string, out, errOut io.W
 	return exitOK
 }
 
-var pastTense = map[string]string{"pause": "paused", "resume": "resumed", "remove": "removed"}
+var pastTense = map[string]string{"pause": "paused", "resume": "resumed", "remove": "removed", "refresh": "refreshed"}
 
 // resolveIDs maps each prefix to the one job id it starts. Case does not
 // matter: ids are upper-case ULIDs.

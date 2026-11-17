@@ -25,6 +25,7 @@ var commands = map[string]func(ctx context.Context, args []string, out, errOut i
 	"pause":   cli.Pause,
 	"resume":  cli.Resume,
 	"remove":  cli.Remove,
+	"refresh": cli.Refresh,
 	"config":  cli.Config,
 	"doctor":  cli.Doctor,
 	"logs":    cli.Logs,
@@ -45,6 +46,8 @@ commands:
             daemon and engine status
   pause|resume <id-prefix>...
   remove [--delete-files] <id-prefix>...
+  refresh <id-prefix> <link>
+            give a download a fresh link and keep its progress
   config list [--json] | get KEY | set KEY VALUE | reset KEY | edit | path | keys
   doctor [--json] [--restart-engine]
             check the setup and say how to fix what is wrong
