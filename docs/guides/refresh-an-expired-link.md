@@ -49,8 +49,16 @@ which the shell would otherwise read as its own syntax.
   the file it has, so a link to a different file gives you a broken
   result.
 - You can refresh a job while it runs or after it failed.
-- Refresh works for HTTP, HTTPS, FTP and SFTP links. It does not work
-  for torrents or magnet links, which have no link to expire.
+- The new link must be an HTTP, HTTPS, FTP or SFTP link. Anything else is
+  refused before it reaches the daemon, with exit code 2. A magnet link,
+  for example, gives:
+
+  ```text
+  lazyaria refresh: torrents and magnets cannot be refreshed; refresh takes an http(s), ftp or sftp link
+  ```
+
+  Torrent and magnet jobs cannot be refreshed either: they have no link
+  that expires.
 - A finished job has nothing to refresh. A removed job cannot be
   refreshed either: add the link again with `lazyaria add`.
 - The server must support resuming (HTTP range requests) for the download

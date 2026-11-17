@@ -128,6 +128,9 @@ file if there is one:
 lazyaria remove --delete-files 01M7MCYN
 ```
 
+It only takes files the job downloaded itself, never a file that was
+there before. See [Files and safety](../concepts/files-and-safety.md).
+
 ## Undo a remove
 
 `remove` prints an undo command. Run it within 10 seconds:

@@ -82,10 +82,31 @@ deletes anything. It moves the file to the trash:
 This is the same trash your file manager uses, so you can restore a file
 from there at any time.
 
-`--delete-files` only takes files that the job wrote itself. If the job
-never received a byte, for example because it failed at once, a file of
-the same name that was there before is left alone. The `.aria2` control
-file always goes.
+`--delete-files` only takes files that the job wrote itself:
+
+- **A running download** is paused first. Its unfinished file goes to the
+  trash with its `.aria2` control file.
+- **A renamed download** is followed. If the job saved as `notes.1.pdf`
+  because `notes.pdf` was there already, only `notes.1.pdf` goes. Your
+  `notes.pdf` is not touched.
+- **A job that never received a byte**, for example because it failed at
+  once, takes no file at all. A file of the same name that was there
+  before is left alone. The `.aria2` control file always goes.
+- **A torrent** takes only the files the torrent lists, and only the ones
+  that were picked for download. The torrent's folder is never trashed as
+  a whole, because it may hold other files. Subfolders that end up empty
+  are removed; the top folder stays.
+
+Sometimes lazyaria cannot tell which files in a torrent's folder are the
+torrent's, for example for a finished magnet link that aria2 no longer
+knows about. It then leaves the folder alone and says so:
+
+```text
+kept /home/you/Downloads/Music: cannot tell which files are this torrent's
+```
+
+The job is still removed. Delete the files yourself if you want them
+gone.
 
 If no trash can be used on that disk, lazyaria moves nothing and keeps the
 job:
@@ -112,8 +133,16 @@ If a file cannot go back because something else now has its name, undo
 says so, leaves that job removed, and keeps the token valid so you can
 try again after you move the other file away.
 
-After the window has passed, undo says `nothing to undo: the undo window
-has passed`. Trashed files are still in the trash.
+Undo tokens live only in the daemon's memory. They end after
+`remove.undo_seconds`, and also when the daemon stops. After that, undo
+exits with 1 and says:
+
+```text
+lazyaria undo: [-32098] nothing to undo: the undo token is unknown or has expired (tokens end after remove.undo_seconds or when the daemon restarts). Add the link again with `lazyaria add`; files that were deleted are in the Trash
+```
+
+Trashed files are still in the trash, and you can restore them from
+there.
 
 ## Other safety checks
 
@@ -128,5 +157,6 @@ has passed`. Trashed files are still in the trash.
   `<folder> is missing or on a different drive; mount it and retry`.
   Mount the drive and run `lazyaria resume`.
 - **Origin.** When a download finishes, lazyaria records its link in the
-  file's extended attributes (`user.xdg.origin.url`), as browsers do. Turn
-  this off with `privacy.stamp_origin_xattr`.
+  extended attributes (`user.xdg.origin.url`) of the files it downloaded,
+  as browsers do. Files that were already there are not marked. Turn this
+  off with `privacy.stamp_origin_xattr`.

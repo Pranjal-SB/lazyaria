@@ -40,9 +40,19 @@ socket is in your folder.
 The runtime folder has loose permissions. Run the `chmod 700` the message
 shows, or remove the folder; the daemon creates it again.
 
-**`the daemon restarted in the middle of this command, so it may or may not have taken effect`**
+**`the connection to the daemon dropped during this command, so it may or may not have taken effect; check with `lazyaria list` ...`** (exit code 1)
 
-Check with `lazyaria list` before you run the command again.
+The daemon went away while it handled a command that changes something,
+for example because it crashed or was stopped. Check with `lazyaria list`
+before you run the command again. For `add`, the message starts with the
+link it was about. See
+[Use lazyaria from scripts](../guides/use-from-scripts.md#if-the-connection-drops).
+
+**`not sent, add them again: <links>`** (exit code 1)
+
+`add` lost the daemon and could not reach it again, so it did not send
+these links. Add them again once `lazyaria doctor` shows the daemon is
+fine.
 
 ## aria2
 
@@ -83,6 +93,22 @@ Free some space, or use `--dir` to download somewhere else.
 `magnet:...`), paths to `.torrent` files, or `-` to read links from
 standard input.
 
+## Refresh
+
+**`torrents and magnets cannot be refreshed; refresh takes an http(s), ftp or sftp link`** (exit code 2)
+
+Refresh replaces a web or FTP link. Torrents and magnet links have no link
+that expires.
+
+**`the new link is not a valid URL under 8 KiB; paste the full download link`** (exit code 2)
+
+The new link is cut off or is not a link. Copy the whole link again, and
+put it in single quotes on the command line.
+
+**`[-32098] the download is already complete; there is nothing to refresh`** (exit code 1)
+
+The job is finished. There is nothing left to download.
+
 ## IDs
 
 **`id prefix "01M7" matches 4 jobs, give more characters`**
@@ -112,10 +138,20 @@ in brackets. `lazyaria list --json` adds a short `error_kind`.
 
 ## Remove and undo
 
-**`[-32098] nothing to undo: the undo window has passed`** (exit code 1)
+**`[-32098] nothing to undo: the undo token is unknown or has expired (tokens end after remove.undo_seconds or when the daemon restarts)...`** (exit code 1)
 
-Undo works for 10 seconds after a remove (`remove.undo_seconds`). Files
-moved to the trash are still in the trash; restore them from there.
+Undo works for 10 seconds after a remove (`remove.undo_seconds`), and only
+while the same daemon runs. Check that you copied the whole token. To get
+a job back after that, add its link again with `lazyaria add`. Files moved
+to the trash are still in the trash; restore them from there.
+
+**`kept <folder>: cannot tell which files are this torrent's`**
+
+You removed a torrent with `--delete-files`, but lazyaria could not tell
+which files in its folder belong to it. This happens, for example, with a
+finished magnet link that aria2 no longer knows. The job is removed; the
+folder and everything in it are left alone. Delete what you do not want
+yourself.
 
 **`no trash is available for ...; the files are untouched and the job was kept`**
 

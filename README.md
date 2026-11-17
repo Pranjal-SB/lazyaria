@@ -20,8 +20,9 @@ These work today:
   file that already exists, is refused. `--force` downloads it again under
   a new name such as `ubuntu.1.iso`.
 - **Removing files goes to the trash, with undo.** `remove --delete-files`
-  moves the file to your desktop's trash, and `remove` prints an
-  `undo` command that brings back the job and its files.
+  moves only the files the job downloaded to your desktop's trash, and
+  `remove` prints an `undo` command that brings back the job and its
+  files.
 - **Refresh an expired link.** `lazyaria refresh` gives a failed or
   running download a new link and keeps the part it already has.
 - **Survives restarts and crashes.** The job list lives in a database.

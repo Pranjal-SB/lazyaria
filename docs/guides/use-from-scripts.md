@@ -104,6 +104,33 @@ change it:
 
 See [Files and safety](../concepts/files-and-safety.md).
 
+## If the connection drops
+
+If the daemon goes away while a command runs (it crashed, or someone
+stopped it), a command that only reads, such as `list`, is sent again
+once the daemon is back. A command that changes something is not sent
+again, because it may already have taken effect. It exits with 1 and
+says:
+
+```text
+lazyaria add: https://example.com/a.bin: the connection to the daemon dropped during this command, so it may or may not have taken effect; check with `lazyaria list` (or `lazyaria config list`) before running it again
+```
+
+For `add` with several links:
+
+- The message starts with the link that was cut off. Check that one with
+  `lazyaria list` before you add it again.
+- If the daemon comes back, the links after it are still sent.
+- If it does not, `add` stops and names the links it did not send:
+
+  ```text
+  lazyaria add: not sent, add them again: https://example.com/b.bin https://example.com/c.bin
+  ```
+
+- `add --wait` stops at the first cut-off link, because it cannot keep
+  waiting without its connection. It names the links it did not send in
+  the same way.
+
 ## Do not start the daemon
 
 A script that should only talk to a daemon that is already running can
