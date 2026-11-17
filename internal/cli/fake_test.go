@@ -31,6 +31,7 @@ type fake struct {
 	removed   []string
 	deleted   bool
 	refreshed []string // id, link of each RefreshURI
+	undone    []string // tokens passed to Undo
 	overrides map[string]string
 	restarts  int
 
@@ -116,7 +117,13 @@ func (f *fake) Remove(_ context.Context, ids []string, del bool) (string, error)
 	return "tok", nil
 }
 
-func (f *fake) Undo(context.Context, string) error { return nil }
+func (f *fake) Undo(_ context.Context, token string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.undone = append(f.undone, token)
+	return nil
+}
+
 func (f *fake) RefreshURI(_ context.Context, id, uri string) (*store.Job, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

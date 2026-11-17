@@ -28,15 +28,44 @@ func Resume(ctx context.Context, args []string, out, errOut io.Writer) int {
 	})
 }
 
-// Remove runs `lazyaria remove [--delete-files] <id-prefix>...`.
+// Remove runs `lazyaria remove [--delete-files] <id-prefix>...` and prints
+// the command that undoes it.
 func Remove(ctx context.Context, args []string, out, errOut io.Writer) int {
 	var del *bool
-	return jobAction(ctx, "remove", args, out, errOut,
+	var tok string
+	code := jobAction(ctx, "remove", args, out, errOut,
 		func(fs *flag.FlagSet) { del = fs.Bool("delete-files", false, "also delete the downloaded files") },
-		func(c *ipc.Client, ids []string) error {
-			_, err := c.Remove(ctx, ids, *del)
+		func(c *ipc.Client, ids []string) (err error) {
+			tok, err = c.Remove(ctx, ids, *del)
 			return err
 		})
+	// A remove that failed for some jobs may still have removed others.
+	if tok != "" {
+		fmt.Fprintf(out, "undo: lazyaria undo %s\n", tok)
+	}
+	return code
+}
+
+// Undo runs `lazyaria undo <token>`, which brings back what a recent remove
+// took, files included.
+func Undo(ctx context.Context, args []string, out, errOut io.Writer) int {
+	pos, err := parseArgs(newFlags("undo", errOut), args)
+	if err != nil {
+		return flagExit(err)
+	}
+	if len(pos) != 1 {
+		return fail(errOut, "undo", usagef("give the token `lazyaria remove` printed: lazyaria undo <token>"))
+	}
+	c, err := connect(ctx)
+	if err != nil {
+		return fail(errOut, "undo", err)
+	}
+	defer c.Close()
+	if err := c.Undo(ctx, pos[0]); err != nil {
+		return fail(errOut, "undo", err)
+	}
+	fmt.Fprintln(out, "undone; jobs that were running are paused, resume them with `lazyaria resume`")
+	return exitOK
 }
 
 // Refresh runs `lazyaria refresh <id-prefix> <link>`: the job carries on

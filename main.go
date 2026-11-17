@@ -26,6 +26,7 @@ var commands = map[string]func(ctx context.Context, args []string, out, errOut i
 	"resume":  cli.Resume,
 	"remove":  cli.Remove,
 	"refresh": cli.Refresh,
+	"undo":    cli.Undo,
 	"config":  cli.Config,
 	"doctor":  cli.Doctor,
 	"logs":    cli.Logs,
@@ -46,6 +47,9 @@ commands:
             daemon and engine status
   pause|resume <id-prefix>...
   remove [--delete-files] <id-prefix>...
+            prints an undo command that works for remove.undo_seconds
+  undo <token>
+            bring back what a remove took, files included
   refresh <id-prefix> <link>
             give a download a fresh link and keep its progress
   config list [--json] | get KEY | set KEY VALUE | reset KEY | edit | path | keys
