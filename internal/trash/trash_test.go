@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -238,6 +239,36 @@ func TestTrashCrossDeviceIsNoTrash(t *testing.T) {
 	infos, _ := filepath.Glob(filepath.Join(os.Getenv("XDG_DATA_HOME"), "Trash", "info", "*"))
 	if len(infos) != 0 {
 		t.Fatalf("stray trashinfo: %v", infos)
+	}
+}
+
+// $topdir/.Trash-$uid is used only as a real directory of the user's own:
+// a symlink or a file planted there is refused, never followed.
+func TestTopTrashRefusesPlanted(t *testing.T) {
+	name := ".Trash-" + strconv.Itoa(os.Getuid())
+	top := t.TempDir()
+	dir, err := topTrash(top)
+	if err != nil || dir != filepath.Join(top, name) {
+		t.Fatalf("topTrash on a fresh drive = %q, %v", dir, err)
+	}
+	if fi, err := os.Lstat(filepath.Join(dir, "files")); err != nil || !fi.IsDir() {
+		t.Fatalf("files/ not made: %v", err)
+	}
+	elsewhere := t.TempDir()
+	for _, plant := range []func(p string) error{
+		func(p string) error { return os.Symlink(elsewhere, p) },
+		func(p string) error { return os.WriteFile(p, nil, 0o600) },
+	} {
+		top := t.TempDir()
+		if err := plant(filepath.Join(top, name)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := topTrash(top); !errors.Is(err, ErrNoTrash) {
+			t.Fatalf("planted %s: err %v, want ErrNoTrash", name, err)
+		}
+	}
+	if ents, _ := os.ReadDir(elsewhere); len(ents) != 0 {
+		t.Fatalf("followed the symlink: %v", ents)
 	}
 }
 

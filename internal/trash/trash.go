@@ -6,6 +6,7 @@ package trash
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -77,11 +78,31 @@ func pick(abs string, dev uint64) (dir, top string, err error) {
 		}
 	}
 	top = mountTop(filepath.Dir(abs), dev)
-	dir = filepath.Join(top, ".Trash-"+strconv.Itoa(os.Getuid()))
-	if err := prepare(dir); err != nil {
-		return "", "", ErrNoTrash
+	if dir, err = topTrash(top); err != nil {
+		return "", "", err
 	}
 	return dir, top, nil
+}
+
+// topTrash returns $topdir/.Trash-$uid, made if missing. One found there
+// is used only as a real directory the user owns: on a shared drive
+// another user may have made it first, or planted a symlink.
+func topTrash(top string) (string, error) {
+	dir := filepath.Join(top, ".Trash-"+strconv.Itoa(os.Getuid()))
+	if err := os.Mkdir(dir, 0o700); err != nil && !errors.Is(err, fs.ErrExist) {
+		return "", ErrNoTrash
+	}
+	fi, err := os.Lstat(dir)
+	if err != nil || !fi.IsDir() { // a symlink is not a directory to Lstat
+		return "", ErrNoTrash
+	}
+	if uid, ok := owner(fi); !ok || uid != os.Getuid() {
+		return "", ErrNoTrash
+	}
+	if err := prepare(dir); err != nil {
+		return "", ErrNoTrash
+	}
+	return dir, nil
 }
 
 func encodePath(p string) string {
