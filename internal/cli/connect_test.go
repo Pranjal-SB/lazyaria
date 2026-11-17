@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -44,5 +45,21 @@ func TestNoRetryWhenDaemonReplaced(t *testing.T) {
 	f.hangups, f.newPID = 1, 1
 	if code, _, _ := run(t, List, ""); code == exitOK {
 		t.Fatal("list was retried on a different daemon")
+	}
+}
+
+// An add cut off by the daemon re-executing itself may already have run, so
+// it is not sent again; the user is told it may or may not have happened.
+func TestNoRetryForAddAfterHangup(t *testing.T) {
+	f := startFake(t)
+	f.hangups = 1
+	code, _, errOut := run(t, Add, "", "https://a/b")
+	if code != exitRuntime || !strings.Contains(errOut, "restarted") || !strings.Contains(errOut, "may or may not have taken effect") {
+		t.Fatalf("exit %d, stderr %q; want 1 saying the daemon restarted", code, errOut)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.adds) != 1 {
+		t.Fatalf("jobs.add sent %d times, want 1", len(f.adds))
 	}
 }

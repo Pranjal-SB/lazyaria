@@ -27,9 +27,9 @@ type Client struct {
 	progress chan []daemon.ProgressItem
 
 	// Redial, when set, reconnects after the daemon hung up in the middle
-	// of a call, and the call is sent once more on the new connection. It
-	// is used once, and never after Subscribe: those events died with the
-	// old connection.
+	// of a read-only call, and the call is sent once more on the new
+	// connection. It is used once, and never after Subscribe: those events
+	// died with the old connection.
 	Redial     func(context.Context) (*Client, error)
 	subscribed bool
 }
@@ -78,12 +78,30 @@ func (c *Client) Subscribe(ctx context.Context, progress bool) (<-chan daemon.Ev
 	return c.events, c.progress, nil
 }
 
+// ErrCutOff means the daemon hung up in the middle of a call that changes
+// something, so the call may have run before it went away.
+var ErrCutOff = errors.New("the daemon restarted in the middle of this command, so it may or may not have taken effect; check with `lazyaria list` (or `lazyaria config list`) before running it again")
+
+// readOnly are the methods that change nothing in the daemon, so sending one
+// again after a hang-up cannot do anything twice. jobs.subscribe only sets
+// up the connection it is sent on.
+var readOnly = map[string]bool{
+	"hello": true, "daemon.status": true, "jobs.snapshot": true, "jobs.search": true,
+	"jobs.subscribe": true, "config.get": true, "config.list": true,
+}
+
 func (c *Client) call(ctx context.Context, method string, params, result any) error {
 	if result == nil {
 		result = new(json.RawMessage)
 	}
 	err := fromWire(c.rpc.CallResult(ctx, method, params, result))
-	if err == nil || c.Redial == nil || c.subscribed || ctx.Err() != nil || !hungUp(err) {
+	if err == nil || ctx.Err() != nil || !hungUp(err) {
+		return err
+	}
+	if !readOnly[method] {
+		return ErrCutOff
+	}
+	if c.Redial == nil || c.subscribed {
 		return err
 	}
 	redial := c.Redial

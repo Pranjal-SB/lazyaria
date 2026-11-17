@@ -38,7 +38,7 @@ type fake struct {
 	dropAdded  bool  // Add answers but keeps no row, as if removed at once
 	version    string
 	upgrades   int
-	hangups    int // Snapshot calls that hang up, as a daemon re-executing itself does
+	hangups    int // Snapshot and Add calls that hang up, as a daemon re-executing itself does
 	newPID     int // when set, the daemon after a hang-up is another process
 	stop       func()
 	restart    func(pid int)
@@ -75,10 +75,13 @@ func (f *fake) RestartEngine(context.Context) error {
 	return f.restartErr
 }
 
-func (f *fake) Add(_ context.Context, p daemon.AddParams) (*store.Job, error) {
+func (f *fake) Add(ctx context.Context, p daemon.AddParams) (*store.Job, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.adds = append(f.adds, p)
+	if f.hangup(ctx) {
+		return nil, nil
+	}
 	if f.addErr != nil {
 		if sk, ok := errors.AsType[*daemon.SkippedError](f.addErr); ok {
 			return sk.Existing, f.addErr
@@ -120,12 +123,7 @@ func (f *fake) StopSeeding(context.Context, []string) error          { return ni
 func (f *fake) Snapshot(ctx context.Context, _ bool, _ int) (uint64, []*store.Job, []daemon.SpeedSample) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.hangups > 0 {
-		f.hangups--
-		go f.restart(f.newPID)
-		f.mu.Unlock()
-		<-ctx.Done()
-		f.mu.Lock()
+	if f.hangup(ctx) {
 		return 0, nil, nil
 	}
 	js := make([]*store.Job, len(f.jobs))
@@ -134,6 +132,20 @@ func (f *fake) Snapshot(ctx context.Context, _ bool, _ int) (uint64, []*store.Jo
 		js[i] = &c
 	}
 	return 0, js, nil
+}
+
+// hangup cuts the current call off, as a daemon re-executing itself does,
+// while hangups are left. f.mu must be held.
+func (f *fake) hangup(ctx context.Context) bool {
+	if f.hangups == 0 {
+		return false
+	}
+	f.hangups--
+	go f.restart(f.newPID)
+	f.mu.Unlock()
+	<-ctx.Done()
+	f.mu.Lock()
+	return true
 }
 
 func (f *fake) Search(context.Context, string, int, int) ([]*store.Job, error) { return nil, nil }
