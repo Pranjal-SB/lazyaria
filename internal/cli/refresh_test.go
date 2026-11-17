@@ -25,3 +25,23 @@ func TestRefresh(t *testing.T) {
 		}
 	}
 }
+
+// A link the daemon would refuse is a usage error, with the reason.
+func TestRefreshBadLink(t *testing.T) {
+	f := startFake(t)
+	f.jobs = sampleJobs()
+	for link, want := range map[string]string{
+		"ftp:/x":                  "not a valid URL",
+		"notalink":                "not a valid URL",
+		"magnet:?xt=urn:btih:abc": "magnets cannot be refreshed",
+		"file:///etc/passwd":      "http(s), ftp or sftp",
+	} {
+		code, _, errOut := run(t, Refresh, "", "01JC0000000000000000000001", link)
+		if code != 2 || !strings.Contains(errOut, want) {
+			t.Errorf("%s: exit %d, stderr %q; want 2 and %q", link, code, errOut, want)
+		}
+	}
+	if len(f.refreshed) != 0 {
+		t.Fatalf("bad links reached the daemon: %v", f.refreshed)
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/Pranjal-SB/lazyaria/internal/daemon"
 	"github.com/Pranjal-SB/lazyaria/internal/ipc"
 	"github.com/Pranjal-SB/lazyaria/internal/store"
 )
@@ -77,6 +78,9 @@ func Refresh(ctx context.Context, args []string, out, errOut io.Writer) int {
 	}
 	if len(pos) != 2 {
 		return fail(errOut, "refresh", usagef("give one job id and its new link: lazyaria refresh <id-prefix> <link>"))
+	}
+	if err := daemon.CheckLink(pos[1]); err != nil {
+		return fail(errOut, "refresh", usagef("%v", err))
 	}
 	return jobAction(ctx, "refresh", pos[:1], out, errOut, nil, func(c *ipc.Client, ids []string) error {
 		_, err := c.Refresh(ctx, ids[0], pos[1])

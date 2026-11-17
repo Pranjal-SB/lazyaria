@@ -130,7 +130,7 @@ func (m *Manager) resume(ctx context.Context, j *store.Job) error {
 
 // RefreshURI points a job at a new link (spec §4.7) and clears its error.
 func (m *Manager) RefreshURI(ctx context.Context, id, uri string) (*store.Job, error) {
-	if err := checkLink(uri); err != nil {
+	if err := CheckLink(uri); err != nil {
 		return nil, err
 	}
 	ctx = context.WithoutCancel(ctx) // see Add
@@ -181,18 +181,24 @@ func (m *Manager) RefreshURI(ctx context.Context, id, uri string) (*store.Job, e
 	return j2, err
 }
 
-// checkLink accepts the links a refresh may use: http(s), ftp or sftp,
+// CheckLink accepts the links a refresh may use: http(s), ftp or sftp,
 // parseable, under 8 KiB.
-func checkLink(raw string) error {
+func CheckLink(raw string) error {
+	invalid := errors.New("the new link is not a valid URL under 8 KiB; paste the full download link")
 	u, err := url.Parse(raw)
-	if len(raw) >= 8<<10 || err != nil || u.Host == "" {
-		return errors.New("the new link is not a valid URL under 8 KiB; paste the full download link")
+	if len(raw) >= 8<<10 || err != nil || u.Scheme == "" {
+		return invalid
 	}
 	switch strings.ToLower(u.Scheme) {
 	case "http", "https", "ftp", "sftp":
+		if u.Host == "" {
+			return invalid
+		}
 		return nil
+	case "magnet":
+		return errors.New("torrents and magnets cannot be refreshed; refresh takes an http(s), ftp or sftp link")
 	}
-	return fmt.Errorf("links with scheme %q cannot be used; use http(s), ftp or sftp", u.Scheme)
+	return fmt.Errorf("links with scheme %q cannot be used; refresh takes an http(s), ftp or sftp link", u.Scheme)
 }
 
 // SetLimit sets a job's speed limits in bytes/s, or the global ones when
