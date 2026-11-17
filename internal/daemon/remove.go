@@ -42,7 +42,10 @@ func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (s
 		}
 		if j.EngineRef != nil {
 			if deleteFiles && (j.State == store.Active || j.State == store.Queued || j.State == store.Seeding) {
-				m.pauseAndWait(ctx, j)
+				// The row's byte count lags behind polling; ownership needs the live one.
+				if st, ok := m.pauseAndWait(ctx, j); ok {
+					setDone(j, st.Done)
+				}
 			}
 			// Without an engine there is nothing to stop; a fresh one starts empty.
 			if err := m.e.Remove(ctx, refOf(j)); err != nil && !errors.Is(err, engine.ErrNotRunning) {
@@ -96,20 +99,26 @@ func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (s
 }
 
 // pauseAndWait pauses a live download and waits (briefly) until aria2 has
-// settled, which is when it has written its control file. Failures are only
+// settled, which is when it has written its control file. It returns the
+// last status aria2 reported, when it reported one. Failures are only
 // logged: the engine removal that follows stops the download anyway.
-func (m *Manager) pauseAndWait(ctx context.Context, j *store.Job) {
+func (m *Manager) pauseAndWait(ctx context.Context, j *store.Job) (last engine.EngineStatus, ok bool) {
 	ref := refOf(j)
 	if err := m.e.Pause(ctx, ref); err != nil {
 		m.log.Warn("pause before remove", "job", j.ID, "err", err)
-		return
+		return last, false
 	}
 	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(25 * time.Millisecond) {
 		sts, err := m.e.Status(ctx, []engine.EngineRef{ref})
-		if err != nil || !sts[0].Known || sts[0].State != "active" {
-			return
+		if err != nil || !sts[0].Known {
+			return last, ok
+		}
+		last, ok = sts[0], true
+		if last.State != "active" {
+			return last, ok
 		}
 	}
+	return last, ok
 }
 
 // Undo restores the rows of a recent Remove, and their files. Jobs that

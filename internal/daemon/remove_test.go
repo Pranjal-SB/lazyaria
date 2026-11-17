@@ -320,3 +320,30 @@ func TestRemoveDeleteFilesSparesUnwrittenName(t *testing.T) {
 		t.Fatalf("the user's f.bin was trashed (now %q)", b)
 	}
 }
+
+// Polling keeps a running job's byte count in memory only, so the row says
+// 0 until the next state change. Removing it with its files must still take
+// the partial payload, not just the control file.
+func TestRemoveRunningTrashesPartial(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
+	r := newRig(t)
+	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}, Out: "a.iso"})
+	ref := r.ref(t, j.ID)
+	r.e.setState(ref, "active")
+	r.event(ref, engine.KindStart)
+	payload := filepath.Join(r.dir, "a.iso")
+	wfile(t, payload, "data")
+	wfile(t, payload+".aria2", "ctl")
+	r.e.set(ref, func(s *engine.EngineStatus) { s.Done, s.Total = 4, 100 })
+	r.m.poll(bg)
+	if got := r.get(t, j.ID); got.DoneBytes != nil && *got.DoneBytes > 0 {
+		t.Fatalf("poll stored %d bytes in the row; this test needs them in memory only", *got.DoneBytes)
+	}
+
+	if _, err := r.m.Remove(bg, []string{j.ID}, true); err != nil {
+		t.Fatal(err)
+	}
+	if exists1(payload) || exists1(payload+".aria2") {
+		t.Fatalf("left behind: payload %v, control file %v", exists1(payload), exists1(payload+".aria2"))
+	}
+}
