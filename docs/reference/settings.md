@@ -150,7 +150,7 @@ the terminal interface, which is not released yet.
 
 | Setting | Default | Applies | Description |
 |---|---|---|---|
-| `privacy.stamp_origin_xattr` | `true` | now | Write user.xdg.origin.url on finished files. |
+| `privacy.stamp_origin_xattr` | `true` | now | Write user.xdg.origin.url on finished files: the link without its query string or credentials. |
 | `privacy.redact_logs` | `true` | now | Strip query strings and credentials from logs. |
 
 ## history

@@ -116,7 +116,7 @@ type RemoveSettings struct {
 }
 
 type PrivacySettings struct {
-	StampOriginXattr bool `toml:"stamp_origin_xattr" default:"true" live:"true" help:"Write user.xdg.origin.url on finished files."`
+	StampOriginXattr bool `toml:"stamp_origin_xattr" default:"true" live:"true" help:"Write user.xdg.origin.url on finished files: the link without its query string or credentials."`
 	RedactLogs       bool `toml:"redact_logs" default:"true" live:"true" help:"Strip query strings and credentials from logs."`
 }
 

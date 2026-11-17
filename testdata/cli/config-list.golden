@@ -640,7 +640,7 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Write user.xdg.origin.url on finished files."
+    "help": "Write user.xdg.origin.url on finished files: the link without its query string or credentials."
   },
   {
     "key": "privacy.redact_logs",

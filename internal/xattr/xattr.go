@@ -5,13 +5,16 @@ package xattr
 import (
 	"net/url"
 	"os"
+
+	"github.com/Pranjal-SB/lazyaria/internal/textutil"
 )
 
 // StampOrigin sets the origin (and, if non-empty, referrer) attributes on path.
-// Userinfo is stripped from both URLs so credentials never land on disk.
-// Filesystems without xattr support are ignored.
+// Both URLs lose userinfo, query and fragment (see cleanURL) so credentials
+// and signed tokens never land on disk. Filesystems without xattr support
+// are ignored.
 func StampOrigin(path, origin, referrer string) error {
-	o, err := stripUserinfo(origin)
+	o, err := cleanURL(origin)
 	if err != nil {
 		return err
 	}
@@ -21,19 +24,24 @@ func StampOrigin(path, origin, referrer string) error {
 	if referrer == "" {
 		return nil
 	}
-	r, err := stripUserinfo(referrer)
+	r, err := cleanURL(referrer)
 	if err != nil {
 		return err
 	}
 	return set(path, "xdg.referrer.url", r)
 }
 
-func stripUserinfo(s string) (string, error) {
+// cleanURL keeps scheme, host and path. A magnet, all query, keeps only
+// its info-hash: its trackers may carry a private passkey.
+func cleanURL(s string) (string, error) {
 	u, err := url.Parse(s)
 	if err != nil {
 		return "", err
 	}
-	u.User = nil
+	if u.Scheme == "magnet" {
+		return textutil.NormalizeURL(s)
+	}
+	u.User, u.RawQuery, u.ForceQuery, u.Fragment, u.RawFragment = nil, "", false, "", ""
 	return u.String(), nil
 }
 

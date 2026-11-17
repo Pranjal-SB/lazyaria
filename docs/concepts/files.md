@@ -126,4 +126,7 @@ The files are still in the trash.
   retry`. Mount the drive and run `lazyaria resume`.
 - **Origin.** When a download finishes, lazyaria records its link in the
   extended attributes (`user.xdg.origin.url`) of the files it downloaded,
-  as browsers do. Turn this off with `privacy.stamp_origin_xattr`.
+  as browsers do. The link is stored without user name, password, query
+  string or fragment, since these can hold credentials or signed tokens; a
+  magnet link keeps only its info-hash. Turn this off with
+  `privacy.stamp_origin_xattr`.
