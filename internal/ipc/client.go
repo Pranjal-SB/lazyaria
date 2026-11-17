@@ -78,9 +78,10 @@ func (c *Client) Subscribe(ctx context.Context, progress bool) (<-chan daemon.Ev
 	return c.events, c.progress, nil
 }
 
-// ErrCutOff means the daemon hung up in the middle of a call that changes
-// something, so the call may have run before it went away.
-var ErrCutOff = errors.New("the daemon restarted in the middle of this command, so it may or may not have taken effect; check with `lazyaria list` (or `lazyaria config list`) before running it again")
+// ErrCutOff means the connection dropped in the middle of a call that
+// changes something (the daemon upgraded, crashed or was stopped), so the
+// call may have run before it went away.
+var ErrCutOff = errors.New("the connection to the daemon dropped during this command, so it may or may not have taken effect; check with `lazyaria list` (or `lazyaria config list`) before running it again")
 
 // readOnly are the methods that change nothing in the daemon, so sending one
 // again after a hang-up cannot do anything twice. jobs.subscribe only sets

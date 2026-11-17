@@ -59,6 +59,9 @@ func Add(ctx context.Context, args []string, out, errOut io.Writer) int {
 	for i, r := range reqs {
 		r.Dir, r.Out, r.StartPaused, r.Force = *dir, *outName, *paused, *force
 		j, err := c.Add(ctx, r)
+		if errors.Is(err, ipc.ErrCutOff) {
+			err = fmt.Errorf("%s: %w", links[i], err)
+		}
 		switch sk, skipped := errors.AsType[*daemon.SkippedError](err); {
 		case *wait && errors.Is(err, ipc.ErrCutOff):
 			// Subscribed, the client cannot reconnect; nothing more goes out.

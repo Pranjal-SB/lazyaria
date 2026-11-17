@@ -49,13 +49,15 @@ func TestNoRetryWhenDaemonReplaced(t *testing.T) {
 }
 
 // An add cut off by the daemon re-executing itself may already have run, so
-// it is not sent again; the user is told it may or may not have happened.
+// it is not sent again; the user is told which link may or may not have
+// been added.
 func TestNoRetryForAddAfterHangup(t *testing.T) {
 	f := startFake(t)
 	f.hangups = 1
 	code, _, errOut := run(t, Add, "", "https://a/b")
-	if code != exitRuntime || !strings.Contains(errOut, "restarted") || !strings.Contains(errOut, "may or may not have taken effect") {
-		t.Fatalf("exit %d, stderr %q; want 1 saying the daemon restarted", code, errOut)
+	if code != exitRuntime || !strings.Contains(errOut, "connection to the daemon dropped") ||
+		!strings.Contains(errOut, "may or may not have taken effect") || !strings.Contains(errOut, "https://a/b") {
+		t.Fatalf("exit %d, stderr %q; want 1 saying the connection dropped, naming the link", code, errOut)
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
