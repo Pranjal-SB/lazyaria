@@ -21,7 +21,7 @@ func liveTorrent(t *testing.T, r *rig) (id, music string) {
 		s.State, s.IsBT, s.Name, s.Path, s.Done, s.Total = "active", true, "Music", music, 4, 100
 	})
 	r.e.details[ref] = engine.EngineDetails{Files: []engine.EngineFile{
-		{Path: filepath.Join(music, "a.flac")}, {Path: filepath.Join(music, "sub", "b.flac")},
+		{Path: filepath.Join(music, "a.flac"), Selected: true}, {Path: filepath.Join(music, "sub", "b.flac"), Selected: true},
 	}}
 	r.event(ref, engine.KindStart)
 	return j.ID, music
@@ -127,5 +127,53 @@ func TestTorrentPaths(t *testing.T) {
 		if got := torrentPaths([]byte(tc.tor), "/d"); !slices.Equal(got, tc.want) {
 			t.Errorf("%q: got %v, want %v", tc.tor, got, tc.want)
 		}
+	}
+}
+
+// With select-file the user may hold a file the torrent lists but never
+// wrote. aria2 lists unselected files too; they are not the torrent's.
+func TestRemoveTorrentSkipsUnselectedFiles(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
+	r := newRig(t)
+	id, music := liveTorrent(t, r)
+	ref := r.ref(t, id)
+	r.e.details[ref] = engine.EngineDetails{Files: []engine.EngineFile{
+		{Path: filepath.Join(music, "a.flac"), Selected: true}, {Path: filepath.Join(music, "sub", "b.flac")},
+	}}
+	os.MkdirAll(filepath.Join(music, "sub"), 0o755)
+	wfile(t, filepath.Join(music, "a.flac"), "a")
+	wfile(t, filepath.Join(music, "sub", "b.flac"), "the user's")
+
+	if _, err := r.m.Remove(bg, []string{id}, true); err != nil {
+		t.Fatal(err)
+	}
+	if !exists1(filepath.Join(music, "sub", "b.flac")) {
+		t.Fatal("the user's sub/b.flac was trashed")
+	}
+	if exists1(filepath.Join(music, "a.flac")) {
+		t.Fatal("a.flac left behind")
+	}
+}
+
+// The stored .torrent cannot say which files select-file picked, so a
+// finished job with it keeps its folder rather than guess.
+func TestRemoveFinishedTorrentWithSelectFileKeepsFiles(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
+	r := newRig(t)
+	tor := "d4:infod5:filesld6:lengthi1e4:pathl6:a.flaceed6:lengthi1e4:pathl3:sub6:b.flaceee4:name5:Musicee"
+	j := r.add(t, AddParams{Torrent: []byte(tor), Options: map[string]string{"select-file": "1"}})
+	if _, err := r.m.change(bg, j.ID, "", "", func(x *store.Job) { x.State, x.Name, x.EngineRef = store.Done, "Music", nil }); err != nil {
+		t.Fatal(err)
+	}
+	music := filepath.Join(r.dir, "Music")
+	os.MkdirAll(filepath.Join(music, "sub"), 0o755)
+	wfile(t, filepath.Join(music, "a.flac"), "a")
+	wfile(t, filepath.Join(music, "sub", "b.flac"), "the user's")
+
+	if _, err := r.m.Remove(bg, []string{j.ID}, true); err != nil {
+		t.Fatal(err)
+	}
+	if !exists1(filepath.Join(music, "sub", "b.flac")) || !exists1(filepath.Join(music, "a.flac")) {
+		t.Fatal("files were trashed on a guess")
 	}
 }

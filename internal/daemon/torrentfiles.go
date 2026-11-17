@@ -11,7 +11,8 @@ import (
 
 // downloadFiles lists the files a torrent job writes: from aria2 while it
 // still has the download, else from the stored .torrent. It is nil for
-// other jobs and when nothing says (a magnet aria2 has forgotten).
+// other jobs and when nothing says (a magnet aria2 has forgotten, or a
+// .torrent with select-file).
 func (m *Manager) downloadFiles(ctx context.Context, j *store.Job) []string {
 	if !isBT(j.Kind) {
 		return nil
@@ -20,7 +21,8 @@ func (m *Manager) downloadFiles(ctx context.Context, j *store.Job) []string {
 		if d, err := m.e.Details(ctx, refOf(j)); err == nil {
 			var out []string
 			for _, f := range d.Files {
-				if f.Path != "" {
+				// aria2 lists files select-file left out too; they are not ours.
+				if f.Path != "" && f.Selected {
 					out = append(out, f.Path)
 				}
 			}
@@ -28,6 +30,9 @@ func (m *Manager) downloadFiles(ctx context.Context, j *store.Job) []string {
 				return out
 			}
 		}
+	}
+	if j.Options["select-file"] != "" {
+		return nil // the .torrent cannot say which files were picked
 	}
 	return torrentPaths(j.Torrent, j.Dir)
 }
