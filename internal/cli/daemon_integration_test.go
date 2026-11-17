@@ -60,6 +60,24 @@ func TestDaemonAddCompleteIdleExit(t *testing.T) {
 	}
 }
 
+// With no client left, the job finishing is what starts the idle timer:
+// the loop must hear about it without polling.
+func TestDaemonIdleExitAfterUnwatchedJob(t *testing.T) {
+	testutil.RequireAria2(t)
+	srv := testutil.NewFaultServer(t, map[string][]byte{"slow.bin": testutil.RandBytes(256 << 10)})
+	e := newEnv(t, "[daemon]\nidle_exit = \"1s\"\n")
+	e.start()
+	pid := e.pid()
+	c := e.dial()
+	if _, err := c.Add(bg, daemon.AddParams{URIs: []string{srv.URL("slow.bin", testutil.ModeSlow)}}); err != nil {
+		t.Fatal(err)
+	}
+	c.Close()
+	if !waitGone(pid, 10*time.Second) {
+		t.Fatalf("daemon %d still running 10s after an unwatched 2s download", pid)
+	}
+}
+
 func TestDaemonAlwaysModeStays(t *testing.T) {
 	testutil.RequireAria2(t)
 	e := newEnv(t, "[daemon]\nidle_exit = \"1s\"\n")

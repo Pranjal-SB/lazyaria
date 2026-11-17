@@ -9,9 +9,9 @@ import (
 	"github.com/Pranjal-SB/lazyaria/internal/daemon"
 )
 
-// idleCheck is how often the loop looks at the job count when nothing
-// wakes it sooner.
-const idleCheck = 250 * time.Millisecond
+// idleCheck is a backstop: job changes (through the bus), clients and
+// reloads wake the loop, and the idle deadline has its own timer.
+const idleCheck = time.Minute
 
 // loop owns the idle timer and the sleep inhibitor, so both are only ever
 // touched from this goroutine. It returns when the daemon should stop:
@@ -19,6 +19,9 @@ const idleCheck = 250 * time.Millisecond
 func (d *daemonProc) loop(ctx context.Context) (upgrade bool) {
 	tick := time.NewTicker(idleCheck)
 	defer tick.Stop()
+	sub := d.bus.Subscribe(false)
+	defer sub.Close()
+	events := sub.Events()
 	inh := &inhibit{d: d}
 	defer inh.release()
 	var idle *daemon.Idle
@@ -36,9 +39,13 @@ func (d *daemonProc) loop(ctx context.Context) (upgrade bool) {
 		} else {
 			inh.update(s, n)
 		}
-		if at := idle.Update(n, int(d.clients.Load()), s.Daemon.Mode == "always"); at != nil && !time.Now().Before(*at) {
-			d.log.Info("idle, shutting down", "idle_exit", idleFor)
-			return false
+		var deadline <-chan time.Time
+		if at := idle.Update(n, int(d.clients.Load()), s.Daemon.Mode == "always"); at != nil {
+			if !time.Now().Before(*at) {
+				d.log.Info("idle, shutting down", "idle_exit", idleFor)
+				return false
+			}
+			deadline = time.After(time.Until(*at))
 		}
 		select {
 		case <-ctx.Done():
@@ -54,6 +61,14 @@ func (d *daemonProc) loop(ctx context.Context) (upgrade bool) {
 			return true
 		case <-tick.C:
 		case <-d.wake:
+		case <-deadline:
+		case _, ok := <-events:
+			if !ok {
+				events = nil
+			}
+			for len(events) > 0 { // one count for a burst
+				<-events
+			}
 		}
 	}
 }
@@ -82,7 +97,7 @@ func (h *inhibit) update(s *config.Settings, n int) {
 		h.release()
 	}
 	// Retrying only when the count changes keeps a missing logind from
-	// being asked, and logged, four times a second.
+	// being asked, and logged, on every wake.
 	if n == h.n {
 		return
 	}
