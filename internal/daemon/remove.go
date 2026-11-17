@@ -12,8 +12,9 @@ import (
 	"github.com/Pranjal-SB/lazyaria/internal/trash"
 )
 
-// ErrUndoExpired means the undo window has passed or the token is unknown.
-var ErrUndoExpired = errors.New("nothing to undo: the undo window has passed")
+// ErrUndoExpired means the undo window has passed or the token is unknown
+// (mistyped, or from before a daemon restart: tokens live in memory only).
+var ErrUndoExpired = errors.New("nothing to undo: the undo token is unknown or has expired (tokens end after remove.undo_seconds or when the daemon restarts). Add the link again with `lazyaria add`; files that were deleted are in the Trash")
 
 type undoRecord struct {
 	until time.Time

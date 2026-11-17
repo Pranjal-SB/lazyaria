@@ -3,6 +3,7 @@ package daemon
 import (
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Pranjal-SB/lazyaria/internal/engine"
@@ -88,5 +89,20 @@ func TestRemoveWhenPauseFailsUsesPolledBytes(t *testing.T) {
 	}
 	if exists1(payload) || exists1(payload+".aria2") {
 		t.Fatalf("left behind: payload %v, control file %v", exists1(payload), exists1(payload+".aria2"))
+	}
+}
+
+// A mistyped token, or any token after a daemon restart, is unknown; the
+// error says so and how to get the job back.
+func TestUndoUnknownTokenSaysWhy(t *testing.T) {
+	r := newRig(t)
+	err := r.m.Undo(bg, "nope")
+	if !errors.Is(err, ErrUndoExpired) {
+		t.Fatalf("got %v", err)
+	}
+	for _, want := range []string{"unknown or has expired", "restarts", "lazyaria add", "Trash"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("%q does not mention %q", err, want)
+		}
 	}
 }
