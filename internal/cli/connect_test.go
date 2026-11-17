@@ -38,13 +38,24 @@ func TestRetryAfterUpgradeHangup(t *testing.T) {
 	}
 }
 
-// When another process holds the lock after the hang-up, the daemon was
-// replaced rather than upgraded and the request may have run: no retry.
-func TestNoRetryWhenDaemonReplaced(t *testing.T) {
+// A daemon exiting on idle hangs up and another process takes over. list
+// changes nothing, so it is sent again to the new daemon.
+func TestListRetriedOnReplacedDaemon(t *testing.T) {
 	f := startFake(t)
 	f.hangups, f.newPID = 1, 1
-	if code, _, _ := run(t, List, ""); code == exitOK {
-		t.Fatal("list was retried on a different daemon")
+	if code, _, errOut := run(t, List, ""); code != exitOK {
+		t.Fatalf("list exited %d: %s", code, errOut)
+	}
+}
+
+// A daemon exiting on idle can hang up on a client that has just connected,
+// before it answers hello. The client says hello again to the daemon that
+// comes back.
+func TestHelloRetriedAfterIdleExitHangup(t *testing.T) {
+	f := startFake(t)
+	f.helloHangs, f.newPID = 1, 1
+	if code, _, errOut := run(t, List, ""); code != exitOK {
+		t.Fatalf("list exited %d: %s", code, errOut)
 	}
 }
 
@@ -93,11 +104,11 @@ func TestAddWaitStopsAtCutOff(t *testing.T) {
 	}
 }
 
-// When no daemon comes back (replaced, or down too long), the links after
-// the cut-off never left the client and are reported as not sent.
+// When no daemon comes back, the links after the cut-off never left the
+// client and are reported as not sent.
 func TestAddAfterFailedRedialNamesUnsent(t *testing.T) {
 	f := startFake(t)
-	f.hangups, f.newPID = 1, 1
+	f.hangups, f.newPID = 1, -1
 	code, _, errOut := run(t, Add, "", "https://a/1", "https://a/2", "https://a/3")
 	f.mu.Lock()
 	defer f.mu.Unlock()

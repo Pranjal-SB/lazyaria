@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/Pranjal-SB/lazyaria/internal/config"
@@ -57,8 +55,9 @@ func resolveLocal(env []string, flags map[string]string) (*config.Settings, conf
 
 // connect reaches the daemon, starting it when daemon.auto_start allows,
 // and does the version handshake. An older daemon is asked, once, to
-// upgrade itself. A call the daemon cuts off while it re-executes is sent
-// again, once, as long as the same daemon process comes back.
+// upgrade itself. After a hang-up (an upgrade, an idle exit, a crash) the
+// client reconnects once, starting a daemon as above; only a read-only
+// call is sent again (see ipc.Client.Redial).
 func connect(ctx context.Context) (*ipc.Client, error) {
 	s, p, err := resolveLocal(os.Environ(), nil)
 	if err != nil {
@@ -72,24 +71,23 @@ func connect(ctx context.Context) (*ipc.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	pid := lockPID(p)
-	c.Redial = func(ctx context.Context) (*ipc.Client, error) {
-		// An upgrade keeps the pid and the socket; anything else is a new
-		// daemon, and the cut-off call may or may not have run there.
+	c.Redial = retry(func(ctx context.Context) (*ipc.Client, error) { return handshake(ctx, p, s.Daemon.AutoStart, exe) })
+	return c, nil
+}
+
+// retry calls dial until it succeeds or 5 s have passed, for a daemon on
+// its way back.
+func retry(dial func(context.Context) (*ipc.Client, error)) func(context.Context) (*ipc.Client, error) {
+	return func(ctx context.Context) (*ipc.Client, error) {
 		deadline := time.Now().Add(5 * time.Second)
 		for {
-			nc, err := handshake(ctx, p, false, exe)
-			if err == nil && lockPID(p) != pid {
-				nc.Close()
-				return nil, errors.New("the daemon was replaced")
-			}
+			c, err := dial(ctx)
 			if err == nil || time.Now().After(deadline) {
-				return nc, err
+				return c, err
 			}
 			time.Sleep(50 * time.Millisecond)
 		}
 	}
-	return c, nil
 }
 
 // handshake dials and says hello. A daemon that agreed to upgrade is
@@ -100,6 +98,10 @@ func handshake(ctx context.Context, p config.Paths, autoStart bool, exe string) 
 	if err != nil {
 		return nil, err
 	}
+	// A daemon exiting on idle can hang up on a client it has just
+	// accepted; hello is read-only, so it goes again to the next daemon
+	// that answers.
+	c.Redial = retry(func(ctx context.Context) (*ipc.Client, error) { return greet(ctx, p, autoStart, exe) })
 	_, upgraded, err := c.Hello(ctx, true)
 	if err == nil && !upgraded {
 		return c, nil
@@ -111,11 +113,8 @@ func handshake(ctx context.Context, p config.Paths, autoStart bool, exe string) 
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		time.Sleep(100 * time.Millisecond)
-		if c, err = ipc.Connect(ctx, p, autoStart, exe); err == nil {
-			if _, _, err = c.Hello(ctx, false); err == nil {
-				return c, nil
-			}
-			c.Close()
+		if c, err = greet(ctx, p, autoStart, exe); err == nil {
+			return c, nil
 		}
 		if time.Now().After(deadline) {
 			return nil, fmt.Errorf("%w (the daemon did not come back after upgrading: %w)", ipc.ErrUnreachable, err)
@@ -123,11 +122,18 @@ func handshake(ctx context.Context, p config.Paths, autoStart bool, exe string) 
 	}
 }
 
-// lockPID is the pid in the daemon lock file, or 0.
-func lockPID(p config.Paths) int {
-	b, _ := os.ReadFile(p.Lock)
-	pid, _ := strconv.Atoi(strings.TrimSpace(string(b)))
-	return pid
+// greet connects and says hello without asking for an upgrade, so a daemon
+// still shutting down, which accepts and then hangs up, counts as down.
+func greet(ctx context.Context, p config.Paths, autoStart bool, exe string) (*ipc.Client, error) {
+	c, err := ipc.Connect(ctx, p, autoStart, exe)
+	if err != nil {
+		return nil, err
+	}
+	if _, _, err = c.Hello(ctx, false); err != nil {
+		c.Close()
+		return nil, err
+	}
+	return c, nil
 }
 
 // exitCode maps an error to the spec §10 exit codes.

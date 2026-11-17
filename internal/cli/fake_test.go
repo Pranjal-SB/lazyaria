@@ -44,16 +44,20 @@ type fake struct {
 	snapLimit  int      // limit of the last Snapshot
 	snapIDs    []string // ids of the last Snapshot
 	hangups    int      // Snapshot and Add calls that hang up, as a daemon re-executing itself does
-	newPID     int      // when set, the daemon after a hang-up is another process
+	helloHangs int      // Hello calls that hang up, as a daemon exiting on idle does
+	newPID     int      // when set, the daemon after a hang-up is another process; -1: none comes back
 	stop       func()
 	restart    func(pid int)
 }
 
 func (f *fake) All() (map[string]string, error) { return f.overrides, nil }
 
-func (f *fake) Hello(context.Context, ipc.HelloParams) (ipc.HelloResult, error) {
+func (f *fake) Hello(ctx context.Context, _ ipc.HelloParams) (ipc.HelloResult, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.hangup(ctx, &f.helloHangs) {
+		return ipc.HelloResult{}, nil
+	}
 	v := f.version
 	if v == "" {
 		v = "dev"
@@ -84,7 +88,7 @@ func (f *fake) Add(ctx context.Context, p daemon.AddParams) (*store.Job, error) 
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.adds = append(f.adds, p)
-	if f.hangup(ctx) {
+	if f.hangup(ctx, &f.hangups) {
 		return nil, nil
 	}
 	if f.addErr != nil {
@@ -138,7 +142,7 @@ func (f *fake) Snapshot(ctx context.Context, _ bool, limit int, ids []string) (u
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.snapLimit, f.snapIDs = limit, ids
-	if f.hangup(ctx) {
+	if f.hangup(ctx, &f.hangups) {
 		return 0, nil, nil
 	}
 	js := make([]*store.Job, len(f.jobs))
@@ -150,12 +154,12 @@ func (f *fake) Snapshot(ctx context.Context, _ bool, limit int, ids []string) (u
 }
 
 // hangup cuts the current call off, as a daemon re-executing itself does,
-// while hangups are left. f.mu must be held.
-func (f *fake) hangup(ctx context.Context) bool {
-	if f.hangups == 0 {
+// while the count n points at is above 0. f.mu must be held.
+func (f *fake) hangup(ctx context.Context, n *int) bool {
+	if *n == 0 {
 		return false
 	}
-	f.hangups--
+	*n--
 	go f.restart(f.newPID)
 	f.mu.Unlock()
 	<-ctx.Done()
@@ -235,12 +239,15 @@ func startFake(t *testing.T) *fake {
 	var mu sync.Mutex
 	stop := serve(0)
 	// restart hangs up on every client and serves again, as the same pid
-	// would after an exec, or as pid when it is set.
+	// would after an exec, or as pid when it is set; with pid -1 it stays down.
 	f.restart = func(pid int) {
 		mu.Lock()
 		defer mu.Unlock()
 		stop()
-		stop = serve(pid)
+		stop = func() {}
+		if pid >= 0 {
+			stop = serve(pid)
+		}
 	}
 	var once sync.Once
 	f.stop = func() {
