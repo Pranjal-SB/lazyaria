@@ -71,7 +71,7 @@ Downloads go to the first of these that is set:
   is on the same disk as that folder;
 - otherwise `.Trash-<your user id>` at the top of the file's disk.
 
-See [Files and safety](../concepts/files-and-safety.md).
+See [Where files go](../concepts/files.md).
 
 ## systemd user service
 

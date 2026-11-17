@@ -15,8 +15,8 @@ aria2 already handles the hard parts, and has done so for years:
 - resuming an unfinished download from its `.aria2` control file.
 
 lazyaria adds what aria2 leaves to you: a job list that survives
-restarts, safe file handling, clear errors, and a process that looks after
-itself.
+restarts, file naming and removal, clear errors, and a process that looks
+after itself.
 
 ## How lazyaria runs aria2
 
@@ -46,9 +46,9 @@ stops it when it exits. You do not run or configure aria2 yourself.
 
 ## What lazyaria changes
 
-- **No overwrites.** aria2 runs with overwriting turned off and automatic
-  renaming turned on. lazyaria also checks names itself before it adds a
-  download. See [Files and safety](files-and-safety.md).
+- **File names.** aria2 runs with overwriting turned off and automatic
+  renaming turned on, and lazyaria checks names itself before it adds a
+  download. See [Where files go](files.md).
 - **Errors.** lazyaria turns aria2's error numbers into short kinds such as
   `link-expired`, `not-found`, `rate-limited` or `disk-full`.
   `lazyaria list --json` shows them in `error_kind`.

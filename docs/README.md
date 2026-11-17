@@ -1,8 +1,8 @@
 # lazyaria documentation
 
 lazyaria is a download manager for the terminal. It keeps a list of
-downloads, runs them with aria2, and never writes over a file you already
-have.
+downloads and runs them with aria2, in a background process that only runs
+while there is work to do.
 
 lazyaria is pre-release. These pages describe what works today. The
 terminal interface (TUI) is not released yet, so everything here uses the
@@ -30,9 +30,11 @@ How lazyaria works, and why.
 
 - [The daemon](concepts/the-daemon.md): the background process that starts
   when you need it and stops when you do not.
-- [Files and safety](concepts/files-and-safety.md): no overwrites,
-  duplicates, the trash and undo.
+- [Where files go](concepts/files.md): the download folder, names that
+  are taken, removing files and undo.
 - [The engine](concepts/the-engine.md): how lazyaria uses aria2.
+- [How lazyaria compares](comparison.md): other download managers, and
+  what lazyaria does not do yet.
 
 ## Reference
 

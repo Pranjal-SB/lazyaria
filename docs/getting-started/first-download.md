@@ -128,8 +128,8 @@ file if there is one:
 lazyaria remove --delete-files 01M7MCYN
 ```
 
-It only takes files the job downloaded itself, never a file that was
-there before. See [Files and safety](../concepts/files-and-safety.md).
+It only takes files the job downloaded itself. See
+[Where files go](../concepts/files.md).
 
 ## Undo a remove
 
@@ -160,8 +160,7 @@ lazyaria add: "ubuntu.iso" is already in the list (done); add it with --force to
 ```
 
 `--force` downloads it anyway, under a new name such as `ubuntu.1.iso`.
-The old file is never written over. See
-[Files and safety](../concepts/files-and-safety.md).
+See [Where files go](../concepts/files.md).
 
 ## Next
 

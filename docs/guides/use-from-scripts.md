@@ -102,7 +102,7 @@ change it:
   `skipped ...` and exit with 0 instead. With `--wait`, a skipped link
   counts as finished once its existing job is.
 
-See [Files and safety](../concepts/files-and-safety.md).
+See [Where files go](../concepts/files.md).
 
 ## If the connection drops
 

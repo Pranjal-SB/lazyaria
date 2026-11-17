@@ -76,7 +76,7 @@ lazyaria doctor --restart-engine
 **`"ubuntu.iso" is already in the list (done); add it with --force to download it again`** (exit code 4)
 
 The link is already a job. Use `--force` to download it again under a new
-name. See [Files and safety](../concepts/files-and-safety.md).
+name. See [Where files go](../concepts/files.md).
 
 **`.../notes.pdf already exists; add it with --force to download it again, or choose another name`** (exit code 4)
 
