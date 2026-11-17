@@ -42,7 +42,8 @@ stops it when it exits. You do not run or configure aria2 yourself.
   the daemon gives up and marks the engine as failed. `lazyaria doctor`
   then shows it, and `lazyaria doctor --restart-engine` tries again.
 - **Log.** aria2 writes its own log to `aria2.log`, next to lazyaria's log
-  (see [Files and paths](../reference/files-and-paths.md)).
+  (see [Files and paths](../reference/files-and-paths.md)). When aria2
+  starts and the file is over 4 MiB, it is emptied first.
 
 ## What lazyaria changes
 

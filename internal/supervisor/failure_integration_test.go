@@ -70,6 +70,27 @@ func TestCrashLoopFails(t *testing.T) {
 	}
 }
 
+// An oversized aria2.log is emptied at spawn, so it cannot grow forever.
+func TestSpawnTrimsLargeLog(t *testing.T) {
+	s, p := testSettings(t)
+	s.Engine.Aria2cPath = fakeAria2(t, "echo 'boom: cannot start' >&2\nexit 1\n")
+	s.Engine.RestartMaxBackoff = "50ms"
+	logp := filepath.Join(p.StateDir, "aria2.log")
+	if err := os.WriteFile(logp, make([]byte, maxAria2Log+1), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sv := New(s, p, quiet)
+	shutdownOnCleanup(t, sv)
+	if _, err := sv.Start(context.Background()); !errors.Is(err, ErrEngineFailed) {
+		t.Fatalf("Start err = %v, want ErrEngineFailed", err)
+	}
+	st := waitPhase(t, sv, "failed", time.Second)
+	fi, err := os.Stat(logp)
+	if err != nil || fi.Size() > maxAria2Log/2 || !strings.Contains(strings.Join(st.LogTail, "\n"), "boom") {
+		t.Fatalf("aria2.log size %v (%v), tail %q; want it emptied, then this run's output", fi.Size(), err, st.LogTail)
+	}
+}
+
 func TestNeverReadyFails(t *testing.T) {
 	s, p := testSettings(t)
 	s.Engine.Aria2cPath = fakeAria2(t, "exec sleep 1000\n")

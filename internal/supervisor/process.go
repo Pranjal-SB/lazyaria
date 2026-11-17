@@ -25,6 +25,10 @@ const (
 	readyPoll      = 50 * time.Millisecond
 	maxBindRetries = 5
 	tailLines      = 20
+	// maxAria2Log: past this, aria2.log is emptied at the next spawn. aria2
+	// only appends to it, so a flaky tracker or a crash loop would fill the
+	// state folder; only the current run's lines are ever read back.
+	maxAria2Log = 4 << 20
 )
 
 var errBindRace = errors.New("aria2c could not bind its RPC port")
@@ -107,6 +111,11 @@ func (sv *Supervisor) spawn(port int, secret string) (*proc, error) {
 	}
 	defer logf.Close()
 	fi, err := logf.Stat()
+	if err == nil && fi.Size() > maxAria2Log {
+		if err = logf.Truncate(0); err == nil {
+			fi, err = logf.Stat()
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("open aria2 log: %w", err)
 	}

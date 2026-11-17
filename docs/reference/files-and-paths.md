@@ -28,7 +28,7 @@ The state folder is `$XDG_STATE_HOME/lazyaria`, by default
 |---|---|
 | `lazyaria.db` | The job list and the values saved with `config set` (SQLite). |
 | `lazyaria.log` | The daemon's log, rotated at `log.max_size`. `log.file` moves it. |
-| `aria2.log` | aria2's own log. |
+| `aria2.log` | aria2's own log. Emptied when aria2 starts if it is over 4 MiB. |
 | `dht.dat` | The BitTorrent DHT cache, kept between runs. It appears once you download a torrent. |
 
 ## Runtime
