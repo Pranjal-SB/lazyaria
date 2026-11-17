@@ -120,7 +120,10 @@ func (t *TrashFiles) RemoveFiles(_ context.Context, j *store.Job, files []string
 		done = append(done, e)
 	}
 	if p, ok := payloadPath(j); ok {
-		pruneEmpty(p, done)
+		// The trash records resolved paths; match them.
+		if real, err := filepath.EvalSymlinks(p); err == nil {
+			pruneEmpty(real, done)
+		}
 	}
 	return done, nil
 }

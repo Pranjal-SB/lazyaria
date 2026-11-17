@@ -182,3 +182,29 @@ func TestRemoveFinishedTorrentWithSelectFileKeepsFiles(t *testing.T) {
 		t.Fatal("files were trashed on a guess")
 	}
 }
+
+// The trash records resolved paths, so a download folder reached through a
+// symlink must still have its emptied folders pruned.
+func TestRemoveTorrentPrunesThroughSymlinkedDir(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
+	r := newRig(t)
+	link := filepath.Join(t.TempDir(), "dl")
+	if err := os.Symlink(r.dir, link); err != nil {
+		t.Fatal(err)
+	}
+	r.dir = link
+	id, music := liveTorrent(t, r)
+	os.MkdirAll(filepath.Join(music, "sub"), 0o755)
+	wfile(t, filepath.Join(music, "a.flac"), "a")
+	wfile(t, filepath.Join(music, "sub", "b.flac"), "b")
+
+	if _, err := r.m.Remove(bg, []string{id}, true); err != nil {
+		t.Fatal(err)
+	}
+	if exists1(filepath.Join(music, "sub", "b.flac")) {
+		t.Fatal("b.flac left behind")
+	}
+	if exists1(filepath.Join(music, "sub")) {
+		t.Fatal("emptied sub folder left behind")
+	}
+}
