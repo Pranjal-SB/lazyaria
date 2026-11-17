@@ -8,7 +8,7 @@ import (
 )
 
 func (s *Store) list(ctx context.Context, where string, a []any, limit, offset int) ([]*Job, error) {
-	q := `SELECT ` + cols + ` FROM jobs ` + where + ` ` + smartOrder
+	q := `SELECT ` + cols + `, NULL FROM jobs ` + where + ` ` + smartOrder
 	if limit > 0 {
 		q += ` LIMIT ? OFFSET ?`
 		a = append(a, limit, offset)

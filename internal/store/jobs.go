@@ -66,8 +66,10 @@ type Filter struct {
 	Limit, Offset  int
 }
 
+// cols leaves out the torrent blob: only GetJob reads it (as a last column)
+// and only InsertJob writes it.
 const cols = `id, kind, engine, engine_ref, state, error_kind, error_code, error_msg, name, uris,
-	torrent, dir, out, dir_dev, total_bytes, done_bytes, options, limit_down, limit_up, category,
+	dir, out, dir_dev, total_bytes, done_bytes, options, limit_down, limit_up, category,
 	queue, priority, retry_count, retry_at, referrer, created_at, started_at, finished_at, removed_at`
 
 // smartOrder: needs-attention, active, waiting, then finished newest first.
@@ -98,9 +100,9 @@ func scanJob(r scanner) (*Job, error) {
 	var errCode, dev, total, done, retryAt, created, started, finished, removed sql.NullInt64
 	var state string
 	err := r.Scan(&j.ID, &j.Kind, &j.Engine, &j.EngineRef, &state, &j.ErrorKind, &errCode, &j.ErrorMsg,
-		&j.Name, &uris, &j.Torrent, &j.Dir, &j.Out, &dev, &total, &done, &opts, &j.LimitDown, &j.LimitUp,
+		&j.Name, &uris, &j.Dir, &j.Out, &dev, &total, &done, &opts, &j.LimitDown, &j.LimitUp,
 		&j.Category, &j.Queue, &j.Priority, &j.RetryCount, &retryAt, &j.Referrer, &created, &started,
-		&finished, &removed)
+		&finished, &removed, &j.Torrent)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +165,7 @@ func args(j *Job) ([]any, error) {
 		dev = int64(*j.DirDev)
 	}
 	return []any{j.ID, j.Kind, j.Engine, j.EngineRef, string(j.State), j.ErrorKind, code, j.ErrorMsg,
-		j.Name, uris, j.Torrent, j.Dir, j.Out, dev, j.TotalBytes, j.DoneBytes, opts,
+		j.Name, uris, j.Dir, j.Out, dev, j.TotalBytes, j.DoneBytes, opts,
 		j.LimitDown, j.LimitUp, j.Category, j.Queue, j.Priority, j.RetryCount, ms(j.RetryAt), j.Referrer,
 		j.CreatedAt.UnixMilli(), ms(j.StartedAt), ms(j.FinishedAt), ms(j.RemovedAt), normJSON}, nil
 }
@@ -193,7 +195,7 @@ func (s *Store) InsertJob(ctx context.Context, j *Job) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO jobs(`+cols+`, norm_uris) VALUES(`+placeholders+`)`, a...)
+	_, err = s.db.ExecContext(ctx, `INSERT INTO jobs(`+cols+`, norm_uris, torrent) VALUES(`+placeholders+`)`, append(a, j.Torrent)...)
 	return err
 }
 
@@ -201,25 +203,33 @@ type queryer interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }
 
-func getJob(ctx context.Context, q queryer, id string) (*Job, error) {
-	j, err := scanJob(q.QueryRowContext(ctx, `SELECT `+cols+` FROM jobs WHERE id=?`, id))
+// getJob reads the torrent blob only when torrent is set.
+func getJob(ctx context.Context, q queryer, id string, torrent bool) (*Job, error) {
+	blob := "NULL"
+	if torrent {
+		blob = "torrent"
+	}
+	j, err := scanJob(q.QueryRowContext(ctx, `SELECT `+cols+`, `+blob+` FROM jobs WHERE id=?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	return j, err
 }
 
-func (s *Store) GetJob(ctx context.Context, id string) (*Job, error) { return getJob(ctx, s.db, id) }
+func (s *Store) GetJob(ctx context.Context, id string) (*Job, error) {
+	return getJob(ctx, s.db, id, true)
+}
 
 // UpdateJob reads the job, applies fn and writes it back in one transaction.
-// fn must not call back into the Store.
+// fn must not call back into the Store. The torrent blob is neither read
+// nor written: fn sees it nil and the stored one is kept.
 func (s *Store) UpdateJob(ctx context.Context, id string, fn func(*Job) error) (*Job, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
-	j, err := getJob(ctx, tx, id)
+	j, err := getJob(ctx, tx, id, false)
 	if err != nil {
 		return nil, err
 	}

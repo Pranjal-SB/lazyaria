@@ -34,7 +34,21 @@ func (m *Manager) downloadFiles(ctx context.Context, j *store.Job) []string {
 	if j.Options["select-file"] != "" {
 		return nil // the .torrent cannot say which files were picked
 	}
-	return torrentPaths(j.Torrent, j.Dir)
+	return torrentPaths(m.torrent(ctx, j), j.Dir)
+}
+
+// torrent returns j's .torrent bytes, reading them from the store when j
+// came from a list or an update, which leave the blob out.
+func (m *Manager) torrent(ctx context.Context, j *store.Job) []byte {
+	if j.Torrent != nil || j.Kind != "torrent" {
+		return j.Torrent
+	}
+	full, err := m.st.GetJob(ctx, j.ID)
+	if err != nil {
+		m.log.Warn("read the stored .torrent", "job", j.ID, "err", err)
+		return nil
+	}
+	return full.Torrent
 }
 
 // torrentPaths lists where the files of a .torrent land under dir. It is

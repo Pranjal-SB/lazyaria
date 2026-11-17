@@ -160,6 +160,7 @@ func (m *Manager) readd(ctx context.Context, j *store.Job, paused bool, why stri
 		return done, nil
 	}
 	req := m.request(j, paused)
+	req.Torrent = m.torrent(ctx, j)
 	if j.EngineRef != nil {
 		if err := m.e.Remove(ctx, refOf(j)); err != nil {
 			m.log.Warn("drop old download", "job", j.ID, "err", err)

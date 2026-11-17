@@ -308,3 +308,16 @@ func TestCompletedOfflineNotRedownloaded(t *testing.T) {
 		t.Fatalf("foreign file: adds %d state %s", adds, r.get(t, f.ID).State)
 	}
 }
+
+// The job list leaves the .torrent out; a re-add must still send it.
+func TestReconcile_ReaddTorrentSendsMetadata(t *testing.T) {
+	r := newRig(t)
+	tor := []byte("d4:infod6:lengthi1e4:name1:xee")
+	r.insert(t, store.Active, "old1", func(j *store.Job) { j.Kind, j.URIs, j.Torrent = "torrent", nil, tor })
+	if err := r.m.Reconcile(bg); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.e.adds) != 1 || string(r.e.adds[0].Torrent) != string(tor) {
+		t.Fatalf("adds = %+v; want one re-add carrying the .torrent", r.e.adds)
+	}
+}
