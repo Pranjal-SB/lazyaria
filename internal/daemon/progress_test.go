@@ -89,7 +89,7 @@ func TestPollPublishesProgress(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("no progress")
 	}
-	_, jobs, speeds := r.m.Snapshot(bg, false, 0, nil)
+	_, jobs, speeds := r.m.Snapshot(bg, false, 0, nil, nil)
 	if len(jobs) != 1 || jobs[0].DoneBytes == nil || *jobs[0].DoneBytes != 10 || len(speeds) != 1 {
 		t.Fatalf("snapshot jobs %+v speeds %v", jobs, speeds)
 	}

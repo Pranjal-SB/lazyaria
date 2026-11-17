@@ -159,7 +159,7 @@ func (f *fakeHandler) RefreshURI(context.Context, string, string) (*store.Job, e
 func (f *fakeHandler) SetLimit(context.Context, string, int64, int64) error { return nil }
 func (f *fakeHandler) StopSeeding(context.Context, []string) error          { return nil }
 
-func (f *fakeHandler) Snapshot(context.Context, bool, int, []string) (uint64, []*store.Job, []daemon.SpeedSample) {
+func (f *fakeHandler) Snapshot(context.Context, bool, int, []string, []string) (uint64, []*store.Job, []daemon.SpeedSample) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return 7, append([]*store.Job(nil), f.jobs...), nil

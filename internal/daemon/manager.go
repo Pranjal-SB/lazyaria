@@ -229,9 +229,9 @@ func (m *Manager) SetObservers(n int) {
 // the recent speed history. The sequence is read first, so a client that
 // applies events after it never misses a change. Non-empty ids keeps only
 // those jobs.
-func (m *Manager) Snapshot(ctx context.Context, includeHistory bool, limit int, ids []string) (uint64, []*store.Job, []SpeedSample) {
+func (m *Manager) Snapshot(ctx context.Context, includeHistory bool, limit int, ids, prefixes []string) (uint64, []*store.Job, []SpeedSample) {
 	seq := m.bus.seq.Load()
-	js, err := m.st.ListJobs(ctx, store.Filter{IncludeHistory: includeHistory, Limit: limit, IDs: ids})
+	js, err := m.st.ListJobs(ctx, store.Filter{IncludeHistory: includeHistory, Limit: limit, IDs: ids, IDPrefixes: prefixes})
 	if err != nil {
 		m.log.Warn("snapshot", "err", err)
 	}

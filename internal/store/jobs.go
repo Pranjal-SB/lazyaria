@@ -64,6 +64,7 @@ type Filter struct {
 	States         []State
 	IncludeHistory bool
 	IDs            []string // when set, only these jobs
+	IDPrefixes     []string // when set, only jobs whose id starts with one of these
 	Limit, Offset  int
 }
 

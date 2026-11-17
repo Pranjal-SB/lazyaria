@@ -26,6 +26,14 @@ func (c *Client) List(ctx context.Context, includeHistory bool, limit int, ids .
 	return r, err
 }
 
+// Match returns the jobs, history included, whose id starts with one of
+// prefixes. An older daemon returns every job; callers match again.
+func (c *Client) Match(ctx context.Context, prefixes ...string) ([]*store.Job, error) {
+	var r SnapshotResult
+	err := c.call(ctx, "jobs.snapshot", SnapshotParams{IncludeHistory: true, Prefixes: prefixes}, &r)
+	return r.Jobs, err
+}
+
 // Search matches query against the whole history, server side.
 func (c *Client) Search(ctx context.Context, query string, limit, offset int) ([]*store.Job, error) {
 	var r JobsResult

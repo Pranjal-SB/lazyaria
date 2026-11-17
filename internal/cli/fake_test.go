@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -36,18 +37,19 @@ type fake struct {
 	overrides map[string]string
 	restarts  int
 
-	pid        int   // reported by Status
-	restartErr error // returned by RestartEngine
-	dropAdded  bool  // Add answers but keeps no row, as if removed at once
-	version    string
-	upgrades   int
-	snapLimit  int      // limit of the last Snapshot
-	snapIDs    []string // ids of the last Snapshot
-	hangups    int      // Snapshot and Add calls that hang up, as a daemon re-executing itself does
-	helloHangs int      // Hello calls that hang up, as a daemon exiting on idle does
-	newPID     int      // when set, the daemon after a hang-up is another process; -1: none comes back
-	stop       func()
-	restart    func(pid int)
+	pid          int   // reported by Status
+	restartErr   error // returned by RestartEngine
+	dropAdded    bool  // Add answers but keeps no row, as if removed at once
+	version      string
+	upgrades     int
+	snapLimit    int      // limit of the last Snapshot
+	snapIDs      []string // ids of the last Snapshot
+	snapPrefixes []string // id prefixes of the last Snapshot
+	hangups      int      // Snapshot and Add calls that hang up, as a daemon re-executing itself does
+	helloHangs   int      // Hello calls that hang up, as a daemon exiting on idle does
+	newPID       int      // when set, the daemon after a hang-up is another process; -1: none comes back
+	stop         func()
+	restart      func(pid int)
 }
 
 func (f *fake) All() (map[string]string, error) { return f.overrides, nil }
@@ -138,17 +140,20 @@ func (f *fake) RefreshURI(_ context.Context, id, uri string) (*store.Job, error)
 func (f *fake) SetLimit(context.Context, string, int64, int64) error { return nil }
 func (f *fake) StopSeeding(context.Context, []string) error          { return nil }
 
-func (f *fake) Snapshot(ctx context.Context, _ bool, limit int, ids []string) (uint64, []*store.Job, []daemon.SpeedSample) {
+func (f *fake) Snapshot(ctx context.Context, _ bool, limit int, ids, prefixes []string) (uint64, []*store.Job, []daemon.SpeedSample) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.snapLimit, f.snapIDs = limit, ids
+	f.snapLimit, f.snapIDs, f.snapPrefixes = limit, ids, prefixes
 	if f.hangup(ctx, &f.hangups) {
 		return 0, nil, nil
 	}
-	js := make([]*store.Job, len(f.jobs))
-	for i, j := range f.jobs {
+	var js []*store.Job
+	for _, j := range f.jobs {
+		if len(prefixes) > 0 && !slices.ContainsFunc(prefixes, func(p string) bool { return strings.HasPrefix(j.ID, p) }) {
+			continue
+		}
 		c := *j
-		js[i] = &c
+		js = append(js, &c)
 	}
 	return 0, js, nil
 }

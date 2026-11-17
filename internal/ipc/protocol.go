@@ -37,7 +37,7 @@ type Handler interface {
 	RefreshURI(ctx context.Context, id, uri string) (*store.Job, error)
 	SetLimit(ctx context.Context, id string, down, up int64) error
 	StopSeeding(ctx context.Context, ids []string) error
-	Snapshot(ctx context.Context, includeHistory bool, limit int, ids []string) (uint64, []*store.Job, []daemon.SpeedSample)
+	Snapshot(ctx context.Context, includeHistory bool, limit int, ids, prefixes []string) (uint64, []*store.Job, []daemon.SpeedSample)
 	Search(ctx context.Context, query string, limit, offset int) ([]*store.Job, error)
 
 	// Subscribe and SetObservers back jobs.subscribe; n counts clients
@@ -78,6 +78,9 @@ type SnapshotParams struct {
 	IncludeHistory bool     `json:"include_history"`
 	Limit          int      `json:"limit"`
 	IDs            []string `json:"ids,omitempty"` // when set, only these jobs
+	// Prefixes, when set, keeps only jobs whose id starts with one of
+	// them (ids are upper case). A daemon that predates it sends every job.
+	Prefixes []string `json:"prefixes,omitempty"`
 }
 
 type SnapshotResult struct {

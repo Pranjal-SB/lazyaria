@@ -9,7 +9,6 @@ import (
 
 	"github.com/Pranjal-SB/lazyaria/internal/daemon"
 	"github.com/Pranjal-SB/lazyaria/internal/ipc"
-	"github.com/Pranjal-SB/lazyaria/internal/store"
 )
 
 // minPrefix is the shortest id prefix accepted.
@@ -110,11 +109,7 @@ func jobAction(ctx context.Context, name string, args []string, out, errOut io.W
 		return fail(errOut, name, err)
 	}
 	defer c.Close()
-	r, err := c.List(ctx, true, 0)
-	if err != nil {
-		return fail(errOut, name, err)
-	}
-	ids, err := resolveIDs(r.Jobs, pos)
+	ids, err := resolveIDs(ctx, c, pos)
 	if err != nil {
 		return fail(errOut, name, err)
 	}
@@ -130,13 +125,22 @@ func jobAction(ctx context.Context, name string, args []string, out, errOut io.W
 var pastTense = map[string]string{"pause": "paused", "resume": "resumed", "remove": "removed", "refresh": "refreshed"}
 
 // resolveIDs maps each prefix to the one job id it starts. Case does not
-// matter: ids are upper-case ULIDs.
-func resolveIDs(jobs []*store.Job, prefixes []string) ([]string, error) {
-	var ids []string
-	for _, p := range prefixes {
+// matter: ids are upper-case ULIDs. The daemon does the matching, so the
+// whole history is never fetched.
+func resolveIDs(ctx context.Context, c *ipc.Client, prefixes []string) ([]string, error) {
+	upper := make([]string, len(prefixes))
+	for i, p := range prefixes {
 		if len(p) < minPrefix {
 			return nil, usagef("id prefix %q is too short; give at least %d characters", p, minPrefix)
 		}
+		upper[i] = strings.ToUpper(p)
+	}
+	jobs, err := c.Match(ctx, upper...)
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for _, p := range prefixes {
 		var match []string
 		for _, j := range jobs {
 			if strings.HasPrefix(j.ID, strings.ToUpper(p)) {

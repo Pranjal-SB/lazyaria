@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -96,6 +97,13 @@ func TestIDPrefixAmbiguous(t *testing.T) {
 	}
 	if code, _, errOut := run(t, Pause, "", "01jc0000000000000000000002"); code != 0 || len(f.paused) != 1 || f.paused[0] != f.jobs[1].ID {
 		t.Errorf("unique prefix: exit %d paused %v: %s", code, f.paused, errOut)
+	}
+	// The daemon matches the prefixes; the whole history is never fetched.
+	if want := []string{"01JC0000000000000000000002"}; !slices.Equal(f.snapPrefixes, want) {
+		t.Errorf("snapshot prefixes %v, want %v", f.snapPrefixes, want)
+	}
+	if code, _, errOut := run(t, Pause, "", "01JZZ"); code != 2 || !strings.Contains(errOut, `no job id starts with "01JZZ"`) {
+		t.Errorf("unknown prefix: exit %d: %s", code, errOut)
 	}
 }
 
