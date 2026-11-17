@@ -35,8 +35,10 @@ func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (s
 		if j.State == store.Removed {
 			return nil
 		}
+		var listed []string
 		if deleteFiles {
-			if err := m.Files.Check(ctx, j); err != nil {
+			listed = m.downloadFiles(ctx, j)
+			if err := m.Files.Check(ctx, j, listed); err != nil {
 				return err
 			}
 		}
@@ -63,7 +65,7 @@ func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (s
 		var es []trash.Entry
 		if deleteFiles {
 			var err error
-			if es, err = m.Files.RemoveFiles(ctx, j); err != nil {
+			if es, err = m.Files.RemoveFiles(ctx, j, listed); err != nil {
 				if running(j.State) && j.EngineRef != nil {
 					cp := *j
 					cp.EngineRef = nil

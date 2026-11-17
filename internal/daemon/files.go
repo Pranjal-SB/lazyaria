@@ -17,9 +17,10 @@ import (
 // can bring them back for Undo.
 type FileRemover interface {
 	// Check reports (as *NeedsConfirmError) whether the files could be
-	// trashed, without moving anything.
-	Check(ctx context.Context, j *store.Job) error
-	RemoveFiles(ctx context.Context, j *store.Job) ([]trash.Entry, error)
+	// trashed, without moving anything. files lists what the download
+	// writes inside a payload folder (see targets).
+	Check(ctx context.Context, j *store.Job, files []string) error
+	RemoveFiles(ctx context.Context, j *store.Job, files []string) ([]trash.Entry, error)
 	RestoreFiles(ctx context.Context, es []trash.Entry) error
 }
 
@@ -58,15 +59,23 @@ func (t *TrashFiles) probe(p string) error {
 // job provably owns it: it wrote bytes there, or finished. So a duplicate
 // "download anyway", a job that failed before its first byte, or a magnet
 // still named "download" never takes a file that was already there.
-func targets(j *store.Job) []string {
+// A payload folder may predate the job and hold other files, so only the
+// listed files inside it are taken, never the folder itself.
+func targets(j *store.Job, files []string) []string {
 	p, ok := payloadPath(j)
 	if !ok {
 		return nil
 	}
 	var out []string
 	owned := (j.DoneBytes != nil && *j.DoneBytes > 0) || j.State == store.Done || j.State == store.Seeding
-	if owned && lexists(p) {
+	if fi, err := os.Lstat(p); err == nil && owned && !fi.IsDir() {
 		out = append(out, p)
+	} else if err == nil && owned {
+		for _, f := range files {
+			if rel, err := filepath.Rel(p, f); err == nil && filepath.IsLocal(rel) && lexists(f) {
+				out = append(out, f)
+			}
+		}
 	}
 	if lexists(p + ".aria2") {
 		out = append(out, p+".aria2")
@@ -76,8 +85,8 @@ func targets(j *store.Job) []string {
 
 func lexists(p string) bool { _, err := os.Lstat(p); return err == nil }
 
-func (t *TrashFiles) Check(_ context.Context, j *store.Job) error {
-	for _, f := range targets(j) {
+func (t *TrashFiles) Check(_ context.Context, j *store.Job, files []string) error {
+	for _, f := range targets(j, files) {
 		if err := t.probe(f); errors.Is(err, trash.ErrNoTrash) {
 			return &NeedsConfirmError{Path: f}
 		} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -87,9 +96,9 @@ func (t *TrashFiles) Check(_ context.Context, j *store.Job) error {
 	return nil
 }
 
-func (t *TrashFiles) RemoveFiles(_ context.Context, j *store.Job) ([]trash.Entry, error) {
+func (t *TrashFiles) RemoveFiles(_ context.Context, j *store.Job, files []string) ([]trash.Entry, error) {
 	var done []trash.Entry
-	for _, f := range targets(j) {
+	for _, f := range targets(j, files) {
 		e, err := t.move(f)
 		if errors.Is(err, fs.ErrNotExist) {
 			continue
@@ -110,7 +119,22 @@ func (t *TrashFiles) RemoveFiles(_ context.Context, j *store.Job) ([]trash.Entry
 		}
 		done = append(done, e)
 	}
+	if p, ok := payloadPath(j); ok {
+		pruneEmpty(p, done)
+	}
 	return done, nil
+}
+
+// pruneEmpty removes the folders under root, root included, that the
+// trashed files left empty. os.Remove refuses a folder that is not empty.
+func pruneEmpty(root string, es []trash.Entry) {
+	for _, e := range es {
+		for d := filepath.Dir(e.Original); d == root || strings.HasPrefix(d, root+string(filepath.Separator)); d = filepath.Dir(d) {
+			if os.Remove(d) != nil {
+				break
+			}
+		}
+	}
 }
 
 // RestoreFiles puts es back. It first checks that every original path is
@@ -123,6 +147,11 @@ func (t *TrashFiles) RestoreFiles(_ context.Context, es []trash.Entry) error {
 	}
 	var errs []error
 	for _, e := range es {
+		// The folder may have been pruned when it was left empty.
+		if err := os.MkdirAll(filepath.Dir(e.Original), 0o755); err != nil {
+			errs = append(errs, err)
+			continue
+		}
 		if err := trash.Restore(e); err != nil {
 			errs = append(errs, err)
 		}

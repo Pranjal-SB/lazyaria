@@ -14,12 +14,12 @@ import (
 
 type recordFiles struct{ got []string }
 
-func (f *recordFiles) RemoveFiles(_ context.Context, j *store.Job) ([]trash.Entry, error) {
+func (f *recordFiles) RemoveFiles(_ context.Context, j *store.Job, _ []string) ([]trash.Entry, error) {
 	f.got = append(f.got, j.ID)
 	return nil, nil
 }
 
-func (f *recordFiles) Check(context.Context, *store.Job) error { return nil }
+func (f *recordFiles) Check(context.Context, *store.Job, []string) error { return nil }
 
 func (f *recordFiles) RestoreFiles(context.Context, []trash.Entry) error { return nil }
 
