@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"errors"
 	"path/filepath"
 	"testing"
 
@@ -58,6 +59,30 @@ func TestRemoveUndoRemoveTrashesPartial(t *testing.T) {
 	if !exists1(payload) {
 		t.Fatal("undo did not bring the payload back")
 	}
+	if _, err := r.m.Remove(bg, []string{j.ID}, true); err != nil {
+		t.Fatal(err)
+	}
+	if exists1(payload) || exists1(payload+".aria2") {
+		t.Fatalf("left behind: payload %v, control file %v", exists1(payload), exists1(payload+".aria2"))
+	}
+}
+
+// When aria2 cannot be paused (down, restarting, timing out), the bytes
+// the last poll saw still decide what the job owns.
+func TestRemoveWhenPauseFailsUsesPolledBytes(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
+	r := newRig(t)
+	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}, Out: "a.iso"})
+	ref := r.ref(t, j.ID)
+	r.e.setState(ref, "active")
+	r.event(ref, engine.KindStart)
+	payload := filepath.Join(r.dir, "a.iso")
+	wfile(t, payload, "data")
+	wfile(t, payload+".aria2", "ctl")
+	r.e.set(ref, func(s *engine.EngineStatus) { s.Path, s.Done, s.Total = payload, 4, 100 })
+	r.m.poll(bg)
+	r.e.pauseErr = errors.New("aria2 timed out")
+
 	if _, err := r.m.Remove(bg, []string{j.ID}, true); err != nil {
 		t.Fatal(err)
 	}

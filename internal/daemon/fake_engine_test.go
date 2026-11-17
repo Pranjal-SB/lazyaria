@@ -31,6 +31,7 @@ type fakeEngine struct {
 	onAdd       func(ref engine.EngineRef)
 	changeRef   engine.EngineRef // ChangeURI result when set
 	changeErr   error
+	pauseErr    error
 	events      chan engine.EngineEvent
 }
 
@@ -91,6 +92,9 @@ func (f *fakeEngine) Pause(_ context.Context, ref engine.EngineRef) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.paused = append(f.paused, ref)
+	if f.pauseErr != nil {
+		return f.pauseErr
+	}
 	if st, ok := f.dl[ref]; ok {
 		st.State = "paused"
 		f.dl[ref] = st

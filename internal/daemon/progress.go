@@ -25,6 +25,7 @@ type jobSpeed struct {
 	ema  float64
 	at   time.Time
 	item ProgressItem
+	st   engine.EngineStatus // the sample item came from
 }
 
 // progress smooths per-job speeds and keeps the recent total speed history.
@@ -56,7 +57,7 @@ func (p *progress) observe(id string, at time.Time, st engine.EngineStatus) Prog
 		eta := time.Duration(float64(st.Total-st.Done) / s.ema * float64(time.Second))
 		it.ETA = &eta
 	}
-	s.item = it
+	s.item, s.st = it, st
 	return it
 }
 
@@ -67,6 +68,16 @@ func (p *progress) last(id string) (ProgressItem, bool) {
 		return s.item, true
 	}
 	return ProgressItem{}, false
+}
+
+// lastStatus is the engine status of the job's latest sample.
+func (p *progress) lastStatus(id string) (engine.EngineStatus, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if s := p.jobs[id]; s != nil {
+		return s.st, true
+	}
+	return engine.EngineStatus{}, false
 }
 
 func (p *progress) forget(id string) {

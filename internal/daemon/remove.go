@@ -43,8 +43,13 @@ func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (s
 		if j.EngineRef != nil {
 			if deleteFiles && (j.State == store.Active || j.State == store.Queued || j.State == store.Seeding) {
 				// The row lags behind polling; ownership needs the live file
-				// name (aria2 may have renamed it) and byte count.
-				if st, ok := m.pauseAndWait(ctx, j); ok {
+				// name (aria2 may have renamed it) and byte count. When aria2
+				// does not answer, the last poll is the best there is.
+				st, ok := m.pauseAndWait(ctx, j)
+				if !ok {
+					st, ok = m.prog.lastStatus(j.ID)
+				}
+				if ok {
 					j = m.trackName(ctx, j, st)
 					setDone(j, st.Done)
 				}
