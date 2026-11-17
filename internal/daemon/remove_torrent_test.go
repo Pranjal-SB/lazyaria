@@ -59,13 +59,15 @@ func TestRemoveTorrentKeepsFolderItDidNotCreate(t *testing.T) {
 	}
 }
 
-// A folder the torrent alone filled is gone after the remove, and Undo
-// builds it again.
-func TestRemoveTorrentDropsItsEmptyFolder(t *testing.T) {
+// The payload folder itself is never removed: it may be the user's, with
+// their own mode. Folders below it that the remove emptied go, and Undo
+// builds them again.
+func TestRemoveTorrentKeepsEmptiedPayloadFolder(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
 	r := newRig(t)
 	id, music := liveTorrent(t, r)
 	os.MkdirAll(filepath.Join(music, "sub"), 0o755)
+	os.Chmod(music, 0o700)
 	wfile(t, filepath.Join(music, "a.flac"), "a")
 	wfile(t, filepath.Join(music, "sub", "b.flac"), "b")
 
@@ -73,8 +75,11 @@ func TestRemoveTorrentDropsItsEmptyFolder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if exists1(music) {
-		t.Fatal("empty Music folder left behind")
+	if fi, err := os.Stat(music); err != nil || fi.Mode().Perm() != 0o700 {
+		t.Fatalf("Music folder not kept as it was: %v %v", fi, err)
+	}
+	if exists1(filepath.Join(music, "sub")) {
+		t.Fatal("emptied sub folder left behind")
 	}
 	if err := r.m.Undo(bg, tok); err != nil {
 		t.Fatal(err)

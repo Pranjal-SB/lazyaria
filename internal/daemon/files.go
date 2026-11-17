@@ -125,11 +125,12 @@ func (t *TrashFiles) RemoveFiles(_ context.Context, j *store.Job, files []string
 	return done, nil
 }
 
-// pruneEmpty removes the folders under root, root included, that the
-// trashed files left empty. os.Remove refuses a folder that is not empty.
+// pruneEmpty removes the folders below root that the trashed files left
+// empty. root itself stays: it may be the user's own folder. os.Remove
+// refuses a folder that is not empty.
 func pruneEmpty(root string, es []trash.Entry) {
 	for _, e := range es {
-		for d := filepath.Dir(e.Original); d == root || strings.HasPrefix(d, root+string(filepath.Separator)); d = filepath.Dir(d) {
+		for d := filepath.Dir(e.Original); strings.HasPrefix(d, root+string(filepath.Separator)); d = filepath.Dir(d) {
 			if os.Remove(d) != nil {
 				break
 			}
