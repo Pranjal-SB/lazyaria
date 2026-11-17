@@ -92,3 +92,17 @@ func TestAddWaitStopsAtCutOff(t *testing.T) {
 		t.Fatalf("exit %d, %d adds sent, stderr %q; want 1 add and the unsent links named", code, len(f.adds), errOut)
 	}
 }
+
+// When no daemon comes back (replaced, or down too long), the links after
+// the cut-off never left the client and are reported as not sent.
+func TestAddAfterFailedRedialNamesUnsent(t *testing.T) {
+	f := startFake(t)
+	f.hangups, f.newPID = 1, 1
+	code, _, errOut := run(t, Add, "", "https://a/1", "https://a/2", "https://a/3")
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if code != exitRuntime || len(f.adds) != 1 || strings.Count(errOut, "may or may not") != 1 ||
+		!strings.Contains(errOut, "not sent, add them again: https://a/2 https://a/3") {
+		t.Fatalf("exit %d, %d adds sent, stderr %q", code, len(f.adds), errOut)
+	}
+}

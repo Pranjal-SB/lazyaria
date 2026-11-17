@@ -32,6 +32,7 @@ type Client struct {
 	// Subscribe: those events died with the old connection.
 	Redial     func(context.Context) (*Client, error)
 	subscribed bool
+	dead       bool // the connection dropped and none replaced it
 }
 
 var clientPeerUID = peerUID // swapped in tests
@@ -83,6 +84,10 @@ func (c *Client) Subscribe(ctx context.Context, progress bool) (<-chan daemon.Ev
 // call may have run before it went away.
 var ErrCutOff = errors.New("the connection to the daemon dropped during this command, so it may or may not have taken effect; check with `lazyaria list` (or `lazyaria config list`) before running it again")
 
+// ErrNotSent means an earlier call lost the connection and no new one was
+// made, so this call never left the client.
+var ErrNotSent = errors.New("not sent: the connection to the daemon dropped earlier in this command; run it again (see `lazyaria doctor` if the daemon is down)")
+
 // readOnly are the methods that change nothing in the daemon, so sending one
 // again after a hang-up cannot do anything twice. jobs.subscribe only sets
 // up the connection it is sent on.
@@ -92,6 +97,9 @@ var readOnly = map[string]bool{
 }
 
 func (c *Client) call(ctx context.Context, method string, params, result any) error {
+	if c.dead {
+		return ErrNotSent
+	}
 	if result == nil {
 		result = new(json.RawMessage)
 	}
@@ -104,6 +112,7 @@ func (c *Client) call(ctx context.Context, method string, params, result any) er
 		err = ErrCutOff
 	}
 	if c.Redial == nil || c.subscribed {
+		c.dead = true
 		return err
 	}
 	// Reconnect either way, so the calls after this one still go out.
@@ -111,6 +120,7 @@ func (c *Client) call(ctx context.Context, method string, params, result any) er
 	c.Redial = nil
 	nc, rerr := redial(ctx)
 	if rerr != nil {
+		c.dead = true
 		return err
 	}
 	c.rpc.Close()

@@ -70,6 +70,9 @@ func Add(ctx context.Context, args []string, out, errOut io.Writer) int {
 				fmt.Fprintf(errOut, "lazyaria add: not sent, add them again: %s\n", strings.Join(rest, " "))
 			}
 			return code
+		case errors.Is(err, ipc.ErrNotSent):
+			fmt.Fprintf(errOut, "lazyaria add: not sent, add them again: %s\n", strings.Join(links[i:], " "))
+			return max(code, exitRuntime)
 		case skipped && j != nil:
 			fmt.Fprintf(out, "skipped %s: already in the list as %s (%s)\n", j.Name, j.ID, j.State)
 			ids[j.ID] = true
