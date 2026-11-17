@@ -77,6 +77,18 @@ func (s *Store) FindByNormalizedURL(ctx context.Context, norm string) (*Job, err
 	return js[0], nil
 }
 
+// FindByEngineRef returns the unfinished job whose engine download is ref.
+func (s *Store) FindByEngineRef(ctx context.Context, ref string) (*Job, error) {
+	js, err := s.list(ctx, `WHERE engine_ref = ? AND state NOT IN ('done','removed')`, []any{ref}, 1, 0)
+	if err != nil {
+		return nil, err
+	}
+	if len(js) == 0 {
+		return nil, ErrNotFound
+	}
+	return js[0], nil
+}
+
 // PurgeRemoved hard-deletes soft-removed jobs removed before the cutoff.
 func (s *Store) PurgeRemoved(ctx context.Context, before time.Time) (int, error) {
 	r, err := s.db.ExecContext(ctx, `DELETE FROM jobs WHERE state='removed' AND removed_at < ?`, before.UnixMilli())

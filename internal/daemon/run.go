@@ -58,8 +58,8 @@ func (m *Manager) Run(ctx context.Context) error {
 // pollEvery is the poll period: fast while a client watches progress,
 // a slow sentinel otherwise, and none without running jobs (spec §4.5).
 func (m *Manager) pollEvery(ctx context.Context) time.Duration {
-	js, err := m.st.ListJobs(ctx, store.Filter{States: runningStates})
-	if err != nil || len(js) == 0 {
+	n, err := m.st.CountJobs(ctx, runningStates...)
+	if err != nil || n == 0 {
 		return 0
 	}
 	v := m.s.Load().Advanced.SentinelInterval

@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 
@@ -35,17 +36,11 @@ func (m *Manager) handleEvent(ctx context.Context, ev engine.EngineEvent) {
 }
 
 func (m *Manager) jobByRef(ctx context.Context, ref engine.EngineRef) *store.Job {
-	js, err := m.st.ListJobs(ctx, store.Filter{})
-	if err != nil {
+	j, err := m.st.FindByEngineRef(ctx, string(ref))
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		m.log.Warn("find job by ref", "ref", ref, "err", err)
-		return nil
 	}
-	for _, j := range js {
-		if j.EngineRef != nil && *j.EngineRef == string(ref) {
-			return j
-		}
-	}
-	return nil
+	return j
 }
 
 // apply moves j to whatever st says and returns the job as stored. Only
