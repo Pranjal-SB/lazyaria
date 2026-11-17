@@ -91,6 +91,8 @@ func TestDiskFullPausesSameDir(t *testing.T) {
 		r.e.setState(ref, "active")
 		r.event(ref, engine.KindStart)
 	}
+	sub := r.bus.Subscribe(false)
+	defer sub.Close()
 	ra := r.ref(t, a.ID)
 	r.e.set(ra, func(s *engine.EngineStatus) { s.State, s.ErrorCode = "error", 9 })
 	r.event(ra, engine.KindError)
@@ -102,6 +104,17 @@ func TestDiskFullPausesSameDir(t *testing.T) {
 	}
 	if got := r.get(t, other.ID); got.State != store.Active {
 		t.Fatalf("other dir: %s, want active", got.State)
+	}
+	// The banner names the jobs it paused, so a client never takes a
+	// user's own pause in that folder for this one.
+	for {
+		ev := <-sub.Events()
+		if ev.Type == "banner" {
+			if jobs, _ := ev.Data["jobs"].([]string); len(jobs) != 1 || jobs[0] != b.ID {
+				t.Fatalf("disk_full banner jobs = %v, want [%s]", ev.Data["jobs"], b.ID)
+			}
+			break
+		}
 	}
 }
 

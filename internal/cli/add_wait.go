@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 
 	"github.com/Pranjal-SB/lazyaria/internal/daemon"
 	"github.com/Pranjal-SB/lazyaria/internal/ipc"
@@ -50,15 +51,17 @@ func waitJobs(ctx context.Context, c *ipc.Client, events <-chan daemon.Event, id
 		delete(pending, j.ID)
 	}
 	// A pause by the daemon itself (no space, disk full) never ends on its
-	// own; its banner follows the paused row. A user's pause keeps waiting.
+	// own; its banner follows the paused row and names the jobs it paused.
+	// A user's pause keeps waiting.
 	systemPause := func(data map[string]any) {
 		kind, _ := data["kind"].(string)
+		jobs, _ := data["jobs"].([]any) // JSON
 		for id, j := range paused {
 			var why string
 			switch {
 			case kind == "no_space" && data["job"] == id:
 				why = "not enough free space in " + j.Dir
-			case kind == "disk_full" && data["dir"] == j.Dir:
+			case kind == "disk_full" && slices.Contains(jobs, any(id)):
 				why = "the disk holding " + j.Dir + " is full"
 			default:
 				continue

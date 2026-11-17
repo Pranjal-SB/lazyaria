@@ -122,7 +122,7 @@ func TestAddWaitEndsOnSystemPause(t *testing.T) {
 				f.jobs[0] = &j
 				f.mu.Unlock()
 				f.bus.Publish(daemon.Event{Type: "job.updated", Job: &j})
-				f.bus.Publish(daemon.Event{Type: "banner", Data: map[string]any{"kind": kind, "job": j.ID, "dir": j.Dir}})
+				f.bus.Publish(daemon.Event{Type: "banner", Data: map[string]any{"kind": kind, "job": j.ID, "dir": j.Dir, "jobs": []string{j.ID}}})
 				return
 			}
 		}()
@@ -130,6 +130,37 @@ func TestAddWaitEndsOnSystemPause(t *testing.T) {
 		if code != exitRuntime || !strings.Contains(errOut, "paused") || !strings.Contains(errOut, "space") {
 			t.Errorf("%s: exit %d, stderr %q; want 1 with the reason", kind, code, errOut)
 		}
+	}
+}
+
+// A job the user paused is not ended by a disk_full banner for its folder
+// that does not name it.
+func TestAddWaitKeepsUserPauseOnDiskFull(t *testing.T) {
+	f := startFake(t)
+	go func() {
+		for {
+			time.Sleep(20 * time.Millisecond)
+			f.mu.Lock()
+			if len(f.jobs) == 0 {
+				f.mu.Unlock()
+				continue
+			}
+			j := *f.jobs[0]
+			j.State = store.Paused
+			f.jobs[0] = &j
+			f.mu.Unlock()
+			f.bus.Publish(daemon.Event{Type: "job.updated", Job: &j})
+			f.bus.Publish(daemon.Event{Type: "banner", Data: map[string]any{"kind": "disk_full", "dir": j.Dir, "jobs": []string{"01OTHER"}}})
+			time.Sleep(100 * time.Millisecond)
+			done := j // the published j may still be being sent
+			done.State = store.Done
+			f.bus.Publish(daemon.Event{Type: "job.updated", Job: &done})
+			return
+		}
+	}()
+	code, _, errOut := run(t, Add, "", "--wait", "https://a/b")
+	if code != 0 {
+		t.Errorf("exit %d, stderr %q; want 0: the user's pause is not the disk's", code, errOut)
 	}
 }
 

@@ -101,6 +101,7 @@ func (m *Manager) diskFull(ctx context.Context, dir string) {
 	if err != nil {
 		m.log.Warn("list jobs after disk full", "err", err)
 	}
+	paused := []string{} // never nil: clients read it as the jobs paused here
 	for _, j := range js {
 		if j.Dir != dir || j.EngineRef == nil {
 			continue
@@ -110,6 +111,7 @@ func (m *Manager) diskFull(ctx context.Context, dir string) {
 			continue
 		}
 		m.to(ctx, j, store.Paused, "disk-full", nil)
+		paused = append(paused, j.ID)
 	}
-	m.banner("disk_full", map[string]any{"dir": dir})
+	m.banner("disk_full", map[string]any{"dir": dir, "jobs": paused})
 }
