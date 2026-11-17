@@ -59,6 +59,38 @@ func TestAddDuplicate(t *testing.T) {
 	}
 }
 
+// A magnet matches by info-hash, in hex or base32; a .torrent file matches
+// by the hash of its info dictionary, also against a magnet.
+func TestAddDuplicateTorrents(t *testing.T) {
+	r := newRig(t)
+	isDup := func(p AddParams) bool {
+		t.Helper()
+		p.Dir = r.dir
+		_, err := r.m.Add(bg, p)
+		var dup *DuplicateError
+		if err != nil && !errors.As(err, &dup) {
+			t.Fatal(err)
+		}
+		return dup != nil
+	}
+	mag := func(xt string) AddParams { return AddParams{URIs: []string{"magnet:?xt=urn:btih:" + xt + "&dn=x"}} }
+	r.add(t, mag("0123456789ABCDEF0123456789ABCDEF01234567"))
+	if !isDup(mag("0123456789abcdef0123456789abcdef01234567")) || !isDup(mag("AERUKZ4JVPG66AJDIVTYTK6N54ASGRLH")) {
+		t.Fatal("the same magnet was not a duplicate")
+	}
+	tor := AddParams{Torrent: []byte("d8:announce1:a4:infod6:lengthi1e4:name1:xee")}
+	if isDup(tor) {
+		t.Fatal("first add of the .torrent was a duplicate")
+	}
+	if !isDup(tor) || !isDup(mag("607361303e836d09e97091ea3a6fc0ae34cb1ebd")) {
+		t.Fatal("the same .torrent, or its magnet, was not a duplicate")
+	}
+	tor.Force = true
+	if isDup(tor) {
+		t.Fatal("--force did not add the .torrent again")
+	}
+}
+
 func TestAddNoSpace(t *testing.T) {
 	r := newRig(t)
 	r.m.free = func(string) (uint64, error) { return 10, nil }

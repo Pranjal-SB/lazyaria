@@ -72,8 +72,14 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	target := existingTarget(dir, p)
+	// A .torrent file has no link; its info-hash, in magnet form, stands
+	// for it so it matches itself and the same torrent's magnet.
+	var keys []string
+	if h := infoHash(p.Torrent); h != "" {
+		keys = append(keys, textutil.MagnetKey(h))
+	}
 	if mode := m.s.Load().Reliability.Duplicates; !p.Force && mode != "allow" {
-		if j := m.findDuplicate(ctx, p.URIs); j != nil {
+		if j := m.findDuplicate(ctx, append(slices.Clone(p.URIs), keys...)); j != nil {
 			if mode == "skip" {
 				return j, &SkippedError{Existing: j}
 			}
@@ -124,7 +130,7 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 	}
 	paused := p.StartPaused || m.s.Load().Downloads.StartPaused
 	j := m.newJob(dir, p, paused)
-	if err := m.st.InsertJob(ctx, j); err != nil {
+	if err := m.st.InsertJob(ctx, j, keys...); err != nil {
 		return nil, fmt.Errorf("save the new job: %w", err)
 	}
 	// Overwrite never reaches aria2 (allow-overwrite would pass on to a

@@ -3,6 +3,8 @@ package daemon
 import (
 	"bytes"
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"path/filepath"
 	"strconv"
 
@@ -82,6 +84,27 @@ func torrentPaths(b []byte, dir string) []string {
 		out = append(out, filepath.Join(root, rel))
 	}
 	return out
+}
+
+// infoHash is the lower-case hex SHA-1 of a .torrent's info dictionary as
+// written (the v1 info-hash a magnet carries), or "" when it cannot be read.
+func infoHash(b []byte) string {
+	if len(b) == 0 || b[0] != 'd' {
+		return ""
+	}
+	d := &bdec{b: b, i: 1}
+	for d.i < len(b) && b[d.i] != 'e' {
+		k, ok := d.value(1)
+		start := d.i
+		if _, vok := d.value(1); !ok || !vok {
+			return ""
+		}
+		if k == "info" && b[start] == 'd' {
+			s := sha1.Sum(b[start:d.i])
+			return hex.EncodeToString(s[:])
+		}
+	}
+	return ""
 }
 
 // local reports whether p names something strictly inside its folder.

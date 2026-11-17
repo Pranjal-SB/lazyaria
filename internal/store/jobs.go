@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
@@ -132,12 +133,13 @@ func scanJob(r scanner) (*Job, error) {
 	return &j, nil
 }
 
-func args(j *Job) ([]any, error) {
+// args are j's values in cols order, then its normalized URIs plus keys.
+func args(j *Job, keys ...string) ([]any, error) {
 	uris, err := marshal(nonNil(j.URIs))
 	if err != nil {
 		return nil, err
 	}
-	norm := make([]string, 0, len(j.URIs))
+	norm := make([]string, 0, len(j.URIs)+len(keys))
 	for _, u := range j.URIs {
 		n, err := textutil.NormalizeURL(u)
 		if err != nil {
@@ -145,6 +147,7 @@ func args(j *Job) ([]any, error) {
 		}
 		norm = append(norm, n)
 	}
+	norm = append(norm, keys...)
 	normJSON, err := marshal(norm)
 	if err != nil {
 		return nil, err
@@ -190,8 +193,11 @@ func nonNil(s []string) []string {
 
 const placeholders = `?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?`
 
-func (s *Store) InsertJob(ctx context.Context, j *Job) error {
-	a, err := args(j)
+// InsertJob stores a new job. keys are extra strings FindByNormalizedURL
+// matches it by, such as a .torrent's info-hash; they last until its URIs
+// change.
+func (s *Store) InsertJob(ctx context.Context, j *Job, keys ...string) error {
+	a, err := args(j, keys...)
 	if err != nil {
 		return err
 	}
@@ -233,6 +239,7 @@ func (s *Store) UpdateJob(ctx context.Context, id string, fn func(*Job) error) (
 	if err != nil {
 		return nil, err
 	}
+	uris := slices.Clone(j.URIs)
 	if err := fn(j); err != nil {
 		return nil, err
 	}
@@ -241,7 +248,13 @@ func (s *Store) UpdateJob(ctx context.Context, id string, fn func(*Job) error) (
 	if err != nil {
 		return nil, err
 	}
-	set := strings.Join(strings.Fields(strings.ReplaceAll(cols+", norm_uris", ",", "=?,")+"=?"), " ")
+	c := cols
+	if slices.Equal(uris, j.URIs) {
+		a = a[:len(a)-1] // norm_uris may hold insert-time keys
+	} else {
+		c += ", norm_uris"
+	}
+	set := strings.Join(strings.Fields(strings.ReplaceAll(c, ",", "=?,")+"=?"), " ")
 	if _, err := tx.ExecContext(ctx, `UPDATE jobs SET `+set+` WHERE id=?`, append(a, id)...); err != nil {
 		return nil, err
 	}

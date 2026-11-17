@@ -41,6 +41,16 @@ func TestNormalizeURL(t *testing.T) {
 	if err != nil || got != "https://example.com/a?a=1&b=2" {
 		t.Fatalf("got %q, %v", got, err)
 	}
+	want := "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567"
+	for _, m := range []string{"MAGNET:?dn=x&xt=urn:btih:0123456789ABCDEF0123456789ABCDEF01234567&tr=t",
+		"magnet:?xt=urn:btih:aeruKZ4JVPG66AJDIVTYTK6N54ASGRLH"} {
+		if got, err := NormalizeURL(m); err != nil || got != want {
+			t.Fatalf("NormalizeURL(%q) = %q, %v; want %q", m, got, err, want)
+		}
+	}
+	if _, err := NormalizeURL("magnet:?xt=urn:btih:xyz"); err == nil {
+		t.Fatal("a magnet with a bad info-hash normalised")
+	}
 }
 
 func TestSplitUserinfo(t *testing.T) {
