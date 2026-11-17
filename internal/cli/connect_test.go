@@ -63,3 +63,30 @@ func TestNoRetryForAddAfterHangup(t *testing.T) {
 		t.Fatalf("jobs.add sent %d times, want 1", len(f.adds))
 	}
 }
+
+// A cut-off add is not resent, but the links after it still go out on the
+// new connection.
+func TestAddAfterCutOffSendsTheRest(t *testing.T) {
+	f := startFake(t)
+	f.hangups = 1
+	code, out, errOut := run(t, Add, "", "https://a/1", "https://a/2", "https://a/3")
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if code != exitRuntime || len(f.adds) != 3 || strings.Count(errOut, "may or may not") != 1 || strings.Count(out, "added ") != 2 {
+		t.Fatalf("exit %d, %d adds sent, stdout %q, stderr %q; want 3 adds, 2 added and one cut-off error", code, len(f.adds), out, errOut)
+	}
+}
+
+// With --wait the client is subscribed and cannot reconnect, so it stops
+// at the cut-off and names the links it never sent.
+func TestAddWaitStopsAtCutOff(t *testing.T) {
+	f := startFake(t)
+	f.hangups = 1
+	code, _, errOut := run(t, Add, "", "--wait", "https://a/1", "https://a/2", "https://a/3")
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if code != exitRuntime || len(f.adds) != 1 || strings.Count(errOut, "may or may not") != 1 ||
+		!strings.Contains(errOut, "https://a/2") || !strings.Contains(errOut, "https://a/3") {
+		t.Fatalf("exit %d, %d adds sent, stderr %q; want 1 add and the unsent links named", code, len(f.adds), errOut)
+	}
+}

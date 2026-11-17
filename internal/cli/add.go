@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/Pranjal-SB/lazyaria/internal/daemon"
+	"github.com/Pranjal-SB/lazyaria/internal/ipc"
 	"github.com/Pranjal-SB/lazyaria/internal/textutil"
 )
 
@@ -28,7 +29,7 @@ func Add(ctx context.Context, args []string, out, errOut io.Writer) int {
 	if *paused && *wait {
 		return fail(errOut, "add", usagef("--wait never ends for a paused job; drop --paused or --wait"))
 	}
-	reqs, err := addRequests(pos)
+	reqs, links, err := addRequests(pos)
 	if err != nil {
 		return fail(errOut, "add", err)
 	}
@@ -55,10 +56,17 @@ func Add(ctx context.Context, args []string, out, errOut io.Writer) int {
 	}
 
 	code, ids := exitOK, map[string]bool{}
-	for _, r := range reqs {
+	for i, r := range reqs {
 		r.Dir, r.Out, r.StartPaused, r.Force = *dir, *outName, *paused, *force
 		j, err := c.Add(ctx, r)
 		switch sk, skipped := errors.AsType[*daemon.SkippedError](err); {
+		case *wait && errors.Is(err, ipc.ErrCutOff):
+			// Subscribed, the client cannot reconnect; nothing more goes out.
+			code = max(code, fail(errOut, "add", err))
+			if rest := links[i+1:]; len(rest) > 0 {
+				fmt.Fprintf(errOut, "lazyaria add: not sent, add them again: %s\n", strings.Join(rest, " "))
+			}
+			return code
 		case skipped && j != nil:
 			fmt.Fprintf(out, "skipped %s: already in the list as %s (%s)\n", j.Name, j.ID, j.State)
 			ids[j.ID] = true
@@ -85,22 +93,23 @@ func addError(err error) error {
 	return err
 }
 
-// addRequests turns the arguments into one add per link or torrent file.
-// "-" reads links from stdin.
-func addRequests(args []string) ([]daemon.AddParams, error) {
+// addRequests turns the arguments into one add per link or torrent file,
+// and returns the links (or file names) in the same order. "-" reads links
+// from stdin.
+func addRequests(args []string) ([]daemon.AddParams, []string, error) {
 	if len(args) == 0 {
-		return nil, usagef("give at least one link, .torrent file or - (links on stdin)")
+		return nil, nil, usagef("give at least one link, .torrent file or - (links on stdin)")
 	}
 	var links []string
 	for _, a := range args {
 		if a == "-" {
 			b, err := io.ReadAll(stdin)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			found := textutil.ExtractLinks(string(b))
 			if len(found) == 0 {
-				return nil, usagef("no links found on stdin")
+				return nil, nil, usagef("no links found on stdin")
 			}
 			links = append(links, found...)
 			continue
@@ -111,11 +120,11 @@ func addRequests(args []string) ([]daemon.AddParams, error) {
 	for _, l := range links {
 		r, err := addRequest(l)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		reqs = append(reqs, r)
 	}
-	return reqs, nil
+	return reqs, links, nil
 }
 
 func addRequest(link string) (daemon.AddParams, error) {

@@ -27,9 +27,9 @@ type Client struct {
 	progress chan []daemon.ProgressItem
 
 	// Redial, when set, reconnects after the daemon hung up in the middle
-	// of a read-only call, and the call is sent once more on the new
-	// connection. It is used once, and never after Subscribe: those events
-	// died with the old connection.
+	// of a call. A read-only call is sent once more on the new connection;
+	// any other fails with ErrCutOff. It is used once, and never after
+	// Subscribe: those events died with the old connection.
 	Redial     func(context.Context) (*Client, error)
 	subscribed bool
 }
@@ -98,12 +98,14 @@ func (c *Client) call(ctx context.Context, method string, params, result any) er
 	if err == nil || ctx.Err() != nil || !hungUp(err) {
 		return err
 	}
-	if !readOnly[method] {
-		return ErrCutOff
+	resend := readOnly[method]
+	if !resend {
+		err = ErrCutOff
 	}
 	if c.Redial == nil || c.subscribed {
 		return err
 	}
+	// Reconnect either way, so the calls after this one still go out.
 	redial := c.Redial
 	c.Redial = nil
 	nc, rerr := redial(ctx)
@@ -112,6 +114,9 @@ func (c *Client) call(ctx context.Context, method string, params, result any) er
 	}
 	c.rpc.Close()
 	c.rpc, c.events, c.progress = nc.rpc, nc.events, nc.progress
+	if !resend {
+		return err
+	}
 	return fromWire(c.rpc.CallResult(ctx, method, params, result))
 }
 
