@@ -1,5 +1,9 @@
 package main
 
+// The reference pages in docs/reference are generated from the code below
+// and the settings schema; docs_test.go fails when they are out of date.
+//go:generate go test -count=1 -run ^TestReferenceDocs$ . -args -update-docs
+
 import (
 	"context"
 	"fmt"
