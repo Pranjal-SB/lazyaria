@@ -32,7 +32,7 @@ type Handler interface {
 	Resume(ctx context.Context, ids []string) error
 	PauseAll(ctx context.Context) error
 	ResumeAll(ctx context.Context) error
-	Remove(ctx context.Context, ids []string, deleteFiles bool) (string, error)
+	Remove(ctx context.Context, ids []string, deleteFiles bool) (token string, kept []string, err error)
 	Undo(ctx context.Context, token string) error
 	RefreshURI(ctx context.Context, id, uri string) (*store.Job, error)
 	SetLimit(ctx context.Context, id string, down, up int64) error
@@ -103,7 +103,8 @@ type RemoveParams struct {
 }
 
 type RemoveResult struct {
-	UndoToken string `json:"undo_token"`
+	UndoToken string   `json:"undo_token"`
+	Kept      []string `json:"kept,omitempty"` // torrent folders kept: their files could not be told apart
 }
 
 type UndoParams struct {

@@ -50,11 +50,12 @@ func (c *Client) StopSeeding(ctx context.Context, ids ...string) error {
 	return c.call(ctx, "jobs.stop_seeding", IDsParams{IDs: ids}, nil)
 }
 
-// Remove returns an undo token valid for a short while.
-func (c *Client) Remove(ctx context.Context, ids []string, deleteFiles bool) (string, error) {
+// Remove returns an undo token valid for a short while, and the torrent
+// folders it kept (see RemoveResult).
+func (c *Client) Remove(ctx context.Context, ids []string, deleteFiles bool) (string, []string, error) {
 	var r RemoveResult
 	err := c.call(ctx, "jobs.remove", RemoveParams{IDs: ids, DeleteFiles: deleteFiles}, &r)
-	return r.UndoToken, err
+	return r.UndoToken, r.Kept, err
 }
 
 func (c *Client) Undo(ctx context.Context, token string) error {

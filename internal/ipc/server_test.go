@@ -122,7 +122,7 @@ func TestRoundTripAddList(t *testing.T) {
 	if snap.Seq != 7 || len(snap.Jobs) != 1 || snap.Jobs[0].ID != "j0" {
 		t.Fatalf("List = %+v", snap)
 	}
-	tok, err := c.Remove(ctx, []string{"j0"}, false)
+	tok, _, err := c.Remove(ctx, []string{"j0"}, false)
 	if err != nil || tok != "tok" {
 		t.Fatalf("Remove = %q, %v", tok, err)
 	}

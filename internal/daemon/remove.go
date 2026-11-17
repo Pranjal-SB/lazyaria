@@ -24,15 +24,17 @@ type undoRecord struct {
 
 // Remove soft-deletes jobs: the engine forgets them, the rows stay as
 // removed until purged. The returned token undoes it for remove.undo_seconds.
+// kept lists torrent folders left in place with deleteFiles because nothing
+// says which of their files are the torrent's.
 //
 // With deleteFiles the order matters (spec §8.3): check a trash exists, stop
 // the download so aria2 saves its control file, drop it, trash the files,
 // and only then mark the row removed. If trashing fails after the engine let
 // go, the files are put back and the job is added again, paused.
-func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (string, error) {
+func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (token string, kept []string, err error) {
 	prev := map[string]store.State{}
 	files := map[string][]trash.Entry{}
-	err := m.each(ctx, ids, func(ctx context.Context, j *store.Job) error {
+	err = m.each(ctx, ids, func(ctx context.Context, j *store.Job) error {
 		if j.State == store.Removed {
 			return nil
 		}
@@ -90,11 +92,14 @@ func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (s
 		}
 		m.prog.forget(j.ID)
 		prev[j.ID], files[j.ID] = j.State, es
+		if p, ok := payloadPath(j); deleteFiles && ok && listed == nil && isBT(j.Kind) && isDir(p) {
+			kept = append(kept, p)
+		}
 		return nil
 	})
 	secs := m.s.Load().Remove.UndoSeconds
 	if secs <= 0 || len(prev) == 0 {
-		return "", err
+		return "", kept, err
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -106,7 +111,7 @@ func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (s
 	}
 	tok := rand.Text()
 	m.undo[tok] = undoRecord{until: now.Add(time.Duration(secs) * time.Second), prev: prev, files: files}
-	return tok, err
+	return tok, kept, err
 }
 
 // pauseAndWait pauses a live download and waits (briefly) until aria2 has

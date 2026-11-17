@@ -34,12 +34,16 @@ func Resume(ctx context.Context, args []string, out, errOut io.Writer) int {
 func Remove(ctx context.Context, args []string, out, errOut io.Writer) int {
 	var del *bool
 	var tok string
+	var kept []string
 	code := jobAction(ctx, "remove", args, out, errOut,
 		func(fs *flag.FlagSet) { del = fs.Bool("delete-files", false, "also delete the downloaded files") },
 		func(c *ipc.Client, ids []string) (err error) {
-			tok, err = c.Remove(ctx, ids, *del)
+			tok, kept, err = c.Remove(ctx, ids, *del)
 			return err
 		})
+	for _, p := range kept {
+		fmt.Fprintf(out, "kept %s: cannot tell which files are this torrent's\n", p)
+	}
 	// A remove that failed for some jobs may still have removed others.
 	if tok != "" {
 		fmt.Fprintf(out, "undo: lazyaria undo %s\n", tok)

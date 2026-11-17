@@ -79,6 +79,8 @@ func targets(j *store.Job, files []string) []string {
 
 func lexists(p string) bool { _, err := os.Lstat(p); return err == nil }
 
+func isDir(p string) bool { fi, err := os.Lstat(p); return err == nil && fi.IsDir() }
+
 func (t *TrashFiles) Check(_ context.Context, j *store.Job, files []string) error {
 	for _, f := range targets(j, files) {
 		if err := t.probe(f); errors.Is(err, trash.ErrNoTrash) {

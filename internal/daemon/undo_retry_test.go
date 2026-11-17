@@ -15,7 +15,7 @@ func TestUndoRetrySkipsEntriesAlreadyRestored(t *testing.T) {
 	wfile(t, payload, "data")
 	r.wrote(t, j.ID)
 	wfile(t, payload+".aria2", "ctl")
-	tok, err := r.m.Remove(bg, []string{j.ID}, true)
+	tok, _, err := r.m.Remove(bg, []string{j.ID}, true)
 	if err != nil {
 		t.Fatal(err)
 	}

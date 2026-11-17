@@ -44,7 +44,7 @@ func TestRemoveUndo(t *testing.T) {
 	r.wrote(t, j.ID)
 	wfile(t, payload+".aria2", "ctl")
 
-	tok, err := r.m.Remove(bg, []string{j.ID}, true)
+	tok, _, err := r.m.Remove(bg, []string{j.ID}, true)
 	if err != nil || tok == "" {
 		t.Fatalf("remove: %q %v", tok, err)
 	}
@@ -64,7 +64,7 @@ func TestRemoveUndo(t *testing.T) {
 		t.Fatalf("state %s", got.State)
 	}
 
-	tok, err = r.m.Remove(bg, []string{j.ID}, true)
+	tok, _, err = r.m.Remove(bg, []string{j.ID}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestRemoveNoTrashNeedsConfirm(t *testing.T) {
 	payload := filepath.Join(r.dir, "a.iso")
 	wfile(t, payload, "data")
 	r.wrote(t, j.ID)
-	tok, err := r.m.Remove(bg, []string{j.ID}, true)
+	tok, _, err := r.m.Remove(bg, []string{j.ID}, true)
 	var nc *NeedsConfirmError
 	if !errors.As(err, &nc) {
 		t.Fatalf("want NeedsConfirmError, got %v", err)
@@ -121,7 +121,7 @@ func TestRemoveRenameFailureReaddsPaused(t *testing.T) {
 	payload := filepath.Join(r.dir, "a.iso")
 	wfile(t, payload, "data")
 	r.wrote(t, j.ID)
-	_, err := r.m.Remove(bg, []string{j.ID}, true)
+	_, _, err := r.m.Remove(bg, []string{j.ID}, true)
 	var nc *NeedsConfirmError
 	if !errors.As(err, &nc) {
 		t.Fatalf("want NeedsConfirmError, got %v", err)
@@ -150,7 +150,7 @@ func TestRemoveNeverTrashesFilesTheJobDoesNotOwn(t *testing.T) {
 	wfile(t, filepath.Join(r.dir, "download"), "other")
 	// a name that cleans to ".".
 	dot := r.insert(t, store.Queued, "", func(j *store.Job) { o := "sub/.."; j.Out = &o })
-	if _, err := r.m.Remove(bg, []string{dup.ID, magnet.ID, dot.ID}, true); err != nil {
+	if _, _, err := r.m.Remove(bg, []string{dup.ID, magnet.ID, dot.ID}, true); err != nil {
 		t.Fatal(err)
 	}
 	if !exists1(orig) || !exists1(filepath.Join(r.dir, "download")) {
@@ -174,7 +174,7 @@ func TestUndoStaysRemovedWhenFilesCannotReturn(t *testing.T) {
 	payload := filepath.Join(r.dir, "a.iso")
 	wfile(t, payload, "data")
 	r.wrote(t, j.ID)
-	tok, err := r.m.Remove(bg, []string{j.ID}, true)
+	tok, _, err := r.m.Remove(bg, []string{j.ID}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +216,7 @@ func TestRemoveRollsBackOnPartialTrash(t *testing.T) {
 	wfile(t, payload, "data")
 	r.wrote(t, j.ID)
 	wfile(t, payload+".aria2", "ctl")
-	_, err := r.m.Remove(bg, []string{j.ID}, true)
+	_, _, err := r.m.Remove(bg, []string{j.ID}, true)
 	var nc *NeedsConfirmError
 	if !errors.As(err, &nc) || !exists1(payload) || !exists1(payload+".aria2") {
 		t.Fatalf("err %v, payload back %v", err, exists1(payload))
@@ -313,7 +313,7 @@ func TestRemoveDeleteFilesSparesUnwrittenName(t *testing.T) {
 	j := r.insert(t, store.Error, "", func(j *store.Job) { j.StartedAt, j.DoneBytes = &started, &none })
 	user := filepath.Join(r.dir, "f.bin")
 	wfile(t, user, "USER FILE")
-	if _, err := r.m.Remove(bg, []string{j.ID}, true); err != nil {
+	if _, _, err := r.m.Remove(bg, []string{j.ID}, true); err != nil {
 		t.Fatal(err)
 	}
 	if b, _ := os.ReadFile(user); string(b) != "USER FILE" {
@@ -340,7 +340,7 @@ func TestRemoveRunningTrashesPartial(t *testing.T) {
 		t.Fatalf("poll stored %d bytes in the row; this test needs them in memory only", *got.DoneBytes)
 	}
 
-	if _, err := r.m.Remove(bg, []string{j.ID}, true); err != nil {
+	if _, _, err := r.m.Remove(bg, []string{j.ID}, true); err != nil {
 		t.Fatal(err)
 	}
 	if exists1(payload) || exists1(payload+".aria2") {

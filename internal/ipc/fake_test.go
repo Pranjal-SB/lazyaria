@@ -145,12 +145,14 @@ func (f *fakeHandler) Add(_ context.Context, p daemon.AddParams) (*store.Job, er
 	return j, nil
 }
 
-func (f *fakeHandler) Pause(context.Context, []string) error                  { return nil }
-func (f *fakeHandler) Resume(context.Context, []string) error                 { return nil }
-func (f *fakeHandler) PauseAll(context.Context) error                         { return nil }
-func (f *fakeHandler) ResumeAll(context.Context) error                        { return nil }
-func (f *fakeHandler) Remove(context.Context, []string, bool) (string, error) { return "tok", nil }
-func (f *fakeHandler) Undo(context.Context, string) error                     { return nil }
+func (f *fakeHandler) Pause(context.Context, []string) error  { return nil }
+func (f *fakeHandler) Resume(context.Context, []string) error { return nil }
+func (f *fakeHandler) PauseAll(context.Context) error         { return nil }
+func (f *fakeHandler) ResumeAll(context.Context) error        { return nil }
+func (f *fakeHandler) Remove(context.Context, []string, bool) (string, []string, error) {
+	return "tok", nil, nil
+}
+func (f *fakeHandler) Undo(context.Context, string) error { return nil }
 func (f *fakeHandler) RefreshURI(context.Context, string, string) (*store.Job, error) {
 	return nil, nil
 }

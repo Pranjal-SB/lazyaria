@@ -23,3 +23,15 @@ func TestRemoveThenUndo(t *testing.T) {
 		}
 	}
 }
+
+// A folder the daemon could not tell apart is named, so the remove does not
+// read as a delete.
+func TestRemoveSaysWhatItKept(t *testing.T) {
+	f := startFake(t)
+	f.jobs = sampleJobs()
+	f.kept = []string{"/dl/Music"}
+	code, out, errOut := run(t, Remove, "", "--delete-files", "01JC0000000000000000000002")
+	if code != 0 || !strings.Contains(out, "kept /dl/Music: cannot tell which files are this torrent's\n") {
+		t.Fatalf("exit %d, stdout %q: %s", code, out, errOut)
+	}
+}

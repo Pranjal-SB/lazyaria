@@ -25,7 +25,7 @@ func TestRemoveDuringAutoRename(t *testing.T) {
 	wfile(t, ours+".aria2", "ctl")
 	r.e.set(ref, func(s *engine.EngineStatus) { s.Path, s.Done, s.Total = ours, 4, 100 })
 
-	if _, err := r.m.Remove(bg, []string{j.ID}, true); err != nil {
+	if _, _, err := r.m.Remove(bg, []string{j.ID}, true); err != nil {
 		t.Fatal(err)
 	}
 	if !exists1(mine) {
@@ -50,7 +50,7 @@ func TestRemoveUndoRemoveTrashesPartial(t *testing.T) {
 	wfile(t, payload+".aria2", "ctl")
 	r.e.set(ref, func(s *engine.EngineStatus) { s.Done, s.Total = 4, 100 })
 
-	tok, err := r.m.Remove(bg, []string{j.ID}, true)
+	tok, _, err := r.m.Remove(bg, []string{j.ID}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestRemoveUndoRemoveTrashesPartial(t *testing.T) {
 	if !exists1(payload) {
 		t.Fatal("undo did not bring the payload back")
 	}
-	if _, err := r.m.Remove(bg, []string{j.ID}, true); err != nil {
+	if _, _, err := r.m.Remove(bg, []string{j.ID}, true); err != nil {
 		t.Fatal(err)
 	}
 	if exists1(payload) || exists1(payload+".aria2") {
@@ -84,7 +84,7 @@ func TestRemoveWhenPauseFailsUsesPolledBytes(t *testing.T) {
 	r.m.poll(bg)
 	r.e.pauseErr = errors.New("aria2 timed out")
 
-	if _, err := r.m.Remove(bg, []string{j.ID}, true); err != nil {
+	if _, _, err := r.m.Remove(bg, []string{j.ID}, true); err != nil {
 		t.Fatal(err)
 	}
 	if exists1(payload) || exists1(payload+".aria2") {

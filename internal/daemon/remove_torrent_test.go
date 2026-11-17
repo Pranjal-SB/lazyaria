@@ -41,7 +41,7 @@ func TestRemoveTorrentKeepsFolderItDidNotCreate(t *testing.T) {
 	wfile(t, filepath.Join(music, "sub", "b.flac"), "b")
 	wfile(t, music+".aria2", "ctl")
 
-	tok, err := r.m.Remove(bg, []string{id}, true)
+	tok, _, err := r.m.Remove(bg, []string{id}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestRemoveTorrentKeepsEmptiedPayloadFolder(t *testing.T) {
 	wfile(t, filepath.Join(music, "a.flac"), "a")
 	wfile(t, filepath.Join(music, "sub", "b.flac"), "b")
 
-	tok, err := r.m.Remove(bg, []string{id}, true)
+	tok, _, err := r.m.Remove(bg, []string{id}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestRemoveFinishedTorrentUsesStoredFileList(t *testing.T) {
 	wfile(t, filepath.Join(music, "a.flac"), "a")
 	wfile(t, filepath.Join(music, "sub", "b.flac"), "b")
 
-	if _, err := r.m.Remove(bg, []string{j.ID}, true); err != nil {
+	if _, _, err := r.m.Remove(bg, []string{j.ID}, true); err != nil {
 		t.Fatal(err)
 	}
 	if !exists1(filepath.Join(music, "mine.flac")) {
@@ -153,7 +153,7 @@ func TestRemoveTorrentSkipsUnselectedFiles(t *testing.T) {
 	wfile(t, filepath.Join(music, "a.flac"), "a")
 	wfile(t, filepath.Join(music, "sub", "b.flac"), "the user's")
 
-	if _, err := r.m.Remove(bg, []string{id}, true); err != nil {
+	if _, _, err := r.m.Remove(bg, []string{id}, true); err != nil {
 		t.Fatal(err)
 	}
 	if !exists1(filepath.Join(music, "sub", "b.flac")) {
@@ -179,7 +179,7 @@ func TestRemoveFinishedTorrentWithSelectFileKeepsFiles(t *testing.T) {
 	wfile(t, filepath.Join(music, "a.flac"), "a")
 	wfile(t, filepath.Join(music, "sub", "b.flac"), "the user's")
 
-	if _, err := r.m.Remove(bg, []string{j.ID}, true); err != nil {
+	if _, _, err := r.m.Remove(bg, []string{j.ID}, true); err != nil {
 		t.Fatal(err)
 	}
 	if !exists1(filepath.Join(music, "sub", "b.flac")) || !exists1(filepath.Join(music, "a.flac")) {
@@ -202,7 +202,7 @@ func TestRemoveTorrentPrunesThroughSymlinkedDir(t *testing.T) {
 	wfile(t, filepath.Join(music, "a.flac"), "a")
 	wfile(t, filepath.Join(music, "sub", "b.flac"), "b")
 
-	if _, err := r.m.Remove(bg, []string{id}, true); err != nil {
+	if _, _, err := r.m.Remove(bg, []string{id}, true); err != nil {
 		t.Fatal(err)
 	}
 	if exists1(filepath.Join(music, "sub", "b.flac")) {
@@ -241,5 +241,27 @@ func TestDoneStampsOnlyTheTorrentsFiles(t *testing.T) {
 	}
 	if got := origin(mine); got != "" {
 		t.Fatalf("the user's file was stamped with %q", got)
+	}
+}
+
+// A finished magnet aria2 has forgotten has no file list, so its folder is
+// kept, and the remove says so instead of looking like it deleted it.
+func TestRemoveFinishedMagnetReportsKeptFolder(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
+	r := newRig(t)
+	j := r.add(t, AddParams{URIs: []string{"magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567"}})
+	if _, err := r.m.change(bg, j.ID, "", "", func(x *store.Job) { x.State, x.Name, x.EngineRef = store.Done, "Music", nil }); err != nil {
+		t.Fatal(err)
+	}
+	music := filepath.Join(r.dir, "Music")
+	os.MkdirAll(music, 0o755)
+	wfile(t, filepath.Join(music, "a.flac"), "a")
+
+	_, kept, err := r.m.Remove(bg, []string{j.ID}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(kept, []string{music}) || !exists1(filepath.Join(music, "a.flac")) {
+		t.Fatalf("kept %v; want the Music folder kept and reported", kept)
 	}
 }

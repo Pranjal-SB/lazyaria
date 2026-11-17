@@ -32,6 +32,7 @@ type fake struct {
 	deleted   bool
 	refreshed []string // id, link of each RefreshURI
 	undone    []string // tokens passed to Undo
+	kept      []string // folders Remove reports kept
 	overrides map[string]string
 	restarts  int
 
@@ -110,11 +111,11 @@ func (f *fake) Resume(context.Context, []string) error { return nil }
 func (f *fake) PauseAll(context.Context) error         { return nil }
 func (f *fake) ResumeAll(context.Context) error        { return nil }
 
-func (f *fake) Remove(_ context.Context, ids []string, del bool) (string, error) {
+func (f *fake) Remove(_ context.Context, ids []string, del bool) (string, []string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.removed, f.deleted = append(f.removed, ids...), del
-	return "tok", nil
+	return "tok", f.kept, nil
 }
 
 func (f *fake) Undo(_ context.Context, token string) error {

@@ -31,7 +31,7 @@ func TestRemoveAndUndo(t *testing.T) {
 	ref := r.ref(t, j.ID)
 	r.e.setState(ref, "active")
 	r.event(ref, engine.KindStart)
-	tok, err := r.m.Remove(bg, []string{j.ID}, true)
+	tok, _, err := r.m.Remove(bg, []string{j.ID}, true)
 	if err != nil || tok == "" {
 		t.Fatalf("remove: %q %v", tok, err)
 	}
@@ -51,7 +51,7 @@ func TestRemoveAndUndo(t *testing.T) {
 	if err := r.m.Undo(bg, tok); err == nil {
 		t.Fatal("undo twice")
 	}
-	tok, _ = r.m.Remove(bg, []string{j.ID}, false)
+	tok, _, _ = r.m.Remove(bg, []string{j.ID}, false)
 	r.clk.add(11 * time.Second)
 	if err := r.m.Undo(bg, tok); err == nil {
 		t.Fatal("undo after the window")
@@ -146,7 +146,7 @@ func TestRemoveCancelsRetry(t *testing.T) {
 	r.m.now = time.Now
 	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}})
 	r.fail429(t, j.ID)
-	if _, err := r.m.Remove(bg, []string{j.ID}, false); err != nil {
+	if _, _, err := r.m.Remove(bg, []string{j.ID}, false); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(200 * time.Millisecond)

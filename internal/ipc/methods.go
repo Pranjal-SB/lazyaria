@@ -46,8 +46,8 @@ func (c *conn) methods() handler.Map {
 		"jobs.pause_all":    handler.New(func(ctx context.Context) (empty, error) { return ok(h.PauseAll(ctx)) }),
 		"jobs.resume_all":   handler.New(func(ctx context.Context) (empty, error) { return ok(h.ResumeAll(ctx)) }),
 		"jobs.remove": handler.New(func(ctx context.Context, p RemoveParams) (RemoveResult, error) {
-			tok, err := h.Remove(ctx, p.IDs, p.DeleteFiles)
-			return RemoveResult{UndoToken: tok}, toWire(err)
+			tok, kept, err := h.Remove(ctx, p.IDs, p.DeleteFiles)
+			return RemoveResult{UndoToken: tok, Kept: kept}, toWire(err)
 		}),
 		"jobs.undo": handler.New(func(ctx context.Context, p UndoParams) (empty, error) { return ok(h.Undo(ctx, p.UndoToken)) }),
 		"jobs.refresh_uri": handler.New(func(ctx context.Context, p RefreshParams) (JobResult, error) {
