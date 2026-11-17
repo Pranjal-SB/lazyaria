@@ -170,3 +170,18 @@ func TestAddUsageErrors(t *testing.T) {
 		}
 	}
 }
+
+// The duplicate error tells the user to add again with --force.
+func TestAddForce(t *testing.T) {
+	f := startFake(t)
+	if code, _, errOut := run(t, Add, "", "--force", "https://a/a.iso"); code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if !f.adds[0].Force {
+		t.Fatalf("add params %+v, want Force", f.adds[0])
+	}
+	run(t, Add, "", "https://a/b.iso")
+	if f.adds[1].Force {
+		t.Fatal("Force set without --force")
+	}
+}

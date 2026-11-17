@@ -34,9 +34,10 @@ var commands = map[string]func(ctx context.Context, args []string, out, errOut i
 const usage = `usage: lazyaria <command> [args]
 
 commands:
-  add [--dir D] [--out F] [--paused] [--wait] <link|file.torrent|->...
+  add [--dir D] [--out F] [--paused] [--wait] [--force] <link|file.torrent|->...
             queue downloads; - reads links from stdin; --wait exits 0
-            when all finish, 1 if any fails
+            when all finish, 1 if any fails; --force downloads a link
+            that is already in the list
   list [--json] [--all]
             show jobs; --all includes finished ones
   status [--json]

@@ -13,13 +13,14 @@ import (
 	"github.com/Pranjal-SB/lazyaria/internal/textutil"
 )
 
-// Add runs `lazyaria add [--dir D] [--out F] [--paused] [--wait] <link|file.torrent|->...`.
+// Add runs `lazyaria add [--dir D] [--out F] [--paused] [--wait] [--force] <link|file.torrent|->...`.
 func Add(ctx context.Context, args []string, out, errOut io.Writer) int {
 	fs := newFlags("add", errOut)
 	dir := fs.String("dir", "", "download directory")
 	outName := fs.String("out", "", "file name to save as")
 	paused := fs.Bool("paused", false, "add the jobs paused")
 	wait := fs.Bool("wait", false, "wait until every job finishes; exit 1 if any fails")
+	force := fs.Bool("force", false, "add even if the link is already in the list")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return flagExit(err)
@@ -55,7 +56,7 @@ func Add(ctx context.Context, args []string, out, errOut io.Writer) int {
 
 	code, ids := exitOK, map[string]bool{}
 	for _, r := range reqs {
-		r.Dir, r.Out, r.StartPaused = *dir, *outName, *paused
+		r.Dir, r.Out, r.StartPaused, r.Force = *dir, *outName, *paused, *force
 		j, err := c.Add(ctx, r)
 		switch sk, skipped := errors.AsType[*daemon.SkippedError](err); {
 		case skipped && j != nil:
