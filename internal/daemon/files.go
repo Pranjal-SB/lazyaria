@@ -68,14 +68,8 @@ func targets(j *store.Job, files []string) []string {
 	}
 	var out []string
 	owned := (j.DoneBytes != nil && *j.DoneBytes > 0) || j.State == store.Done || j.State == store.Seeding
-	if fi, err := os.Lstat(p); err == nil && owned && !fi.IsDir() {
-		out = append(out, p)
-	} else if err == nil && owned {
-		for _, f := range files {
-			if rel, err := filepath.Rel(p, f); err == nil && filepath.IsLocal(rel) && lexists(f) {
-				out = append(out, f)
-			}
-		}
+	if owned {
+		out = inPayload(p, files)
 	}
 	if lexists(p + ".aria2") {
 		out = append(out, p+".aria2")
@@ -179,18 +173,22 @@ func payloadPath(j *store.Job) (string, bool) {
 	return filepath.Join(j.Dir, name), true
 }
 
-// payloadFiles lists the regular files of a job's payload.
-func payloadFiles(j *store.Job) []string {
-	p, ok := payloadPath(j)
-	if !ok {
+// inPayload lists the payload p when it is a file, else those of files
+// that exist inside the folder p. A folder may predate the job and hold
+// other files, so it never counts as a whole.
+func inPayload(p string, files []string) []string {
+	fi, err := os.Lstat(p)
+	if err != nil {
 		return nil
 	}
+	if !fi.IsDir() {
+		return []string{p}
+	}
 	var out []string
-	filepath.WalkDir(p, func(path string, d fs.DirEntry, err error) error {
-		if err == nil && d.Type().IsRegular() && !strings.HasSuffix(path, ".aria2") {
-			out = append(out, path)
+	for _, f := range files {
+		if rel, err := filepath.Rel(p, f); err == nil && filepath.IsLocal(rel) && lexists(f) {
+			out = append(out, f)
 		}
-		return nil
-	})
+	}
 	return out
 }

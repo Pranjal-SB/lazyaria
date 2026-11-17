@@ -6,6 +6,8 @@ import (
 	"slices"
 	"testing"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/Pranjal-SB/lazyaria/internal/engine"
 	"github.com/Pranjal-SB/lazyaria/internal/store"
 )
@@ -208,5 +210,36 @@ func TestRemoveTorrentPrunesThroughSymlinkedDir(t *testing.T) {
 	}
 	if exists1(filepath.Join(music, "sub")) {
 		t.Fatal("emptied sub folder left behind")
+	}
+}
+
+// A finished torrent stamps only the files it wrote, not the user's files
+// sharing its folder.
+func TestDoneStampsOnlyTheTorrentsFiles(t *testing.T) {
+	r := newRig(t)
+	r.m.s.Load().Privacy.StampOriginXattr = true
+	j := r.add(t, AddParams{URIs: []string{"magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567"}})
+	ref := r.ref(t, j.ID)
+	music := filepath.Join(r.dir, "Music")
+	os.MkdirAll(music, 0o755)
+	mine, ours := filepath.Join(music, "mine.flac"), filepath.Join(music, "a.flac")
+	wfile(t, mine, "the user's")
+	wfile(t, ours, "a")
+	if err := unix.Setxattr(ours, "user.probe", []byte("1"), 0); err != nil {
+		t.Skipf("no user xattrs here: %v", err)
+	}
+	r.e.set(ref, func(s *engine.EngineStatus) {
+		s.State, s.IsBT, s.Name, s.Path, s.Done, s.Total = "complete", true, "Music", music, 1, 1
+	})
+	r.e.details[ref] = engine.EngineDetails{Files: []engine.EngineFile{{Path: ours, Selected: true}}}
+	r.event(ref, engine.KindComplete)
+	if got := r.get(t, j.ID); got.State != store.Done {
+		t.Fatalf("state %s", got.State)
+	}
+	if origin(ours) == "" {
+		t.Fatal("the torrent's file was not stamped")
+	}
+	if got := origin(mine); got != "" {
+		t.Fatalf("the user's file was stamped with %q", got)
 	}
 }

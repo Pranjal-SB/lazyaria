@@ -265,6 +265,6 @@ func (m *Manager) completedOffline(ctx context.Context, j *store.Job) (*store.Jo
 		x.State, x.FinishedAt, x.DoneBytes, x.RetryAt = store.Done, &now, &total, nil
 		x.ErrorKind, x.ErrorCode, x.ErrorMsg = nil, nil, nil
 	})
-	m.stampOrigin(j)
+	m.stampOrigin(ctx, j)
 	return j, true
 }

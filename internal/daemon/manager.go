@@ -196,7 +196,7 @@ func (m *Manager) to(ctx context.Context, j *store.Job, s store.State, detail st
 		}
 	})
 	if s == store.Done {
-		m.stampOrigin(j)
+		m.stampOrigin(ctx, j)
 	}
 	return j
 }
