@@ -46,7 +46,15 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 			return nil, engine.ErrInvalidOption{Name: k}
 		}
 	}
-	if p.Out != "" || p.Options["out"] != "" {
+	if o, ok := p.Options["out"]; ok {
+		// Out gets the name checks below; options.out would skip them.
+		if p.Out == "" {
+			p.Out = o
+		}
+		p.Options = maps.Clone(p.Options)
+		delete(p.Options, "out")
+	}
+	if p.Out != "" {
 		if k := jobKind(p.URIs, p.Torrent); isBT(k) {
 			return nil, engine.ErrInvalidOption{Name: "out", Reason: "torrents and magnet links name their own files; drop --out"}
 		}

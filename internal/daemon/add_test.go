@@ -300,6 +300,23 @@ func TestAddOnExists(t *testing.T) {
 	})
 }
 
+// options.out is the same request as Out: it is sanitised and checked
+// against existing files, and never reaches aria2 as written.
+func TestAddOptionsOutIsChecked(t *testing.T) {
+	r := newRig(t)
+	os.WriteFile(filepath.Join(r.dir, "taken.bin"), []byte("mine"), 0o600)
+	for _, c := range []struct{ out, want string }{{"../x", "x"}, {"taken.bin", "taken.1.bin"}} {
+		j := r.add(t, AddParams{URIs: []string{"http://example.com/" + c.out}, Options: map[string]string{"out": c.out}, Force: true})
+		req := r.e.adds[len(r.e.adds)-1]
+		if j.Out == nil || *j.Out != c.want || req.Out != c.want {
+			t.Fatalf("out %q: job out %v, request out %q; want %q", c.out, j.Out, req.Out, c.want)
+		}
+		if _, ok := req.Options["out"]; ok {
+			t.Fatalf("out %q: options.out still sent: %v", c.out, req.Options)
+		}
+	}
+}
+
 func TestAddBTRejectsOut(t *testing.T) {
 	r := newRig(t)
 	for _, p := range []AddParams{
