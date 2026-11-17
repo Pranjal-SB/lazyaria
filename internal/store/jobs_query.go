@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 )
@@ -42,10 +43,13 @@ func (s *Store) ListJobs(ctx context.Context, f Filter) ([]*Job, error) {
 		conds = append(conds, `state != 'removed'`)
 	}
 	if len(f.IDs) > 0 {
-		conds = append(conds, `id IN (`+strings.TrimSuffix(strings.Repeat("?,", len(f.IDs)), ",")+`)`)
-		for _, id := range f.IDs {
-			a = append(a, id)
+		// One JSON parameter: SQLite caps the number of ? at 32766.
+		ids, err := json.Marshal(f.IDs)
+		if err != nil {
+			return nil, err
 		}
+		conds = append(conds, `id IN (SELECT value FROM json_each(?))`)
+		a = append(a, string(ids))
 	}
 	return s.list(ctx, `WHERE `+strings.Join(conds, " AND "), a, f.Limit, f.Offset)
 }
