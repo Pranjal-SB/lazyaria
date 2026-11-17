@@ -125,6 +125,8 @@ func TestTorrentPaths(t *testing.T) {
 		{"d4:infod5:filesld6:lengthi1e4:pathl3:sub1:aeee4:name1:Mee", []string{"/d/M/sub/a"}},
 		{"d4:infod5:filesld6:lengthi1e4:pathl2:..1:aeee4:name1:Mee", nil}, // escapes the folder
 		{"d4:infod4:name2:..ee", nil},
+		{"d4:infod10:name.utf-81:.ee", nil}, // the download folder itself
+		{"d4:infod5:filesld6:lengthi1e4:pathl1:.eee4:name1:Mee", nil},
 		{"garbage", nil},
 		{"d4:infod5:filesl", nil},
 		{"lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll", nil},

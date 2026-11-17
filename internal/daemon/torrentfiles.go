@@ -45,7 +45,7 @@ func torrentPaths(b []byte, dir string) []string {
 	top, _ := v.(map[string]any)
 	info, _ := top["info"].(map[string]any)
 	name := utf8Key[string](info, "name")
-	if !ok || name == "" || !filepath.IsLocal(name) {
+	if !ok || !local(name) {
 		return nil
 	}
 	root := filepath.Join(dir, name)
@@ -62,13 +62,16 @@ func torrentPaths(b []byte, dir string) []string {
 			segs = append(segs, s)
 		}
 		rel := filepath.Join(segs...)
-		if !filepath.IsLocal(rel) {
+		if !local(rel) {
 			return nil
 		}
 		out = append(out, filepath.Join(root, rel))
 	}
 	return out
 }
+
+// local reports whether p names something strictly inside its folder.
+func local(p string) bool { return filepath.IsLocal(p) && filepath.Clean(p) != "." }
 
 // utf8Key prefers the key's ".utf-8" variant, as aria2 does.
 func utf8Key[T any](d map[string]any, k string) T {
