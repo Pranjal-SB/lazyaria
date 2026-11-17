@@ -29,7 +29,7 @@ func (c *conn) methods() handler.Map {
 		"engine.restart": handler.New(func(ctx context.Context) (empty, error) { return ok(h.RestartEngine(ctx)) }),
 
 		"jobs.snapshot": handler.New(func(ctx context.Context, p SnapshotParams) (SnapshotResult, error) {
-			seq, jobs, speed := h.Snapshot(ctx, p.IncludeHistory, p.Limit)
+			seq, jobs, speed := h.Snapshot(ctx, p.IncludeHistory, p.Limit, p.IDs)
 			return SnapshotResult{Seq: seq, Jobs: redactAll(jobs), Speed: speed}, nil
 		}),
 		"jobs.subscribe": handler.New(func(_ context.Context, p SubscribeParams) (empty, error) {

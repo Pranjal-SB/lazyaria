@@ -62,6 +62,7 @@ type Job struct {
 type Filter struct {
 	States         []State
 	IncludeHistory bool
+	IDs            []string // when set, only these jobs
 	Limit, Offset  int
 }
 

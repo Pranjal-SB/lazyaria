@@ -41,6 +41,12 @@ func (s *Store) ListJobs(ctx context.Context, f Filter) ([]*Job, error) {
 	} else {
 		conds = append(conds, `state != 'removed'`)
 	}
+	if len(f.IDs) > 0 {
+		conds = append(conds, `id IN (`+strings.TrimSuffix(strings.Repeat("?,", len(f.IDs)), ",")+`)`)
+		for _, id := range f.IDs {
+			a = append(a, id)
+		}
+	}
 	return s.list(ctx, `WHERE `+strings.Join(conds, " AND "), a, f.Limit, f.Offset)
 }
 

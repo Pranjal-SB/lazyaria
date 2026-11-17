@@ -227,10 +227,11 @@ func (m *Manager) SetObservers(n int) {
 
 // Snapshot returns the bus sequence, the job list with live progress and
 // the recent speed history. The sequence is read first, so a client that
-// applies events after it never misses a change.
-func (m *Manager) Snapshot(ctx context.Context, includeHistory bool, limit int) (uint64, []*store.Job, []SpeedSample) {
+// applies events after it never misses a change. Non-empty ids keeps only
+// those jobs.
+func (m *Manager) Snapshot(ctx context.Context, includeHistory bool, limit int, ids []string) (uint64, []*store.Job, []SpeedSample) {
 	seq := m.bus.seq.Load()
-	js, err := m.st.ListJobs(ctx, store.Filter{IncludeHistory: includeHistory, Limit: limit})
+	js, err := m.st.ListJobs(ctx, store.Filter{IncludeHistory: includeHistory, Limit: limit, IDs: ids})
 	if err != nil {
 		m.log.Warn("snapshot", "err", err)
 	}

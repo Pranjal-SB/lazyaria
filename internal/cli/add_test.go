@@ -185,3 +185,16 @@ func TestAddForce(t *testing.T) {
 		t.Fatal("Force set without --force")
 	}
 }
+
+// --wait asks the daemon only for its own jobs, not the whole history.
+func TestAddWaitAsksOnlyForItsJobs(t *testing.T) {
+	f := startFake(t)
+	f.jobs = sampleJobs()
+	f.dropAdded = true // the job is gone at once, so --wait ends after one snapshot
+	run(t, Add, "", "--wait", "https://a/b")
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.snapIDs) != 1 || f.snapIDs[0] == f.jobs[0].ID || f.snapIDs[0] == f.jobs[1].ID {
+		t.Fatalf("snapshot asked for %v, want only the added job", f.snapIDs)
+	}
+}

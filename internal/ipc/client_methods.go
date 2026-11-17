@@ -19,10 +19,10 @@ func (c *Client) Add(ctx context.Context, p daemon.AddParams) (*store.Job, error
 	return r.Job, err
 }
 
-// List returns the daemon's job snapshot.
-func (c *Client) List(ctx context.Context, includeHistory bool, limit int) (SnapshotResult, error) {
+// List returns the daemon's job snapshot; given ids, only those jobs.
+func (c *Client) List(ctx context.Context, includeHistory bool, limit int, ids ...string) (SnapshotResult, error) {
 	var r SnapshotResult
-	err := c.call(ctx, "jobs.snapshot", SnapshotParams{IncludeHistory: includeHistory, Limit: limit}, &r)
+	err := c.call(ctx, "jobs.snapshot", SnapshotParams{IncludeHistory: includeHistory, Limit: limit, IDs: ids}, &r)
 	return r, err
 }
 

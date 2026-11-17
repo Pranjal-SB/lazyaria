@@ -38,8 +38,9 @@ commands:
             queue downloads; - reads links from stdin; --wait exits 0
             when all finish, 1 if any fails; --force downloads a link
             that is already in the list
-  list [--json] [--all]
-            show jobs; --all includes finished ones
+  list [--json] [--all] [--limit N]
+            show jobs; --all includes finished ones; --limit shows
+            at most N
   status [--json]
             daemon and engine status
   pause|resume <id-prefix>...

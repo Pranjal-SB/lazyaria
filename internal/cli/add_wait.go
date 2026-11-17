@@ -69,8 +69,12 @@ func waitJobs(ctx context.Context, c *ipc.Client, events <-chan daemon.Event, id
 			delete(pending, id)
 		}
 	}
+	want := make([]string, 0, len(ids))
+	for id := range ids {
+		want = append(want, id)
+	}
 	snapshot := func() (uint64, error) {
-		r, err := c.List(ctx, true, 0)
+		r, err := c.List(ctx, true, 0, want...)
 		if err != nil {
 			return 0, err
 		}

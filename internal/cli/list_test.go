@@ -129,3 +129,14 @@ func TestListMasksUnparseableUserinfo(t *testing.T) {
 		t.Errorf("list --json leaks credentials:\n%s", out)
 	}
 }
+
+func TestListLimit(t *testing.T) {
+	f := startFake(t)
+	f.jobs = sampleJobs()
+	if code, _, errOut := run(t, List, "", "--all", "--limit", "5"); code != 0 || f.snapLimit != 5 {
+		t.Fatalf("exit %d, limit sent %d: %s", code, f.snapLimit, errOut)
+	}
+	if code, _, _ := run(t, List, "", "--limit", "-1"); code != 2 {
+		t.Fatalf("negative limit: exit %d, want 2", code)
+	}
+}

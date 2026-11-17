@@ -10,7 +10,7 @@ import (
 	"github.com/creachadair/jrpc2/channel"
 )
 
-var ErrFrameTooLarge = errors.New("ipc message larger than 32 MiB; ask for less (e.g. a smaller --limit), or run `lazyaria doctor`")
+var ErrFrameTooLarge = errors.New("ipc message larger than 32 MiB; ask for less (e.g. `lazyaria list --limit 1000`), or run `lazyaria doctor`")
 
 // writeTimeout is how long a client may leave the daemon's writes unread.
 const writeTimeout = 5 * time.Second

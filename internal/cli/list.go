@@ -7,20 +7,24 @@ import (
 	"time"
 )
 
-// List runs `lazyaria list [--json] [--all]`.
+// List runs `lazyaria list [--json] [--all] [--limit N]`.
 func List(ctx context.Context, args []string, out, errOut io.Writer) int {
 	fs := newFlags("list", errOut)
 	asJSON := fs.Bool("json", false, "print JSON")
 	all := fs.Bool("all", false, "include finished jobs")
+	limit := fs.Int("limit", 0, "show at most N jobs (0 = all)")
 	if _, err := parseArgs(fs, args); err != nil {
 		return flagExit(err)
+	}
+	if *limit < 0 {
+		return fail(errOut, "list", usagef("--limit must be 0 (all) or more"))
 	}
 	c, err := connect(ctx)
 	if err != nil {
 		return fail(errOut, "list", err)
 	}
 	defer c.Close()
-	r, err := c.List(ctx, *all, 0)
+	r, err := c.List(ctx, *all, *limit)
 	if err != nil {
 		return fail(errOut, "list", err)
 	}
