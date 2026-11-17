@@ -42,8 +42,10 @@ func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (s
 		}
 		if j.EngineRef != nil {
 			if deleteFiles && (j.State == store.Active || j.State == store.Queued || j.State == store.Seeding) {
-				// The row's byte count lags behind polling; ownership needs the live one.
+				// The row lags behind polling; ownership needs the live file
+				// name (aria2 may have renamed it) and byte count.
 				if st, ok := m.pauseAndWait(ctx, j); ok {
+					j = m.trackName(ctx, j, st)
 					setDone(j, st.Done)
 				}
 			}
