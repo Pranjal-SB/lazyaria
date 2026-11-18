@@ -27,7 +27,8 @@ func (h *countingFake) Pause(_ context.Context, ids []string) error {
 
 // Many goroutines share one client while its daemon goes away, and in some
 // rounds the client is closed as well. Without a Close every call must
-// succeed, or fail with ErrCutOff for a write cut off on the wire; a write
+// succeed, or fail with ErrCutOff for a write cut off on the wire (unless a
+// subscribe was answered before the hang-up, which ends the client); a write
 // is never run twice, ErrNotSent is never said of a write that ran, one
 // redial at most is made, and nothing hangs.
 func TestClientStress(t *testing.T) {
@@ -69,11 +70,12 @@ func TestClientStress(t *testing.T) {
 			err error
 		}
 		writes := make(chan wres, g*20)
-		check := func(what string, err error) {
-			if !closing && err != nil && !(what == "write" && errors.Is(err, ErrCutOff)) {
-				t.Errorf("round %d: %s: %v", r, what, err)
-			}
+		type cres struct {
+			what string
+			err  error
 		}
+		calls := make(chan cres, g*20)
+		check := func(what string, err error) { calls <- cres{what, err} }
 		for i := range g {
 			wg.Go(func() {
 				for k := range 20 {
@@ -112,6 +114,22 @@ func TestClientStress(t *testing.T) {
 		case <-fin:
 		case <-time.After(20 * time.Second):
 			t.Fatalf("round %d: calls stuck", r)
+		}
+		// A slow machine can answer a subscribe before the hang-up. Its
+		// events died with the connection, so the client does not redial
+		// (see Client.Redial): later calls are not sent, and calls in
+		// flight fail as the hang-up left them.
+		c.mu.Lock()
+		subscribedOnA := c.subscribed && redials.Load() == 0
+		c.mu.Unlock()
+		close(calls)
+		for cr := range calls {
+			switch {
+			case closing, cr.err == nil, cr.what == "write" && errors.Is(cr.err, ErrCutOff):
+			case subscribedOnA && (errors.Is(cr.err, ErrNotSent) || cr.what != "write" && hungUp(cr.err)):
+			default:
+				t.Errorf("round %d: %s: %v", r, cr.what, cr.err)
+			}
 		}
 		<-doneA
 		lockA.Close()
