@@ -105,7 +105,7 @@ that expires.
 The new link is cut off or is not a link. Copy the whole link again, and
 put it in single quotes on the command line.
 
-**`[-32098] the download is already complete; there is nothing to refresh`** (exit code 1)
+**`the download is already complete; there is nothing to refresh`** (exit code 1)
 
 The job is finished. There is nothing left to download.
 
@@ -138,7 +138,7 @@ in brackets. `lazyaria list --json` adds a short `error_kind`.
 
 ## Remove and undo
 
-**`[-32098] nothing to undo: the undo token is unknown or has expired (tokens end after remove.undo_seconds or when the daemon restarts)...`** (exit code 1)
+**`nothing to undo: the undo token is unknown or has expired (tokens end after remove.undo_seconds or when the daemon restarts)...`** (exit code 1)
 
 Undo works for 10 seconds after a remove (`remove.undo_seconds`), and only
 while the same daemon runs. Check that you copied the whole token. To get

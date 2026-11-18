@@ -71,10 +71,23 @@ func fromWire(err error) error {
 		}
 	}
 	if out == nil {
-		return err
+		return remoteError{e}
 	}
 	return out
 }
+
+// remoteError shows a daemon error by its message alone; the JSON-RPC code
+// stays reachable through errors.As for the exit code.
+type remoteError struct{ e *jrpc2.Error }
+
+func (r remoteError) Error() string {
+	if r.e.Message == "" {
+		return r.e.Code.String()
+	}
+	return r.e.Message
+}
+
+func (r remoteError) Unwrap() error { return r.e }
 
 func decode[T error](e *jrpc2.Error, v T) error {
 	if json.Unmarshal(e.Data, v) != nil {

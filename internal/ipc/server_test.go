@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/creachadair/jrpc2"
+
 	"github.com/Pranjal-SB/lazyaria/internal/daemon"
 	"github.com/Pranjal-SB/lazyaria/internal/engine"
 	"github.com/Pranjal-SB/lazyaria/internal/store"
@@ -296,6 +298,21 @@ func TestErrorMapping(t *testing.T) {
 	_, err = add(engine.ErrInvalidOption{Name: "out", Reason: "drop --out"})
 	if !errors.As(err, &inv) || inv.Reason != "drop --out" {
 		t.Errorf("invalid option reason: %#v", err)
+	}
+}
+
+// A daemon error reaches the user as its message, without the JSON-RPC
+// code, which stays available to pick the exit code.
+func TestErrorShowsMessageOnly(t *testing.T) {
+	f := newFake()
+	f.addErr = errors.New("nothing to undo")
+	c, _ := serve(t, f)
+	_, err := c.Add(context.Background(), daemon.AddParams{URIs: []string{"https://example.com/a"}})
+	if err == nil || err.Error() != "nothing to undo" {
+		t.Fatalf("error = %v, want the message alone", err)
+	}
+	if _, ok := errors.AsType[*jrpc2.Error](err); !ok {
+		t.Fatalf("error %#v hides its JSON-RPC code", err)
 	}
 }
 

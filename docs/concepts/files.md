@@ -108,7 +108,7 @@ name, undo says so and the token stays valid for another try.
 After that, undo exits with 1:
 
 ```text
-lazyaria undo: [-32098] nothing to undo: the undo token is unknown or has expired (tokens end after remove.undo_seconds or when the daemon restarts). Add the link again with `lazyaria add`; files that were deleted are in the Trash
+lazyaria undo: nothing to undo: the undo token is unknown or has expired (tokens end after remove.undo_seconds or when the daemon restarts). Add the link again with `lazyaria add`; files that were deleted are in the Trash
 ```
 
 The files are still in the trash.
