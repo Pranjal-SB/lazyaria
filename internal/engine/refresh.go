@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -162,8 +163,10 @@ func (e *aria2Engine) readd(ctx context.Context, ref EngineRef, s *aria2.Status,
 	}
 	// The old download wrote nothing, or never learned its file: a file at
 	// the name now is not its own, so aria2 renames beside it rather than
-	// resuming into it. A partial with its .aria2 still resumes.
-	if s.CompletedLength == 0 || !derived {
+	// resuming into it. A partial with its .aria2 still resumes; without it
+	// aria2 would trust the file, preallocated to full size, and call it
+	// complete, so the download starts over beside it.
+	if s.CompletedLength == 0 || !derived || !hasControlFile(s.Files[0].Path) {
 		opts["continue"] = "false"
 	}
 	opts["allow-overwrite"] = "false" // see Add
@@ -183,4 +186,10 @@ func (e *aria2Engine) readd(ctx context.Context, ref EngineRef, s *aria2.Status,
 		return "", fmt.Errorf("refresh %s: re-add: %w", ref, err)
 	}
 	return EngineRef(gid), nil
+}
+
+// hasControlFile: path has the .aria2 control file a resume needs.
+func hasControlFile(path string) bool {
+	_, err := os.Stat(path + ".aria2")
+	return err == nil
 }

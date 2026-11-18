@@ -219,3 +219,42 @@ func checkResumed(t *testing.T, fs *testutil.FaultServer, name string, done int6
 	}
 	t.Fatalf("%s: no request resumed within the %d bytes on disk: restarted, not resumed; ranges %q", name, done, ranges)
 }
+
+// A paused download whose .aria2 control file is gone must not resume into
+// its file: the file is preallocated to full size, so aria2 would take it
+// as done and end complete with zeroes in it.
+func TestChangeURIOnPausedWithoutControlFile(t *testing.T) {
+	t.Parallel()
+	e, _ := startEngine(t)
+	big := testutil.RandBytes(16 << 20) // above aria2's 5 MiB no-file-allocation-limit
+	fs := testutil.NewFaultServer(t, map[string][]byte{"old.bin": big, "new.bin": big})
+	ref := add(t, e, AddRequest{URIs: []string{fs.URL("old.bin", testutil.ModeOK)}, Options: map[string]string{"max-download-limit": "2M"}})
+	waitStatus(t, e, ref, 15*time.Second, func(s EngineStatus) bool { return s.Done > 1<<20 })
+	if err := e.Pause(ctxT(t, 5*time.Second), ref); err != nil {
+		t.Fatal(err)
+	}
+	paused := waitStatus(t, e, ref, 5*time.Second, func(s EngineStatus) bool { return s.State == "paused" })
+	if err := os.Remove(paused.Path + ".aria2"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.ChangeURI(ctxT(t, 10*time.Second), ref, fs.URL("new.bin", testutil.ModeOK)); err != nil {
+		t.Fatal(err)
+	}
+	rawCall(t, e, "aria2.changeOption", nil, string(ref), map[string]string{"max-download-limit": "0"})
+	if err := e.Resume(ctxT(t, 5*time.Second), ref); err != nil {
+		t.Fatal(err)
+	}
+	checkPayload(t, e, ref, big)
+}
+
+// checkPayload waits for ref to finish and fails unless it holds want.
+func checkPayload(t *testing.T, e Engine, ref EngineRef, want []byte) {
+	t.Helper()
+	st := waitStatus(t, e, ref, 30*time.Second, func(s EngineStatus) bool { return s.State == "complete" || s.State == "error" })
+	if st.State != "complete" {
+		t.Fatalf("after resume: %s (%d %s)", st.State, st.ErrorCode, st.ErrorMsg)
+	}
+	if b, err := os.ReadFile(st.Path); err != nil || !bytes.Equal(b, want) {
+		t.Fatalf("%s ended complete with the wrong bytes (%v)", st.Path, err)
+	}
+}
