@@ -23,6 +23,9 @@ const newConfig = "# lazyaria settings. `lazyaria config list` shows every key a
 // it in place once it loads cleanly, offering another round on errors.
 func configEdit(ctx context.Context, out, errOut io.Writer) error {
 	_, p, err := resolveLocal(os.Environ(), nil)
+	if _, broken := errors.AsType[*config.ValueError](err); broken {
+		p, err = configFilePaths() // a broken file is what the editor is for
+	}
 	if err != nil {
 		return err
 	}

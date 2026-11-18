@@ -166,6 +166,24 @@ func TestConfigEditDiscard(t *testing.T) {
 	}
 }
 
+// A broken file is what edit is for: it opens it rather than refuse.
+func TestConfigEditBrokenFile(t *testing.T) {
+	for name, body := range map[string]string{"syntax": "daemon = [\n", "value": "[ui]\nunits = \"bogus\"\n"} {
+		t.Run(name, func(t *testing.T) {
+			p := isolate(t)
+			os.MkdirAll(filepath.Dir(p.ConfigFile), 0o700)
+			os.WriteFile(p.ConfigFile, []byte(body), 0o600)
+			fakeEditor(t, "version = 1\n")
+			if code, out, errOut := run(t, Config, "", "edit"); code != 0 {
+				t.Fatalf("exit %d: %s %s", code, out, errOut)
+			}
+			if b, _ := os.ReadFile(p.ConfigFile); string(b) != "version = 1\n" {
+				t.Errorf("config = %q", b)
+			}
+		})
+	}
+}
+
 func TestConfigValuesVerbatim(t *testing.T) {
 	f := startFake(t)
 	if code, _, errOut := run(t, Config, "", "set", "engine.aria2_extra_args", "--max-tries=5"); code != 0 {

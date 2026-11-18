@@ -14,6 +14,14 @@ import (
 
 const configUsage = "usage: lazyaria config list [--json] | get KEY | set KEY VALUE | reset KEY | edit | path | keys"
 
+// configFilePaths finds the config file without reading any setting: the
+// file's own location does not depend on one, and it may be the broken file
+// the user is looking for.
+func configFilePaths() (config.Paths, error) {
+	s, _, _, _ := config.Load("", nil, nil, nil)
+	return config.ResolvePaths(s, os.Getenv)
+}
+
 // Config runs `lazyaria config list|get|set|reset|edit|path|keys`.
 func Config(ctx context.Context, args []string, out, errOut io.Writer) int {
 	// A KEY or VALUE is taken verbatim, so only the word after the
@@ -47,10 +55,7 @@ func Config(ctx context.Context, args []string, out, errOut io.Writer) int {
 	}
 	switch sub {
 	case "path":
-		// The file's own location does not depend on any setting, so it is
-		// not read: it may be the broken file the user is looking for.
-		s, _, _, _ := config.Load("", nil, nil, nil)
-		p, err := config.ResolvePaths(s, os.Getenv)
+		p, err := configFilePaths()
 		if err != nil {
 			return fail(errOut, "config", err)
 		}
