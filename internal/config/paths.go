@@ -61,7 +61,7 @@ func resolvePaths(s *Settings, env func(string) string, tmpRoot string) (Paths, 
 	if s.Advanced.SocketPath != "" {
 		p.Socket = s.Advanced.SocketPath
 		if len(p.Socket) >= maxSocketPath {
-			return Paths{}, fmt.Errorf("advanced.socket_path is %d bytes, limit is %d; use a shorter path", len(p.Socket), maxSocketPath-1)
+			return Paths{}, &ValueError{fmt.Errorf("advanced.socket_path is %d bytes, limit is %d; use a shorter path", len(p.Socket), maxSocketPath-1)}
 		}
 	}
 

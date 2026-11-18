@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -54,6 +55,16 @@ func TestSocketPathTooLong(t *testing.T) {
 	want := filepath.Join(tmp, fmt.Sprintf("lazyaria-%d", os.Getuid()))
 	if !strings.HasPrefix(p.Socket, want+"/") {
 		t.Fatalf("socket %q not under %q", p.Socket, want)
+	}
+}
+
+// A socket_path that is too long is a bad setting (exit 2).
+func TestSocketPathSettingTooLong(t *testing.T) {
+	s := &Settings{}
+	s.Advanced.SocketPath = "/" + strings.Repeat("a", 119)
+	_, err := resolvePaths(s, envMap(map[string]string{"HOME": "/home/u"}), t.TempDir())
+	if _, ok := errors.AsType[*ValueError](err); !ok {
+		t.Fatalf("got %v (%T), want a *ValueError", err, err)
 	}
 }
 
