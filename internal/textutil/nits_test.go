@@ -35,7 +35,7 @@ func TestNormalizeURLMalformedQueryKept(t *testing.T) {
 }
 
 func TestSanitizeNameStripsBidi(t *testing.T) {
-	if got := SanitizeName("a‮gpj.exe⁦‏", false); got != "agpj.exe" {
+	if got := SanitizeName("a\u202Egpj.exe\u2066\u200F", false); got != "agpj.exe" {
 		t.Fatalf("got %q", got)
 	}
 }
