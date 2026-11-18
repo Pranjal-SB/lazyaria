@@ -105,6 +105,16 @@ func TestRedactsErrorData(t *testing.T) {
 	check("skipped", j)
 }
 
+func TestBadRequestCrossesTheWire(t *testing.T) {
+	f := newFake()
+	f.addErr = &daemon.BadRequestError{Err: errors.New("torrents cannot be refreshed")}
+	c, _ := serve(t, f)
+	_, err := c.Add(context.Background(), daemon.AddParams{URIs: []string{"https://example.com/a.bin"}})
+	if _, ok := errors.AsType[*daemon.BadRequestError](err); !ok || err.Error() != "torrents cannot be refreshed" {
+		t.Fatalf("err = %#v", err)
+	}
+}
+
 func TestExistsErrorCrossesTheWire(t *testing.T) {
 	f := newFake()
 	f.addErr = &daemon.ExistsError{Path: "/dl/a.bin"}

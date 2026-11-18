@@ -24,18 +24,19 @@ import (
 type fake struct {
 	bus *daemon.Bus
 
-	mu        sync.Mutex
-	jobs      []*store.Job
-	adds      []daemon.AddParams
-	addErr    error
-	paused    []string
-	removed   []string
-	deleted   bool
-	refreshed []string // id, link of each RefreshURI
-	undone    []string // tokens passed to Undo
-	kept      []string // folders Remove reports kept
-	overrides map[string]string
-	restarts  int
+	mu         sync.Mutex
+	jobs       []*store.Job
+	adds       []daemon.AddParams
+	addErr     error
+	paused     []string
+	removed    []string
+	deleted    bool
+	refreshed  []string // id, link of each RefreshURI
+	refreshErr error    // returned by RefreshURI
+	undone     []string // tokens passed to Undo
+	kept       []string // folders Remove reports kept
+	overrides  map[string]string
+	restarts   int
 
 	pid          int   // reported by Status
 	restartErr   error // returned by RestartEngine
@@ -135,7 +136,7 @@ func (f *fake) RefreshURI(_ context.Context, id, uri string) (*store.Job, error)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.refreshed = append(f.refreshed, id, uri)
-	return nil, nil
+	return nil, f.refreshErr
 }
 func (f *fake) SetLimit(context.Context, string, int64, int64) error { return nil }
 func (f *fake) StopSeeding(context.Context, []string) error          { return nil }

@@ -4,6 +4,9 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/Pranjal-SB/lazyaria/internal/daemon"
+	"github.com/Pranjal-SB/lazyaria/internal/engine"
 )
 
 func TestRefresh(t *testing.T) {
@@ -23,6 +26,18 @@ func TestRefresh(t *testing.T) {
 		if code, _, errOut := run(t, Refresh, "", args...); code != 2 {
 			t.Errorf("%v: exit %d, want 2: %s", args, code, errOut)
 		}
+	}
+}
+
+// A refresh the daemon refuses as wrong for the job, such as a torrent job
+// given an http link, is a usage error like a bad link refused locally.
+func TestRefreshMisfitExitsUsage(t *testing.T) {
+	f := startFake(t)
+	f.jobs = sampleJobs()
+	f.refreshErr = &daemon.BadRequestError{Err: engine.ErrNotSupported}
+	code, _, errOut := run(t, Refresh, "", "01JC0000000000000000000001", "https://example.com/new.iso")
+	if code != 2 || !strings.Contains(errOut, engine.ErrNotSupported.Error()) || strings.Contains(errOut, "[-") {
+		t.Fatalf("exit %d, stderr %q; want 2 and the reason alone", code, errOut)
 	}
 }
 

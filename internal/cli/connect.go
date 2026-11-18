@@ -150,6 +150,9 @@ func exitCode(err error) int {
 	if _, ok := errors.AsType[engine.ErrInvalidOption](err); ok {
 		return exitUsage
 	}
+	if _, ok := errors.AsType[*daemon.BadRequestError](err); ok {
+		return exitUsage
+	}
 	_, foreign := errors.AsType[*ipc.ErrForeignDaemon](err)
 	_, mismatch := errors.AsType[*ipc.ErrProtocolMismatch](err)
 	if foreign || mismatch || errors.Is(err, ipc.ErrUnreachable) {

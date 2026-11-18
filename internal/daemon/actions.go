@@ -131,7 +131,7 @@ func (m *Manager) resume(ctx context.Context, j *store.Job) error {
 // RefreshURI points a job at a new link (spec §4.7) and clears its error.
 func (m *Manager) RefreshURI(ctx context.Context, id, uri string) (*store.Job, error) {
 	if err := CheckLink(uri); err != nil {
-		return nil, err
+		return nil, &BadRequestError{err}
 	}
 	ctx = context.WithoutCancel(ctx) // see Add
 	m.mu.Lock()
@@ -142,11 +142,11 @@ func (m *Manager) RefreshURI(ctx context.Context, id, uri string) (*store.Job, e
 	}
 	switch {
 	case j.State == store.Done || j.State == store.Seeding:
-		return nil, engine.ErrAlreadyComplete
+		return nil, &BadRequestError{engine.ErrAlreadyComplete}
 	case j.State == store.Removed:
-		return nil, errors.New("the job was removed; add the link again")
+		return nil, &BadRequestError{errors.New("the job was removed; add the link again")}
 	case j.Kind == "torrent" || j.Kind == "magnet":
-		return nil, engine.ErrNotSupported
+		return nil, &BadRequestError{engine.ErrNotSupported}
 	}
 	opts := maps.Clone(j.Options)
 	clean := engine.SplitAuth([]string{uri}, "", "", opts)[0]
@@ -211,7 +211,7 @@ func CheckLink(raw string) error {
 // id is empty. 0 means unlimited.
 func (m *Manager) SetLimit(ctx context.Context, id string, down, up int64) error {
 	if down < 0 || up < 0 {
-		return errors.New("speed limits cannot be negative; use 0 for unlimited")
+		return &BadRequestError{errors.New("speed limits cannot be negative; use 0 for unlimited")}
 	}
 	if id == "" {
 		return m.e.SetGlobalLimit(context.WithoutCancel(ctx), down, up)

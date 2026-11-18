@@ -6,8 +6,8 @@ standard error, as `lazyaria <command>: <message>`.
 | Code | Name | When |
 |---|---|---|
 | 0 | OK | The command worked. Also: `add` skipped a duplicate because `reliability.duplicates` is `skip`; and `-h`, which prints a command's flags (except `daemon -h`, which exits with 2). |
-| 1 | Error | Something failed at run time. Examples: a download under `add --wait` failed or was removed; `doctor` found a failing check; `undo` came too late or got an unknown token; a setting in the environment has a bad value; `refresh` was given a finished job; the connection to the daemon dropped during a command that changes something, or `add` could not send some links. |
-| 2 | Usage | The command line was wrong, so nothing was done. Examples: an unknown command or flag, a missing argument, an ID prefix that matches no job or several, `add --paused --wait`, a `refresh` link that is not an http(s), ftp or sftp link, an unknown setting or a bad value for `config set`. |
+| 1 | Error | Something failed at run time. Examples: a download under `add --wait` failed or was removed; `doctor` found a failing check; `undo` came too late or got an unknown token; a setting in the environment has a bad value; the connection to the daemon dropped during a command that changes something, or `add` could not send some links. |
+| 2 | Usage | The command line was wrong, so nothing was done. Examples: an unknown command or flag, a missing argument, an ID prefix that matches no job or several, `add --paused --wait`, a `refresh` link that is not an http(s), ftp or sftp link, or a `refresh` of a finished, removed or torrent job, an unknown setting or a bad value for `config set`. |
 | 3 | Daemon unreachable | No daemon answered and none could be started; or the socket belongs to another user; or the daemon and this client do not speak the same protocol version. |
 | 4 | Refused | `add` refused: the link is already in the list, the file already exists, or the disk does not have room for it. |
 

@@ -36,10 +36,10 @@ type AddParams struct {
 // (with the existing job for a known link) and nothing is added.
 func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 	if len(p.URIs) == 0 && len(p.Torrent) == 0 {
-		return nil, errors.New("nothing to download: give a link or a torrent file")
+		return nil, &BadRequestError{errors.New("nothing to download: give a link or a torrent file")}
 	}
 	if err := engine.CheckLinks(p.URIs); err != nil {
-		return nil, err
+		return nil, &BadRequestError{err}
 	}
 	for k := range p.Options {
 		if !slices.Contains(engine.AllowedOptions, k) {

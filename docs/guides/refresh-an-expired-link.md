@@ -62,7 +62,8 @@ which the shell would otherwise read as its own syntax.
   Torrent and magnet jobs cannot be refreshed either: they have no link
   that expires.
 - A finished job has nothing to refresh. A removed job cannot be
-  refreshed either: add the link again with `lazyaria add`.
+  refreshed either: add the link again with `lazyaria add`. These
+  refusals also exit with code 2.
 - The server must support resuming (HTTP range requests) for the download
   to carry on. Most file hosts do. If it does not, the job fails again
   with a message about the range header.

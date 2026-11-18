@@ -95,6 +95,31 @@ func TestRefreshErroredJob(t *testing.T) {
 	}
 }
 
+// A refresh that does not fit the job is a bad request, whatever the reason,
+// so the CLI exits with the usage code for each.
+func TestRefreshMisfitIsBadRequest(t *testing.T) {
+	r := newRig(t)
+	torrent := r.insert(t, store.Paused, "", func(j *store.Job) { j.Kind = "torrent" })
+	done := r.insert(t, store.Done, "", nil)
+	removed := r.insert(t, store.Removed, "", nil)
+	http := r.insert(t, store.Paused, "", nil)
+	for _, c := range []struct{ id, link string }{
+		{torrent.ID, "https://example.com/f.bin"},
+		{done.ID, "https://example.com/f.bin"},
+		{removed.ID, "https://example.com/f.bin"},
+		{http.ID, "magnet:?xt=urn:btih:abc"},
+		{http.ID, "file:///etc/passwd"},
+	} {
+		_, err := r.m.RefreshURI(bg, c.id, c.link)
+		if _, ok := errors.AsType[*BadRequestError](err); !ok {
+			t.Errorf("refresh %s with %s: err %v, want a *BadRequestError", c.id, c.link, err)
+		}
+	}
+	if _, err := r.m.RefreshURI(bg, torrent.ID, "https://example.com/f.bin"); !errors.Is(err, engine.ErrNotSupported) {
+		t.Errorf("torrent refresh: err %v, want it to wrap engine.ErrNotSupported", err)
+	}
+}
+
 func TestPauseHoldsWhileEngineSettles(t *testing.T) {
 	r := newRig(t)
 	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}})

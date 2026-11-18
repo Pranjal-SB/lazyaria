@@ -105,9 +105,17 @@ that expires.
 The new link is cut off or is not a link. Copy the whole link again, and
 put it in single quotes on the command line.
 
-**`the download is already complete; there is nothing to refresh`** (exit code 1)
+**`the download is already complete; there is nothing to refresh`** (exit code 2)
 
 The job is finished. There is nothing left to download.
+
+**`refreshing the link works for HTTP and FTP downloads only, not torrents`** (exit code 2)
+
+The job is a torrent or magnet download. It has no link that expires.
+
+**`the job was removed; add the link again`** (exit code 2)
+
+Run `lazyaria add` with the link to download it again.
 
 ## IDs
 

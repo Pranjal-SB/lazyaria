@@ -97,6 +97,15 @@ func (e *ExistsError) Error() string {
 	return fmt.Sprintf("%s already exists (downloads.on_exists = ask); save it under another name with --out, or set downloads.on_exists to rename or overwrite", e.Path)
 }
 
+// BadRequestError is a request that does not fit the job or the arguments
+// it names, such as refreshing a torrent; nothing was changed. The CLI
+// treats it as a usage error.
+type BadRequestError struct{ Err error }
+
+func (e *BadRequestError) Error() string { return e.Err.Error() }
+
+func (e *BadRequestError) Unwrap() error { return e.Err }
+
 // SkippedError means reliability.duplicates is "skip" and nothing was
 // added: the link is already known (Existing), or a finished file already
 // sits at the target path (Path). Callers treat it as success.

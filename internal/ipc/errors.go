@@ -14,10 +14,11 @@ import (
 
 // Error codes for daemon errors that cross the socket with their data.
 const (
-	CodeDuplicate jrpc2.Code = -32001
-	CodeSkipped   jrpc2.Code = -32002
-	CodeNoSpace   jrpc2.Code = -32003
-	CodeExists    jrpc2.Code = -32004
+	CodeDuplicate  jrpc2.Code = -32001
+	CodeSkipped    jrpc2.Code = -32002
+	CodeNoSpace    jrpc2.Code = -32003
+	CodeExists     jrpc2.Code = -32004
+	CodeBadRequest jrpc2.Code = -32005
 )
 
 // toWire turns a handler error into a JSON-RPC error carrying enough data
@@ -32,6 +33,7 @@ func toWire(err error) error {
 		ns  *daemon.NoSpaceError
 		ex  *daemon.ExistsError
 		inv engine.ErrInvalidOption
+		bad *daemon.BadRequestError
 	)
 	switch {
 	case errors.As(err, &dup):
@@ -44,6 +46,8 @@ func toWire(err error) error {
 		return jrpc2.Errorf(CodeExists, "%s", err).WithData(ex)
 	case errors.As(err, &inv):
 		return jrpc2.Errorf(jrpc2.InvalidParams, "%s", err).WithData(inv)
+	case errors.As(err, &bad):
+		return jrpc2.Errorf(CodeBadRequest, "%s", err)
 	}
 	return err
 }
@@ -64,6 +68,8 @@ func fromWire(err error) error {
 		out = decode(e, &daemon.NoSpaceError{})
 	case CodeExists:
 		out = decode(e, &daemon.ExistsError{})
+	case CodeBadRequest:
+		out = &daemon.BadRequestError{Err: remoteError{e}}
 	case jrpc2.InvalidParams:
 		var inv engine.ErrInvalidOption
 		if json.Unmarshal(e.Data, &inv) == nil && inv.Name != "" {
