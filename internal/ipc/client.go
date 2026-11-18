@@ -146,16 +146,16 @@ func (c *Client) callOn(ctx context.Context, method string, params, result any) 
 	if result == nil {
 		result = new(json.RawMessage)
 	}
-	raw := rpc.CallResult(ctx, method, params, result)
+	raw, err := send(ctx, rpc, method, params, result)
 	if raw != nil && ctx.Err() == nil && unsent(rpc, raw) {
 		// It never left: send it, read or write, on the next connection.
 		if next := c.reconnect(ctx, rpc); next != nil {
-			return next, fromWire(next.CallResult(ctx, method, params, result))
+			_, err := send(ctx, next, method, params, result)
+			return next, err
 		}
 		return nil, ErrNotSent
 	}
-	err := fromWire(raw)
-	if err == nil || ctx.Err() != nil || !hungUp(err) {
+	if raw == nil || ctx.Err() != nil || !hungUp(err) {
 		return rpc, err
 	}
 	resend := readOnly[method]
@@ -167,7 +167,19 @@ func (c *Client) callOn(ctx context.Context, method string, params, result any) 
 	if next == nil || !resend {
 		return nil, err
 	}
-	return next, fromWire(next.CallResult(ctx, method, params, result))
+	_, err = send(ctx, next, method, params, result)
+	return next, err
+}
+
+// send makes one call on rpc. raw is the call's own error, the only one
+// unsent may judge: a result that fails to decode came back from the
+// daemon, so the call was sent even if the connection has since dropped.
+func send(ctx context.Context, rpc *jrpc2.Client, method string, params, result any) (raw, err error) {
+	rsp, raw := rpc.Call(ctx, method, params)
+	if raw != nil {
+		return raw, fromWire(raw)
+	}
+	return nil, rsp.UnmarshalResult(result)
 }
 
 // unsent reports whether jrpc2 (v1.3.6) refused the call before writing it.
