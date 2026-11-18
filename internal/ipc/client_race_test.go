@@ -1,0 +1,82 @@
+package ipc
+
+import (
+	"context"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/Pranjal-SB/lazyaria/internal/daemon"
+	"github.com/Pranjal-SB/lazyaria/internal/store"
+)
+
+// heldSnapshot answers jobs.snapshot only once the connection ends.
+type heldSnapshot struct {
+	*fakeHandler
+	waiting atomic.Int32
+}
+
+func (h *heldSnapshot) Snapshot(ctx context.Context, all bool, limit int, ids, prefixes []string) (uint64, []*store.Job, []daemon.SpeedSample) {
+	h.waiting.Add(1)
+	<-ctx.Done()
+	return h.fakeHandler.Snapshot(ctx, all, limit, ids, prefixes)
+}
+
+// Calls running at once on one client all survive the daemon going away:
+// one reconnect is made, and each read-only call is sent again on it.
+func TestConcurrentCallsAcrossReconnect(t *testing.T) {
+	const n = 8
+	_, pB := serve(t, newFake())
+
+	h := &heldSnapshot{fakeHandler: newFake()}
+	pA := testPaths(shortDir(t))
+	l, lock, err := Listen(pA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lock.Close()
+	ctx, stopA := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- Serve(ctx, l, h) }()
+
+	c, err := Dial(context.Background(), pA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	var redials atomic.Int32
+	c.Redial = func(ctx context.Context) (*Client, error) {
+		redials.Add(1)
+		return Dial(ctx, pB)
+	}
+
+	var wg sync.WaitGroup
+	errs := make(chan error, n)
+	for range n {
+		wg.Go(func() {
+			_, err := c.List(context.Background(), false, 0)
+			errs <- err
+		})
+	}
+	for deadline := time.Now().Add(5 * time.Second); h.waiting.Load() < n; time.Sleep(time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("only %d of %d calls reached the daemon", h.waiting.Load(), n)
+		}
+	}
+	stopA()
+	<-done
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Errorf("call across the reconnect: %v", err)
+		}
+	}
+	if got := redials.Load(); got != 1 {
+		t.Errorf("redialled %d times, want 1", got)
+	}
+	if _, err := c.List(context.Background(), false, 0); err != nil {
+		t.Errorf("call after the reconnect: %v", err)
+	}
+}

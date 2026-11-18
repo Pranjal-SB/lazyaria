@@ -21,7 +21,12 @@ import (
 
 // Client talks to the daemon. Pushed events and progress arrive on the
 // channels Subscribe returns; both close when the connection ends.
+//
+// Calls may run at once from several goroutines. mu guards the fields
+// below it, so a reconnect is made once and the calls that lost the same
+// connection share the new one; it is not held while a call is in flight.
 type Client struct {
+	mu       sync.Mutex
 	rpc      *jrpc2.Client
 	events   chan daemon.Event
 	progress chan []daemon.ProgressItem
@@ -29,7 +34,8 @@ type Client struct {
 	// Redial, when set, reconnects after the daemon hung up in the middle
 	// of a call. A read-only call is sent once more on the new connection;
 	// any other fails with ErrCutOff. It is used once, and never after
-	// Subscribe: those events died with the old connection.
+	// Subscribe: those events died with the old connection. Set it before
+	// the client is shared.
 	Redial     func(context.Context) (*Client, error)
 	subscribed bool
 	dead       bool // the connection dropped and none replaced it
@@ -54,11 +60,15 @@ func Dial(ctx context.Context, p config.Paths) (*Client, error) {
 		return nil, &ErrForeignDaemon{Socket: p.Socket, UID: uid}
 	}
 	c := &Client{events: make(chan daemon.Event, 512), progress: make(chan []daemon.ProgressItem, 1)}
-	c.rpc = jrpc2.NewClient(&pushChannel{Channel: lineChannel(conn), c: c}, nil)
+	c.rpc = jrpc2.NewClient(&pushChannel{Channel: lineChannel(conn), events: c.events, progress: c.progress}, nil)
 	return c, nil
 }
 
-func (c *Client) Close() error { return c.rpc.Close() }
+func (c *Client) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.rpc.Close()
+}
 
 // ErrForeignDaemon means the socket is served by another user.
 type ErrForeignDaemon struct {
@@ -72,8 +82,16 @@ func (e *ErrForeignDaemon) Error() string {
 
 // Subscribe asks for job events, and progress frames when progress is set.
 func (c *Client) Subscribe(ctx context.Context, progress bool) (<-chan daemon.Event, <-chan []daemon.ProgressItem, error) {
-	if err := c.call(ctx, "jobs.subscribe", SubscribeParams{Progress: progress}, nil); err != nil {
+	on, err := c.callOn(ctx, "jobs.subscribe", SubscribeParams{Progress: progress}, nil)
+	if err != nil {
 		return nil, nil, err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.rpc != on {
+		// Another call reconnected after this one subscribed; the events
+		// went with the old connection.
+		return nil, nil, ErrNotSent
 	}
 	c.subscribed = true
 	return c.events, c.progress, nil
@@ -97,38 +115,60 @@ var readOnly = map[string]bool{
 }
 
 func (c *Client) call(ctx context.Context, method string, params, result any) error {
-	if c.dead {
-		return ErrNotSent
+	_, err := c.callOn(ctx, method, params, result)
+	return err
+}
+
+// callOn is call that also returns the connection the call was answered on.
+func (c *Client) callOn(ctx context.Context, method string, params, result any) (*jrpc2.Client, error) {
+	c.mu.Lock()
+	rpc, dead := c.rpc, c.dead
+	c.mu.Unlock()
+	if dead {
+		return nil, ErrNotSent
 	}
 	if result == nil {
 		result = new(json.RawMessage)
 	}
-	err := fromWire(c.rpc.CallResult(ctx, method, params, result))
+	err := fromWire(rpc.CallResult(ctx, method, params, result))
 	if err == nil || ctx.Err() != nil || !hungUp(err) {
-		return err
+		return rpc, err
 	}
 	resend := readOnly[method]
 	if !resend {
 		err = ErrCutOff
 	}
+	// Reconnect either way, so the calls after this one still go out.
+	next := c.reconnect(ctx, rpc)
+	if next == nil || !resend {
+		return nil, err
+	}
+	return next, fromWire(next.CallResult(ctx, method, params, result))
+}
+
+// reconnect replaces the connection old, which hung up, and returns the new
+// one, or nil when there is none. Calls that lost old at the same time wait
+// here and share one reconnect.
+func (c *Client) reconnect(ctx context.Context, old *jrpc2.Client) *jrpc2.Client {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.rpc != old {
+		return c.rpc // another call already reconnected
+	}
 	if c.Redial == nil || c.subscribed {
 		c.dead = true
-		return err
+		return nil
 	}
-	// Reconnect either way, so the calls after this one still go out.
 	redial := c.Redial
 	c.Redial = nil
-	nc, rerr := redial(ctx)
-	if rerr != nil {
+	nc, err := redial(ctx)
+	if err != nil {
 		c.dead = true
-		return err
+		return nil
 	}
 	c.rpc.Close()
 	c.rpc, c.events, c.progress = nc.rpc, nc.events, nc.progress
-	if !resend {
-		return err
-	}
-	return fromWire(c.rpc.CallResult(ctx, method, params, result))
+	return c.rpc
 }
 
 // hungUp reports whether err is the connection going away rather than an
@@ -147,15 +187,16 @@ func hungUp(err error) bool {
 // here they are delivered in arrival order on the reader goroutine.
 type pushChannel struct {
 	channel.Channel
-	c    *Client
-	once sync.Once
+	events   chan daemon.Event
+	progress chan []daemon.ProgressItem
+	once     sync.Once
 }
 
 func (p *pushChannel) Recv() ([]byte, error) {
 	for {
 		b, err := p.Channel.Recv()
 		if err != nil {
-			p.once.Do(func() { close(p.c.events); close(p.c.progress) })
+			p.once.Do(func() { close(p.events); close(p.progress) })
 			return b, err
 		}
 		var m struct {
@@ -166,14 +207,14 @@ func (p *pushChannel) Recv() ([]byte, error) {
 		if len(b) == 0 || b[0] != '{' || json.Unmarshal(b, &m) != nil || m.Method == "" || m.ID != nil {
 			return b, nil
 		}
-		p.c.deliver(m.Method, m.Params)
+		p.deliver(m.Method, m.Params)
 	}
 }
 
 // deliver queues a push without ever blocking the reader. Events mirror
 // the daemon's bus: on overflow the backlog becomes one resync_required.
 // Progress keeps only the newest frame.
-func (c *Client) deliver(method string, params json.RawMessage) {
+func (p *pushChannel) deliver(method string, params json.RawMessage) {
 	switch method {
 	case PushEvent:
 		var ev daemon.Event
@@ -181,26 +222,26 @@ func (c *Client) deliver(method string, params json.RawMessage) {
 			return
 		}
 		select {
-		case c.events <- ev:
+		case p.events <- ev:
 			return
 		default:
 		}
-		for len(c.events) > 0 {
+		for len(p.events) > 0 {
 			select {
-			case <-c.events:
+			case <-p.events:
 			default:
 			}
 		}
-		c.events <- daemon.Event{Seq: ev.Seq, Type: "resync_required"}
+		p.events <- daemon.Event{Seq: ev.Seq, Type: "resync_required"}
 	case PushProgress:
 		var items []daemon.ProgressItem
 		if json.Unmarshal(params, &items) != nil {
 			return
 		}
 		select {
-		case <-c.progress:
+		case <-p.progress:
 		default:
 		}
-		c.progress <- items
+		p.progress <- items
 	}
 }
