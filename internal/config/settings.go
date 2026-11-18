@@ -3,7 +3,8 @@ package config
 // Settings is the full configuration. Tags drive the schema: default is the
 // built-in value (list values are comma separated), live marks keys that apply
 // without a daemon restart, kind selects extra validation (size, duration,
-// extra_args).
+// extra_args), unused marks keys nothing reads yet (they wait for the
+// terminal interface; on a struct it covers every key in it).
 type Settings struct {
 	Version     int                 `toml:"version" default:"1" live:"false" help:"Config file format version."`
 	Downloads   DownloadsSettings   `toml:"downloads"`
@@ -17,7 +18,7 @@ type Settings struct {
 	Remove      RemoveSettings      `toml:"remove"`
 	Privacy     PrivacySettings     `toml:"privacy"`
 	History     HistorySettings     `toml:"history"`
-	UI          UISettings          `toml:"ui"`
+	UI          UISettings          `toml:"ui" unused:"true"`
 
 	// Keys maps an action to its key list. The "preset" entry is a single
 	// element list holding the validated preset name (default|vim).
@@ -31,7 +32,7 @@ type Settings struct {
 
 type DownloadsSettings struct {
 	Dir                  string `toml:"dir" default:"" live:"false" help:"Download directory; empty uses the XDG download dir or ~/Downloads."`
-	RememberLastDir      bool   `toml:"remember_last_dir" default:"true" live:"true" help:"Offer the last used directory for new jobs."`
+	RememberLastDir      bool   `toml:"remember_last_dir" default:"true" live:"true" help:"Offer the last used directory for new jobs." unused:"true"`
 	MaxConcurrent        int    `toml:"max_concurrent" default:"5" live:"true" min:"1" help:"Maximum downloads running at once."`
 	ConnectionsPerServer int    `toml:"connections_per_server" default:"16" live:"true" min:"1" max:"16" help:"Connections per server (aria2 caps this at 16)."`
 	Split                int    `toml:"split" default:"16" live:"true" min:"1" help:"Pieces a file is split into."`
@@ -110,9 +111,9 @@ type ReliabilitySettings struct {
 }
 
 type RemoveSettings struct {
-	DefaultAction string `toml:"default_action" default:"ask" live:"true" enum:"ask|list-only|trash" help:"Default action when removing a job."`
+	DefaultAction string `toml:"default_action" default:"ask" live:"true" enum:"ask|list-only|trash" help:"Default action when removing a job." unused:"true"`
 	UndoSeconds   int    `toml:"undo_seconds" default:"10" live:"true" min:"0" help:"Seconds an undo stays available; 0 disables undo."`
-	Confirm       bool   `toml:"confirm" default:"true" live:"true" help:"Ask before removing."`
+	Confirm       bool   `toml:"confirm" default:"true" live:"true" help:"Ask before removing." unused:"true"`
 }
 
 type PrivacySettings struct {
@@ -123,8 +124,8 @@ type PrivacySettings struct {
 type HistorySettings struct {
 	KeepDays              int  `toml:"keep_days" default:"0" live:"true" min:"0" help:"Days of history to keep; 0 keeps everything."`
 	PurgeRemovedAfterDays int  `toml:"purge_removed_after_days" default:"30" live:"true" min:"0" help:"Days before removed jobs are purged."`
-	ShowInList            bool `toml:"show_in_list" default:"true" live:"true" help:"Show finished jobs in the main list."`
-	ListLimit             int  `toml:"list_limit" default:"200" live:"true" min:"1" help:"History page size."`
+	ShowInList            bool `toml:"show_in_list" default:"true" live:"true" help:"Show finished jobs in the main list." unused:"true"`
+	ListLimit             int  `toml:"list_limit" default:"200" live:"true" min:"1" help:"History page size." unused:"true"`
 }
 
 type UISettings struct {

@@ -7,7 +7,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Config file format version."
+    "help": "Config file format version.",
+    "not_used_yet": false
   },
   {
     "key": "downloads.dir",
@@ -17,7 +18,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Download directory; empty uses the XDG download dir or ~/Downloads."
+    "help": "Download directory; empty uses the XDG download dir or ~/Downloads.",
+    "not_used_yet": false
   },
   {
     "key": "downloads.remember_last_dir",
@@ -27,7 +29,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Offer the last used directory for new jobs."
+    "help": "Offer the last used directory for new jobs.",
+    "not_used_yet": true
   },
   {
     "key": "downloads.max_concurrent",
@@ -37,7 +40,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Maximum downloads running at once."
+    "help": "Maximum downloads running at once.",
+    "not_used_yet": false
   },
   {
     "key": "downloads.connections_per_server",
@@ -47,7 +51,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Connections per server (aria2 caps this at 16)."
+    "help": "Connections per server (aria2 caps this at 16).",
+    "not_used_yet": false
   },
   {
     "key": "downloads.split",
@@ -57,7 +62,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Pieces a file is split into."
+    "help": "Pieces a file is split into.",
+    "not_used_yet": false
   },
   {
     "key": "downloads.min_split_size",
@@ -67,7 +73,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Do not split pieces smaller than this."
+    "help": "Do not split pieces smaller than this.",
+    "not_used_yet": false
   },
   {
     "key": "downloads.start_paused",
@@ -77,7 +84,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Add new jobs in the paused state."
+    "help": "Add new jobs in the paused state.",
+    "not_used_yet": false
   },
   {
     "key": "downloads.on_exists",
@@ -91,7 +99,8 @@
       "overwrite",
       "ask"
     ],
-    "help": "What to do when the target file exists."
+    "help": "What to do when the target file exists.",
+    "not_used_yet": false
   },
   {
     "key": "downloads.file_allocation",
@@ -107,7 +116,8 @@
       "trunc",
       "none"
     ],
-    "help": "File allocation method; auto picks per filesystem."
+    "help": "File allocation method; auto picks per filesystem.",
+    "not_used_yet": false
   },
   {
     "key": "downloads.user_agent",
@@ -117,7 +127,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "HTTP user agent; empty uses the aria2 default."
+    "help": "HTTP user agent; empty uses the aria2 default.",
+    "not_used_yet": false
   },
   {
     "key": "downloads.lowest_speed_limit",
@@ -127,7 +138,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Abort connections slower than this (bytes/s); 0 disables."
+    "help": "Abort connections slower than this (bytes/s); 0 disables.",
+    "not_used_yet": false
   },
   {
     "key": "downloads.connect_timeout",
@@ -137,7 +149,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Connection timeout."
+    "help": "Connection timeout.",
+    "not_used_yet": false
   },
   {
     "key": "downloads.timeout",
@@ -147,7 +160,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Transfer timeout."
+    "help": "Transfer timeout.",
+    "not_used_yet": false
   },
   {
     "key": "limits.global_down",
@@ -157,7 +171,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Global download limit (bytes/s); 0 is unlimited."
+    "help": "Global download limit (bytes/s); 0 is unlimited.",
+    "not_used_yet": false
   },
   {
     "key": "limits.global_up",
@@ -167,7 +182,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Global upload limit (bytes/s); 0 is unlimited."
+    "help": "Global upload limit (bytes/s); 0 is unlimited.",
+    "not_used_yet": false
   },
   {
     "key": "network.all_proxy",
@@ -177,7 +193,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "HTTP(S) proxy URL; empty falls back to environment variables."
+    "help": "HTTP(S) proxy URL; empty falls back to environment variables.",
+    "not_used_yet": false
   },
   {
     "key": "network.no_proxy",
@@ -187,7 +204,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Comma separated hosts that bypass the proxy."
+    "help": "Comma separated hosts that bypass the proxy.",
+    "not_used_yet": false
   },
   {
     "key": "network.check_certificate",
@@ -197,7 +215,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Verify TLS certificates; a warning is shown when off."
+    "help": "Verify TLS certificates; a warning is shown when off.",
+    "not_used_yet": false
   },
   {
     "key": "network.ca_certificate",
@@ -207,7 +226,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Path to a custom CA bundle."
+    "help": "Path to a custom CA bundle.",
+    "not_used_yet": false
   },
   {
     "key": "network.interface",
@@ -217,7 +237,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Bind to this network interface or IP."
+    "help": "Bind to this network interface or IP.",
+    "not_used_yet": false
   },
   {
     "key": "network.disable_ipv6",
@@ -227,7 +248,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Disable IPv6."
+    "help": "Disable IPv6.",
+    "not_used_yet": false
   },
   {
     "key": "retry.max_tries",
@@ -237,7 +259,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "aria2 tries per connection."
+    "help": "aria2 tries per connection.",
+    "not_used_yet": false
   },
   {
     "key": "retry.retry_wait",
@@ -247,7 +270,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Wait between aria2 retries."
+    "help": "Wait between aria2 retries.",
+    "not_used_yet": false
   },
   {
     "key": "retry.max_file_not_found",
@@ -257,7 +281,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Give up after this many file-not-found replies."
+    "help": "Give up after this many file-not-found replies.",
+    "not_used_yet": false
   },
   {
     "key": "retry.auto_retry",
@@ -276,7 +301,8 @@
       "network",
       "timeout"
     ],
-    "help": "Failure kinds retried automatically."
+    "help": "Failure kinds retried automatically.",
+    "not_used_yet": false
   },
   {
     "key": "retry.backoff_base",
@@ -286,7 +312,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "First automatic retry delay."
+    "help": "First automatic retry delay.",
+    "not_used_yet": false
   },
   {
     "key": "retry.backoff_factor",
@@ -296,7 +323,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Multiplier applied to the delay on each retry."
+    "help": "Multiplier applied to the delay on each retry.",
+    "not_used_yet": false
   },
   {
     "key": "retry.backoff_max_attempts",
@@ -306,7 +334,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Maximum automatic retries per job."
+    "help": "Maximum automatic retries per job.",
+    "not_used_yet": false
   },
   {
     "key": "bt.seed_ratio",
@@ -316,7 +345,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Seed until this share ratio; 0 means no ratio target."
+    "help": "Seed until this share ratio; 0 means no ratio target.",
+    "not_used_yet": false
   },
   {
     "key": "bt.seed_minutes",
@@ -326,7 +356,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Seed for this many minutes; 0 means do not seed."
+    "help": "Seed for this many minutes; 0 means do not seed.",
+    "not_used_yet": false
   },
   {
     "key": "bt.listen_port",
@@ -336,7 +367,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "BitTorrent listen port or range."
+    "help": "BitTorrent listen port or range.",
+    "not_used_yet": false
   },
   {
     "key": "bt.dht_listen_port",
@@ -346,7 +378,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "DHT listen port or range."
+    "help": "DHT listen port or range.",
+    "not_used_yet": false
   },
   {
     "key": "bt.enable_dht",
@@ -356,7 +389,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Enable DHT."
+    "help": "Enable DHT.",
+    "not_used_yet": false
   },
   {
     "key": "bt.enable_peer_exchange",
@@ -366,7 +400,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Enable peer exchange."
+    "help": "Enable peer exchange.",
+    "not_used_yet": false
   },
   {
     "key": "bt.max_peers",
@@ -376,7 +411,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Maximum peers per torrent."
+    "help": "Maximum peers per torrent.",
+    "not_used_yet": false
   },
   {
     "key": "bt.extra_trackers",
@@ -386,7 +422,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Trackers appended to every torrent."
+    "help": "Trackers appended to every torrent.",
+    "not_used_yet": false
   },
   {
     "key": "bt.require_crypto",
@@ -396,7 +433,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Require encrypted peer connections."
+    "help": "Require encrypted peer connections.",
+    "not_used_yet": false
   },
   {
     "key": "bt.save_metadata",
@@ -406,7 +444,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Keep the .torrent for magnets (needed to resume)."
+    "help": "Keep the .torrent for magnets (needed to resume).",
+    "not_used_yet": false
   },
   {
     "key": "daemon.mode",
@@ -419,7 +458,8 @@
       "on-demand",
       "always"
     ],
-    "help": "Run the daemon on demand or keep it always running."
+    "help": "Run the daemon on demand or keep it always running.",
+    "not_used_yet": false
   },
   {
     "key": "daemon.idle_exit",
@@ -429,7 +469,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Exit after this long with no clients and no work."
+    "help": "Exit after this long with no clients and no work.",
+    "not_used_yet": false
   },
   {
     "key": "daemon.auto_start",
@@ -439,7 +480,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Clients start the daemon when it is missing."
+    "help": "Clients start the daemon when it is missing.",
+    "not_used_yet": false
   },
   {
     "key": "engine.aria2c_path",
@@ -449,7 +491,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Path or name of the aria2c binary."
+    "help": "Path or name of the aria2c binary.",
+    "not_used_yet": false
   },
   {
     "key": "engine.attach_url",
@@ -459,7 +502,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Attach to an existing aria2 RPC endpoint instead of spawning one."
+    "help": "Attach to an existing aria2 RPC endpoint instead of spawning one.",
+    "not_used_yet": false
   },
   {
     "key": "engine.attach_secret_file",
@@ -469,7 +513,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "File holding the secret for the attached endpoint."
+    "help": "File holding the secret for the attached endpoint.",
+    "not_used_yet": false
   },
   {
     "key": "engine.aria2_extra_args",
@@ -479,7 +524,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Extra aria2c arguments; rpc-* options are rejected."
+    "help": "Extra aria2c arguments; rpc-* options are rejected.",
+    "not_used_yet": false
   },
   {
     "key": "engine.disk_cache",
@@ -489,7 +535,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "aria2 disk cache size."
+    "help": "aria2 disk cache size.",
+    "not_used_yet": false
   },
   {
     "key": "engine.auto_save_interval",
@@ -499,7 +546,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "How often aria2 saves its session."
+    "help": "How often aria2 saves its session.",
+    "not_used_yet": false
   },
   {
     "key": "engine.restart_max_backoff",
@@ -509,7 +557,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Longest wait between aria2 restarts."
+    "help": "Longest wait between aria2 restarts.",
+    "not_used_yet": false
   },
   {
     "key": "engine.crash_loop_exits",
@@ -519,7 +568,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Exits within the window that count as a crash loop."
+    "help": "Exits within the window that count as a crash loop.",
+    "not_used_yet": false
   },
   {
     "key": "engine.crash_loop_window",
@@ -529,7 +579,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Window used to detect a crash loop."
+    "help": "Window used to detect a crash loop.",
+    "not_used_yet": false
   },
   {
     "key": "reliability.inhibit_sleep",
@@ -539,7 +590,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Keep the system awake while downloading."
+    "help": "Keep the system awake while downloading.",
+    "not_used_yet": false
   },
   {
     "key": "reliability.inhibit_mode",
@@ -552,7 +604,8 @@
       "block",
       "delay"
     ],
-    "help": "Sleep inhibit mode."
+    "help": "Sleep inhibit mode.",
+    "not_used_yet": false
   },
   {
     "key": "reliability.disk_precheck",
@@ -562,7 +615,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Check free space before starting a job."
+    "help": "Check free space before starting a job.",
+    "not_used_yet": false
   },
   {
     "key": "reliability.disk_margin_percent",
@@ -572,7 +626,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Extra free space required, in percent."
+    "help": "Extra free space required, in percent.",
+    "not_used_yet": false
   },
   {
     "key": "reliability.duplicates",
@@ -586,7 +641,8 @@
       "allow",
       "skip"
     ],
-    "help": "How to handle a URL that is already queued."
+    "help": "How to handle a URL that is already queued.",
+    "not_used_yet": false
   },
   {
     "key": "reliability.unmounted_guard",
@@ -596,7 +652,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Refuse to write when the target mount is missing."
+    "help": "Refuse to write when the target mount is missing.",
+    "not_used_yet": false
   },
   {
     "key": "remove.default_action",
@@ -610,7 +667,8 @@
       "list-only",
       "trash"
     ],
-    "help": "Default action when removing a job."
+    "help": "Default action when removing a job.",
+    "not_used_yet": true
   },
   {
     "key": "remove.undo_seconds",
@@ -620,7 +678,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Seconds an undo stays available; 0 disables undo."
+    "help": "Seconds an undo stays available; 0 disables undo.",
+    "not_used_yet": false
   },
   {
     "key": "remove.confirm",
@@ -630,7 +689,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Ask before removing."
+    "help": "Ask before removing.",
+    "not_used_yet": true
   },
   {
     "key": "privacy.stamp_origin_xattr",
@@ -640,7 +700,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Write user.xdg.origin.url on finished files: the link without its query string or credentials."
+    "help": "Write user.xdg.origin.url on finished files: the link without its query string or credentials.",
+    "not_used_yet": false
   },
   {
     "key": "privacy.redact_logs",
@@ -650,7 +711,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Strip query strings and credentials from logs."
+    "help": "Strip query strings and credentials from logs.",
+    "not_used_yet": false
   },
   {
     "key": "history.keep_days",
@@ -660,7 +722,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Days of history to keep; 0 keeps everything."
+    "help": "Days of history to keep; 0 keeps everything.",
+    "not_used_yet": false
   },
   {
     "key": "history.purge_removed_after_days",
@@ -670,7 +733,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Days before removed jobs are purged."
+    "help": "Days before removed jobs are purged.",
+    "not_used_yet": false
   },
   {
     "key": "history.show_in_list",
@@ -680,7 +744,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Show finished jobs in the main list."
+    "help": "Show finished jobs in the main list.",
+    "not_used_yet": true
   },
   {
     "key": "history.list_limit",
@@ -690,7 +755,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "History page size."
+    "help": "History page size.",
+    "not_used_yet": true
   },
   {
     "key": "ui.mouse",
@@ -704,7 +770,8 @@
       "cell",
       "off"
     ],
-    "help": "Mouse reporting mode."
+    "help": "Mouse reporting mode.",
+    "not_used_yet": true
   },
   {
     "key": "ui.double_click_ms",
@@ -714,7 +781,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Double click interval in milliseconds."
+    "help": "Double click interval in milliseconds.",
+    "not_used_yet": true
   },
   {
     "key": "ui.glyphs",
@@ -727,7 +795,8 @@
       "unicode",
       "ascii"
     ],
-    "help": "Glyph set."
+    "help": "Glyph set.",
+    "not_used_yet": true
   },
   {
     "key": "ui.units",
@@ -740,7 +809,8 @@
       "iec",
       "si"
     ],
-    "help": "Size units (1024 or 1000 based)."
+    "help": "Size units (1024 or 1000 based).",
+    "not_used_yet": true
   },
   {
     "key": "ui.speed_unit",
@@ -753,7 +823,8 @@
       "bytes",
       "bits"
     ],
-    "help": "Show speeds in bytes or bits."
+    "help": "Show speeds in bytes or bits.",
+    "not_used_yet": true
   },
   {
     "key": "ui.time_format",
@@ -768,7 +839,8 @@
       "12h",
       "iso"
     ],
-    "help": "Timestamp format."
+    "help": "Timestamp format.",
+    "not_used_yet": true
   },
   {
     "key": "ui.details_position",
@@ -783,7 +855,8 @@
       "bottom",
       "hidden"
     ],
-    "help": "Where the details pane goes."
+    "help": "Where the details pane goes.",
+    "not_used_yet": true
   },
   {
     "key": "ui.details_width_percent",
@@ -793,7 +866,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Details pane width in percent."
+    "help": "Details pane width in percent.",
+    "not_used_yet": true
   },
   {
     "key": "ui.wide_breakpoint",
@@ -803,7 +877,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Columns at which the wide layout starts."
+    "help": "Columns at which the wide layout starts.",
+    "not_used_yet": true
   },
   {
     "key": "ui.sort",
@@ -820,7 +895,8 @@
       "speed",
       "size"
     ],
-    "help": "Default list sort."
+    "help": "Default list sort.",
+    "not_used_yet": true
   },
   {
     "key": "ui.paste_detection",
@@ -830,7 +906,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Offer to add URLs found in pasted text."
+    "help": "Offer to add URLs found in pasted text.",
+    "not_used_yet": true
   },
   {
     "key": "ui.toast_seconds",
@@ -840,7 +917,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Seconds a toast stays visible."
+    "help": "Seconds a toast stays visible.",
+    "not_used_yet": true
   },
   {
     "key": "ui.sparkline_seconds",
@@ -850,7 +928,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Seconds of speed history in sparklines."
+    "help": "Seconds of speed history in sparklines.",
+    "not_used_yet": true
   },
   {
     "key": "ui.window_title",
@@ -860,7 +939,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Set the terminal window title."
+    "help": "Set the terminal window title.",
+    "not_used_yet": true
   },
   {
     "key": "ui.title_format",
@@ -870,7 +950,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Window title template."
+    "help": "Window title template.",
+    "not_used_yet": true
   },
   {
     "key": "ui.osc_links",
@@ -880,7 +961,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Use OSC 8 hyperlinks."
+    "help": "Use OSC 8 hyperlinks.",
+    "not_used_yet": true
   },
   {
     "key": "ui.clipboard",
@@ -896,7 +978,8 @@
       "xclip",
       "off"
     ],
-    "help": "Clipboard backend."
+    "help": "Clipboard backend.",
+    "not_used_yet": true
   },
   {
     "key": "ui.open_command",
@@ -906,7 +989,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Command used to open files."
+    "help": "Command used to open files.",
+    "not_used_yet": true
   },
   {
     "key": "ui.open_folder_command",
@@ -916,7 +1000,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Command used to open folders; empty uses open_command."
+    "help": "Command used to open folders; empty uses open_command.",
+    "not_used_yet": true
   },
   {
     "key": "ui.reduced_motion",
@@ -926,7 +1011,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Turn off animation."
+    "help": "Turn off animation.",
+    "not_used_yet": true
   },
   {
     "key": "ui.first_run",
@@ -936,7 +1022,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Show the first-run screen; cleared after it is shown."
+    "help": "Show the first-run screen; cleared after it is shown.",
+    "not_used_yet": true
   },
   {
     "key": "log.level",
@@ -951,7 +1038,8 @@
       "warn",
       "error"
     ],
-    "help": "Log level."
+    "help": "Log level.",
+    "not_used_yet": false
   },
   {
     "key": "log.file",
@@ -961,7 +1049,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Log file path; empty uses the state dir."
+    "help": "Log file path; empty uses the state dir.",
+    "not_used_yet": false
   },
   {
     "key": "log.max_size",
@@ -971,7 +1060,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Rotate the log at this size."
+    "help": "Rotate the log at this size.",
+    "not_used_yet": false
   },
   {
     "key": "log.keep",
@@ -981,7 +1071,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Rotated log files to keep."
+    "help": "Rotated log files to keep.",
+    "not_used_yet": false
   },
   {
     "key": "advanced.progress_hz",
@@ -991,7 +1082,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "Maximum progress pushes per second per client."
+    "help": "Maximum progress pushes per second per client.",
+    "not_used_yet": false
   },
   {
     "key": "advanced.poll_interval",
@@ -1001,7 +1093,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "aria2 poll interval while observed."
+    "help": "aria2 poll interval while observed.",
+    "not_used_yet": false
   },
   {
     "key": "advanced.sentinel_interval",
@@ -1011,7 +1104,8 @@
     "source": "default",
     "live": true,
     "enum": [],
-    "help": "aria2 poll interval while unobserved."
+    "help": "aria2 poll interval while unobserved.",
+    "not_used_yet": false
   },
   {
     "key": "advanced.socket_path",
@@ -1021,7 +1115,8 @@
     "source": "default",
     "live": false,
     "enum": [],
-    "help": "Override the socket location."
+    "help": "Override the socket location.",
+    "not_used_yet": false
   },
   {
     "key": "keys.preset",
@@ -1034,6 +1129,7 @@
       "default",
       "vim"
     ],
-    "help": "Keymap preset."
+    "help": "Keymap preset.",
+    "not_used_yet": true
   }
 ]

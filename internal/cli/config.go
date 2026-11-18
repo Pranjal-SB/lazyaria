@@ -79,6 +79,9 @@ func Config(ctx context.Context, args []string, out, errOut io.Writer) int {
 		if err := c.ConfigSet(ctx, pos[0], pos[1]); err != nil {
 			return fail(errOut, "config", err)
 		}
+		if config.Unused(pos[0]) {
+			fmt.Fprintf(errOut, "lazyaria config: warning: %s is not used yet; it is saved for the terminal interface, which is not released yet\n", pos[0])
+		}
 		if e, ok := schemaByKey()[pos[0]]; ok && !e.Live {
 			fmt.Fprintf(out, "%s saved; it applies after the daemon restarts\n", pos[0])
 		}
@@ -116,11 +119,14 @@ func keyEntries(ents []ipc.ConfigEntry) []ipc.ConfigEntry {
 func printSettings(out io.Writer, ents []ipc.ConfigEntry) {
 	tw := tabwriter.NewWriter(out, 0, 4, 2, ' ', 0)
 	for _, e := range ents {
-		restart := ""
+		note := ""
 		if !e.Live {
-			restart = "  (restart)"
+			note = "  (restart)"
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s%s\n", e.Key, fmtValue(maskSetting(e.Key, e.Value)), e.Source, restart)
+		if config.Unused(e.Key) {
+			note += "  (not used yet)"
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s%s\n", e.Key, fmtValue(maskSetting(e.Key, e.Value)), e.Source, note)
 	}
 	tw.Flush()
 }

@@ -30,6 +30,7 @@ type Entry struct {
 	Live   bool
 	Help   string
 	Enum   []string
+	Unused bool // nothing reads it yet; it waits for the terminal interface
 }
 
 // field describes one leaf setting, built once from the struct tags.
@@ -45,6 +46,7 @@ type field struct {
 	kind     string
 	mapName  string // "keys" or "theme" for map backed fields
 	mapKey   string
+	unused   bool
 }
 
 var (
@@ -56,9 +58,9 @@ var (
 func fields() []*field {
 	schemaOnce.Do(func() {
 		byKey = map[string]*field{}
-		walk(reflect.TypeOf(Settings{}), nil, "")
+		walk(reflect.TypeOf(Settings{}), nil, "", false)
 		add(&field{key: "keys.preset", typ: reflect.TypeOf(""), def: "default", live: true,
-			enum: []string{"default", "vim"}, help: "Keymap preset.", mapName: "keys", mapKey: "preset"})
+			enum: []string{"default", "vim"}, help: "Keymap preset.", mapName: "keys", mapKey: "preset", unused: true})
 	})
 	return schema
 }
@@ -68,18 +70,19 @@ func add(f *field) {
 	byKey[f.key] = f
 }
 
-func walk(t reflect.Type, idx []int, prefix string) {
+func walk(t reflect.Type, idx []int, prefix string, unused bool) {
 	for i := 0; i < t.NumField(); i++ {
 		sf := t.Field(i)
 		name := sf.Tag.Get("toml")
 		path := append(append([]int{}, idx...), i)
+		unused := unused || sf.Tag.Get("unused") == "true"
 		switch {
 		case sf.Type.Kind() == reflect.Map:
 		case sf.Type.Kind() == reflect.Struct:
-			walk(sf.Type, path, name+".")
+			walk(sf.Type, path, name+".", unused)
 		default:
 			f := &field{key: prefix + name, idx: path, typ: sf.Type, def: sf.Tag.Get("default"),
-				live: sf.Tag.Get("live") == "true", help: sf.Tag.Get("help"), kind: sf.Tag.Get("kind")}
+				live: sf.Tag.Get("live") == "true", help: sf.Tag.Get("help"), kind: sf.Tag.Get("kind"), unused: unused}
 			if e := sf.Tag.Get("enum"); e != "" {
 				f.enum = strings.Split(e, "|")
 			}
@@ -107,13 +110,19 @@ func lookup(key string) *field {
 		switch name {
 		case "keys":
 			return &field{key: key, typ: reflect.TypeOf([]string{}), live: true, kind: "keys",
-				help: "Keys bound to this action.", mapName: "keys", mapKey: k}
+				help: "Keys bound to this action.", mapName: "keys", mapKey: k, unused: true}
 		case "theme":
 			return &field{key: key, typ: reflect.TypeOf(""), live: true, kind: "color",
-				help: "Colour for this theme role.", mapName: "theme", mapKey: k}
+				help: "Colour for this theme role.", mapName: "theme", mapKey: k, unused: true}
 		}
 	}
 	return nil
+}
+
+// Unused reports whether key is a setting nothing reads yet.
+func Unused(key string) bool {
+	f := lookup(key)
+	return f != nil && f.unused
 }
 
 // Schema returns every built-in setting with its default value.
@@ -131,7 +140,7 @@ func entries(s *Settings, src map[string]Source) []Entry {
 }
 
 func (f *field) entry(s *Settings, src Source) Entry {
-	return Entry{Key: f.key, Value: f.get(s), Source: src, Live: f.live, Help: f.help, Enum: f.enum}
+	return Entry{Key: f.key, Value: f.get(s), Source: src, Live: f.live, Help: f.help, Enum: f.enum, Unused: f.unused}
 }
 
 func (f *field) get(s *Settings) any {

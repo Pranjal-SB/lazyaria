@@ -37,6 +37,7 @@ type settingDoc struct {
 	Live    bool     `json:"live"`
 	Enum    []string `json:"enum"`
 	Help    string   `json:"help"`
+	Unused  bool     `json:"not_used_yet"` // nothing reads it yet
 }
 
 // checkDoc is one row of `lazyaria doctor --json`.
@@ -71,7 +72,7 @@ func settingDocs(entries []ipc.ConfigEntry) []settingDoc {
 		if enum == nil {
 			enum = []string{}
 		}
-		out[i] = settingDoc{Key: e.Key, Type: typ, Value: maskSetting(e.Key, e.Value), Default: maskSetting(e.Key, def.Value), Source: e.Source, Live: e.Live, Enum: enum, Help: e.Help}
+		out[i] = settingDoc{Key: e.Key, Type: typ, Value: maskSetting(e.Key, e.Value), Default: maskSetting(e.Key, def.Value), Source: e.Source, Live: e.Live, Enum: enum, Help: e.Help, Unused: config.Unused(e.Key)}
 	}
 	return out
 }

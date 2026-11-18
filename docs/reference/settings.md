@@ -34,7 +34,9 @@ comma separated (`429,network`); in the file it is a TOML array.
 
 The **Applies** column says when a change takes effect: **now**, or after
 the daemon **restarts**. Settings marked *Not used yet* are read only by
-the terminal interface, which is not released yet.
+the terminal interface, which is not released yet. `lazyaria config list`
+marks them `(not used yet)`, and `lazyaria config set` saves one with a
+warning.
 
 ## general
 

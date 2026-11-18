@@ -104,20 +104,6 @@ func helpEntries() map[string]string {
 	return out
 }
 
-// notUsedYet are settings that only the terminal interface reads.
-// shortcut: kept by hand; drop entries as the interface ships.
-var notUsedYet = []string{"ui.", "keys.", "downloads.remember_last_dir", "remove.default_action",
-	"remove.confirm", "history.show_in_list", "history.list_limit"}
-
-func unused(key string) bool {
-	for _, p := range notUsedYet {
-		if key == p || (strings.HasSuffix(p, ".") && strings.HasPrefix(key, p)) {
-			return true
-		}
-	}
-	return false
-}
-
 // settingsDoc is one table per section of the settings schema.
 func settingsDoc() string {
 	var b strings.Builder
@@ -147,7 +133,9 @@ comma separated (` + "`429,network`" + `); in the file it is a TOML array.
 
 The **Applies** column says when a change takes effect: **now**, or after
 the daemon **restarts**. Settings marked *Not used yet* are read only by
-the terminal interface, which is not released yet.
+the terminal interface, which is not released yet. ` + "`lazyaria config list`" + `
+marks them ` + "`(not used yet)`" + `, and ` + "`lazyaria config set`" + ` saves one with a
+warning.
 `)
 	section := ""
 	for _, e := range config.Schema() {
@@ -167,7 +155,7 @@ the terminal interface, which is not released yet.
 		if len(e.Enum) > 0 {
 			desc += " One of: `" + strings.Join(e.Enum, "`, `") + "`."
 		}
-		if unused(e.Key) {
+		if e.Unused {
 			desc += " *Not used yet.*"
 		}
 		fmt.Fprintf(&b, "| `%s` | %s | %s | %s |\n", e.Key, defaultCell(e.Value), applies, strings.ReplaceAll(desc, "|", `\|`))
