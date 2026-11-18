@@ -5,10 +5,12 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/Pranjal-SB/lazyaria/internal/daemon"
 	"github.com/Pranjal-SB/lazyaria/internal/ipc"
+	"github.com/Pranjal-SB/lazyaria/internal/store"
 )
 
 // minPrefix is the shortest id prefix accepted.
@@ -109,7 +111,7 @@ func jobAction(ctx context.Context, name string, args []string, out, errOut io.W
 		return fail(errOut, name, err)
 	}
 	defer c.Close()
-	ids, err := resolveIDs(ctx, c, pos)
+	ids, jobs, err := resolveIDs(ctx, c, pos)
 	if err != nil {
 		return fail(errOut, name, err)
 	}
@@ -117,27 +119,56 @@ func jobAction(ctx context.Context, name string, args []string, out, errOut io.W
 		return fail(errOut, name, err)
 	}
 	for _, id := range ids {
+		if why := unchanged(name, jobs, id); why != "" {
+			fmt.Fprintf(out, "%s %s; nothing to %s\n", id, why, name)
+			continue
+		}
 		fmt.Fprintf(out, "%s %s\n", pastTense[name], id)
 	}
 	return exitOK
+}
+
+// unchanged says why pause or resume leaves job id as it was, as the
+// daemon decides it (daemon.Manager pause and resume), or "" if it acts.
+func unchanged(action string, jobs []*store.Job, id string) string {
+	i := slices.IndexFunc(jobs, func(j *store.Job) bool { return j.ID == id })
+	if i < 0 || (action != "pause" && action != "resume") {
+		return ""
+	}
+	j := jobs[i]
+	switch {
+	case j.State == store.Done:
+		return "is already finished"
+	case j.State == store.Seeding:
+		return "is seeding"
+	case action == "pause" && j.State == store.Paused:
+		return "is already paused"
+	case action == "pause" && j.State == store.Error:
+		return "has failed"
+	case action == "resume" && j.State == store.Active:
+		return "is already running"
+	case action == "resume" && j.State == store.Queued && j.EngineRef != nil:
+		return "is already queued"
+	}
+	return ""
 }
 
 var pastTense = map[string]string{"pause": "paused", "resume": "resumed", "remove": "removed", "refresh": "refreshed"}
 
 // resolveIDs maps each prefix to the one job id it starts. Case does not
 // matter: ids are upper-case ULIDs. The daemon does the matching, so the
-// whole history is never fetched.
-func resolveIDs(ctx context.Context, c *ipc.Client, prefixes []string) ([]string, error) {
+// whole history is never fetched. The jobs it matched come back too.
+func resolveIDs(ctx context.Context, c *ipc.Client, prefixes []string) ([]string, []*store.Job, error) {
 	upper := make([]string, len(prefixes))
 	for i, p := range prefixes {
 		if len(p) < minPrefix {
-			return nil, usagef("id prefix %q is too short; give at least %d characters", p, minPrefix)
+			return nil, nil, usagef("id prefix %q is too short; give at least %d characters", p, minPrefix)
 		}
 		upper[i] = strings.ToUpper(p)
 	}
 	jobs, err := c.Match(ctx, upper...)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var ids []string
 	for _, p := range prefixes {
@@ -149,12 +180,12 @@ func resolveIDs(ctx context.Context, c *ipc.Client, prefixes []string) ([]string
 		}
 		switch len(match) {
 		case 0:
-			return nil, usagef("no job id starts with %q; removed jobs are not listed, the others are in `lazyaria list --all`", p)
+			return nil, nil, usagef("no job id starts with %q; removed jobs are not listed, the others are in `lazyaria list --all`", p)
 		case 1:
 			ids = append(ids, match[0])
 		default:
-			return nil, usagef("id prefix %q matches %d jobs, give more characters:\n  %s", p, len(match), strings.Join(match, "\n  "))
+			return nil, nil, usagef("id prefix %q matches %d jobs, give more characters:\n  %s", p, len(match), strings.Join(match, "\n  "))
 		}
 	}
-	return ids, nil
+	return ids, jobs, nil
 }

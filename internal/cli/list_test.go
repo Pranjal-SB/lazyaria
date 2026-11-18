@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
+	"io"
 	"os"
 	"slices"
 	"strings"
@@ -115,6 +117,31 @@ func TestIDPrefixAmbiguous(t *testing.T) {
 	}
 	if code, _, errOut := run(t, Pause, "", "01JZZ"); code != 2 || !strings.Contains(errOut, `no job id starts with "01JZZ"`) {
 		t.Errorf("unknown prefix: exit %d: %s", code, errOut)
+	}
+}
+
+// pause and resume say so when a job is left as it was, and still exit 0.
+func TestPauseResumeSayWhatHappened(t *testing.T) {
+	f := startFake(t)
+	f.jobs = sampleJobs() // 1 active, 2 failed
+	done := *f.jobs[0]
+	done.ID, done.State = "01JC0000000000000000000003", store.Done
+	f.jobs = append(f.jobs, &done)
+	for _, tc := range []struct {
+		cmd  func(context.Context, []string, io.Writer, io.Writer) int
+		id   string
+		want string
+	}{
+		{Pause, "01JC0000000000000000000001", "paused 01JC0000000000000000000001\n"},
+		{Pause, "01JC0000000000000000000002", "01JC0000000000000000000002 has failed; nothing to pause\n"},
+		{Pause, "01JC0000000000000000000003", "01JC0000000000000000000003 is already finished; nothing to pause\n"},
+		{Resume, "01JC0000000000000000000001", "01JC0000000000000000000001 is already running; nothing to resume\n"},
+		{Resume, "01JC0000000000000000000002", "resumed 01JC0000000000000000000002\n"},
+		{Resume, "01JC0000000000000000000003", "01JC0000000000000000000003 is already finished; nothing to resume\n"},
+	} {
+		if code, out, errOut := run(t, tc.cmd, "", tc.id); code != 0 || out != tc.want {
+			t.Errorf("%s: exit %d, stdout %q, stderr %q; want 0 and %q", tc.id, code, out, errOut, tc.want)
+		}
 	}
 }
 
