@@ -16,9 +16,13 @@ const configUsage = "usage: lazyaria config list [--json] | get KEY | set KEY VA
 
 // Config runs `lazyaria config list|get|set|reset|edit|path|keys`.
 func Config(ctx context.Context, args []string, out, errOut io.Writer) int {
-	if len(args) == 0 || isHelp(args[0]) {
+	// A KEY or VALUE is taken verbatim, so only the word after the
+	// subcommand can ask for help: `config set -h`, not `config set k -h`.
+	// list and keys print their flags for -h below.
+	subHelp := len(args) > 1 && isHelp(args[1]) && args[0] != "list" && args[0] != "keys"
+	if len(args) == 0 || isHelp(args[0]) || subHelp {
 		fmt.Fprintln(errOut, configUsage)
-		return helpExit(args)
+		return helpExit(args[:min(len(args), 2)])
 	}
 	sub, rest := args[0], args[1:]
 	want := map[string]int{"list": 0, "keys": 0, "path": 0, "edit": 0, "get": 1, "reset": 1, "set": 2}

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/Pranjal-SB/lazyaria/internal/config"
@@ -208,9 +209,9 @@ func isHelp(arg string) bool {
 }
 
 // helpExit is the exit code after printing a command's usage: 0 when the
-// arguments were only a request for help.
+// arguments asked for help.
 func helpExit(args []string) int {
-	if len(args) == 1 && isHelp(args[0]) {
+	if slices.ContainsFunc(args, isHelp) {
 		return exitOK
 	}
 	return exitUsage

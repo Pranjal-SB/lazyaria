@@ -18,12 +18,22 @@ func TestRunVersion(t *testing.T) {
 	}
 }
 
-// -h prints help and exits 0 for every command.
+// -h prints help and exits 0 for every command and subcommand.
 func TestHelpFlagExitsZero(t *testing.T) {
+	var cmds [][]string
 	for name := range commands {
-		var out, errb bytes.Buffer
-		if code := run(context.Background(), []string{"lazyaria", name, "-h"}, &out, &errb); code != 0 {
-			t.Errorf("%s -h: exit %d, want 0 (stderr: %q)", name, code, errb.String())
+		cmds = append(cmds, []string{name})
+	}
+	for _, sub := range []string{"list", "keys", "get", "set", "reset", "path", "edit"} {
+		cmds = append(cmds, []string{"config", sub})
+	}
+	cmds = append(cmds, []string{"service", "install"}, []string{"service", "uninstall"})
+	for _, c := range cmds {
+		for _, h := range []string{"-h", "--help"} {
+			var out, errb bytes.Buffer
+			if code := run(context.Background(), append(append([]string{"lazyaria"}, c...), h), &out, &errb); code != 0 {
+				t.Errorf("%v %s: exit %d, want 0 (stderr: %q)", c, h, code, errb.String())
+			}
 		}
 	}
 }
