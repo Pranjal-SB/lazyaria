@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/channel"
@@ -38,8 +39,13 @@ type Client struct {
 	// the client is shared.
 	Redial     func(context.Context) (*Client, error)
 	subscribed bool
-	dead       bool // closed, or the connection dropped and none replaced it
+	dead       bool          // closed, or the connection dropped and none replaced it
+	redialing  chan struct{} // closed when the redial under way ends
+	stopRedial func()        // cancels the redial under way
 }
+
+// redialTimeout bounds a reconnect, which no single caller's context ends.
+const redialTimeout = 10 * time.Second
 
 var clientPeerUID = peerUID // swapped in tests
 
@@ -64,12 +70,16 @@ func Dial(ctx context.Context, p config.Paths) (*Client, error) {
 	return c, nil
 }
 
-// Close ends the connection. A call in flight fails rather than reconnect.
+// Close ends the connection. A call in flight fails rather than reconnect,
+// and a reconnect under way is cancelled, not waited for.
 func (c *Client) Close() error {
 	c.mu.Lock()
 	c.dead = true
-	rpc := c.rpc
+	rpc, stop := c.rpc, c.stopRedial
 	c.mu.Unlock()
+	if stop != nil {
+		stop()
+	}
 	return rpc.Close()
 }
 
@@ -124,10 +134,8 @@ func (c *Client) call(ctx context.Context, method string, params, result any) er
 
 // callOn is call that also returns the connection the call was answered on.
 func (c *Client) callOn(ctx context.Context, method string, params, result any) (*jrpc2.Client, error) {
-	c.mu.Lock()
-	rpc, dead := c.rpc, c.dead
-	c.mu.Unlock()
-	if dead {
+	rpc := c.current(ctx)
+	if rpc == nil {
 		return nil, ErrNotSent
 	}
 	if result == nil {
@@ -149,23 +157,69 @@ func (c *Client) callOn(ctx context.Context, method string, params, result any) 
 	return next, fromWire(next.CallResult(ctx, method, params, result))
 }
 
-// reconnect replaces the connection old, which hung up, and returns the new
-// one, or nil when there is none. Calls that lost old at the same time wait
-// here and share one reconnect.
-func (c *Client) reconnect(ctx context.Context, old *jrpc2.Client) *jrpc2.Client {
+// current waits for a reconnect under way and returns the connection to
+// use, or nil when the client is closed or has none.
+func (c *Client) current(ctx context.Context) *jrpc2.Client {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.rpc != old {
-		return c.rpc // another call already reconnected
+	for c.redialing != nil {
+		ch := c.redialing
+		c.mu.Unlock()
+		select {
+		case <-ch:
+		case <-ctx.Done():
+		}
+		c.mu.Lock()
+		if ctx.Err() != nil {
+			return nil
+		}
+	}
+	if c.dead {
+		return nil
+	}
+	return c.rpc
+}
+
+// reconnect replaces the connection old, which hung up, and returns the new
+// one, or nil when there is none. Calls that lost old at the same time wait
+// for one reconnect and share it. The lock is not held while redialling, so
+// Close never waits for it.
+func (c *Client) reconnect(ctx context.Context, old *jrpc2.Client) *jrpc2.Client {
+	for {
+		if rpc := c.current(ctx); rpc != old {
+			return rpc // another call reconnected, or the client is closed
+		}
+		c.mu.Lock()
+		if c.rpc == old && c.redialing == nil {
+			break // still holding the lock
+		}
+		c.mu.Unlock() // another call started a redial meanwhile
 	}
 	if c.Redial == nil || c.subscribed || c.dead {
 		c.dead = true
+		c.mu.Unlock()
 		return nil
 	}
 	redial := c.Redial
 	c.Redial = nil
-	nc, err := redial(ctx)
-	if err != nil {
+	done := make(chan struct{})
+	// The redial serves every waiting call, so one caller giving up must
+	// not end it.
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), redialTimeout)
+	c.redialing, c.stopRedial = done, cancel
+	c.mu.Unlock()
+
+	nc, err := redial(rctx)
+	cancel()
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.redialing, c.stopRedial = nil, nil
+	close(done)
+	if err != nil || c.dead {
+		if nc != nil {
+			nc.Close()
+		}
 		c.dead = true
 		return nil
 	}
