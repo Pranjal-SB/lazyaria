@@ -156,6 +156,12 @@ func (m *Manager) RefreshURI(ctx context.Context, id, uri string) (*store.Job, e
 		if err != nil && !m.lost(ctx, refOf(j)) {
 			return nil, err
 		}
+		if err != nil {
+			// A paused download is removed before its re-add, which can
+			// fail. The new link is saved either way; the job is added
+			// again below, or on resume or reconcile when paused.
+			m.log.Warn("refresh: the engine dropped the download; adding it again from the new link", "job", id, "err", err)
+		}
 		newRef = string(r) // "" when the engine lost it: re-added below
 	}
 	m.cancelRetry(id)

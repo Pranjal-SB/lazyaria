@@ -1,8 +1,10 @@
 package daemon
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
@@ -137,6 +139,37 @@ func TestRefreshLostDownloadReadds(t *testing.T) {
 	}
 	if *got.EngineRef != string(ref) || got.State != store.Queued {
 		t.Fatalf("ref %s state %s", *got.EngineRef, got.State)
+	}
+}
+
+// A refresh of a paused job removes the download and adds it again. When
+// that add fails the job stays paused with the new link, and comes back on
+// resume or reconcile; the failure is logged, not dropped.
+func TestRefreshPausedReaddFailsIsLogged(t *testing.T) {
+	r := newRig(t)
+	var logs bytes.Buffer
+	r.m.log = slog.New(slog.NewTextHandler(&logs, nil))
+	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}})
+	if err := r.m.Pause(bg, []string{j.ID}); err != nil {
+		t.Fatal(err)
+	}
+	r.e.Remove(bg, r.ref(t, j.ID)) // the engine's remove went through
+	r.e.changeErr = errors.New("re-add: refused")
+	got, err := r.m.RefreshURI(bg, j.ID, "http://mirror.example.com/a.iso")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.State != store.Paused || got.URIs[0] != "http://mirror.example.com/a.iso" {
+		t.Fatalf("state %s uris %v, want paused with the new link", got.State, got.URIs)
+	}
+	if !strings.Contains(logs.String(), "re-add: refused") {
+		t.Fatalf("the engine's failure was not logged: %q", logs.String())
+	}
+	if err := r.m.Resume(bg, []string{j.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if adds, _ := r.e.count(); adds != 2 || r.e.adds[1].URIs[0] != "http://mirror.example.com/a.iso" {
+		t.Fatalf("resume did not add the job again from the new link: %d %+v", adds, r.e.adds)
 	}
 }
 
