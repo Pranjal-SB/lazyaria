@@ -230,10 +230,18 @@ func (f *field) fail(where string, line int, err error) error {
 		loc += " from " + where
 	}
 	if f.mapName != "" && f.mapKey != "preset" {
-		return fmt.Errorf("%s: %w", loc, err)
+		return &ValueError{fmt.Errorf("%s: %w", loc, err)}
 	}
-	return fmt.Errorf("%s: %w; default %q", loc, err, f.def)
+	return &ValueError{fmt.Errorf("%s: %w; default %q", loc, err, f.def)}
 }
+
+// ValueError is a setting given a value it does not accept, in the config
+// file, the environment or a flag. The CLI treats it as a usage error.
+type ValueError struct{ Err error }
+
+func (e *ValueError) Error() string { return e.Err.Error() }
+
+func (e *ValueError) Unwrap() error { return e.Err }
 
 func asList(v any) []string {
 	switch x := v.(type) {

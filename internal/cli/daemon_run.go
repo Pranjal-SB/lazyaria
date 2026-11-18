@@ -74,7 +74,7 @@ func (d *daemonProc) run(ctx context.Context, ready func()) (int, error) {
 
 	pre, err := d.resolve()
 	if err != nil {
-		return 1, err
+		return exitCode(err), err
 	}
 	closeLog := d.openLog(pre)
 	defer closeLog()

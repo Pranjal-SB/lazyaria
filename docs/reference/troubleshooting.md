@@ -183,10 +183,10 @@ Check the spelling against [Settings](settings.md).
 The value is out of range or of the wrong type. The message names the
 allowed values and the default.
 
-**`downloads.max_concurrent from LAZYARIA_DOWNLOADS_MAX_CONCURRENT: expected a whole number`**
+**`downloads.max_concurrent from LAZYARIA_DOWNLOADS_MAX_CONCURRENT: expected a whole number; default "5"`** (exit code 2)
 
 An environment variable holds a bad value. Every command fails until you
-fix or unset it.
+fix or unset it. A bad value in the config file also exits with 2.
 
 **A setting I changed has no effect**
 

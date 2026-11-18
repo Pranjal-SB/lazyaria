@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,6 +36,18 @@ func TestConfigSetInvalid(t *testing.T) {
 	}
 	if code, _, _ := run(t, Config, "", "frob"); code != 2 {
 		t.Fatalf("unknown subcommand: exit %d", code)
+	}
+}
+
+// A bad value in a LAZYARIA_* variable is a usage error (spec §10).
+func TestBadEnvValueExitsUsage(t *testing.T) {
+	startFake(t)
+	t.Setenv("LAZYARIA_DOWNLOADS_MAX_CONCURRENT", "lots")
+	for _, cmd := range []func(context.Context, []string, io.Writer, io.Writer) int{List, Logs} {
+		code, _, errOut := run(t, cmd, "")
+		if code != 2 || !strings.Contains(errOut, "LAZYARIA_DOWNLOADS_MAX_CONCURRENT") {
+			t.Errorf("exit %d, stderr %q; want 2 naming the variable", code, errOut)
+		}
 	}
 }
 
