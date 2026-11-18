@@ -13,7 +13,7 @@ func List(ctx context.Context, args []string, out, errOut io.Writer) int {
 	asJSON := fs.Bool("json", false, "print JSON")
 	all := fs.Bool("all", false, "include finished jobs")
 	limit := fs.Int("limit", 0, "show at most N jobs (0 = all)")
-	if _, err := parseArgs(fs, args); err != nil {
+	if err := parseNoArgs(fs, args); err != nil {
 		return flagExit(err)
 	}
 	if *limit < 0 {
@@ -40,7 +40,7 @@ func List(ctx context.Context, args []string, out, errOut io.Writer) int {
 func Status(ctx context.Context, args []string, out, errOut io.Writer) int {
 	fs := newFlags("status", errOut)
 	asJSON := fs.Bool("json", false, "print JSON")
-	if _, err := parseArgs(fs, args); err != nil {
+	if err := parseNoArgs(fs, args); err != nil {
 		return flagExit(err)
 	}
 	c, err := connect(ctx)

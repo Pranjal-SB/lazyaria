@@ -33,7 +33,7 @@ func Doctor(ctx context.Context, args []string, out, errOut io.Writer) int {
 	fs := newFlags("doctor", errOut)
 	asJSON := fs.Bool("json", false, "print JSON")
 	restart := fs.Bool("restart-engine", false, "restart aria2 with a freshly read config first")
-	if _, err := parseArgs(fs, args); err != nil {
+	if err := parseNoArgs(fs, args); err != nil {
 		return flagExit(err)
 	}
 	s, p, err := resolveLocal(os.Environ(), nil)

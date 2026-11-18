@@ -23,7 +23,7 @@ const (
 func Logs(ctx context.Context, args []string, out, errOut io.Writer) int {
 	fs := newFlags("logs", errOut)
 	follow := fs.Bool("f", false, "keep printing new lines")
-	if _, err := parseArgs(fs, args); err != nil {
+	if err := parseNoArgs(fs, args); err != nil {
 		return flagExit(err)
 	}
 	_, p, err := resolveLocal(os.Environ(), nil)

@@ -6,6 +6,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -93,7 +95,19 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	return cmd(ctx, args[2:], stdout, stderr)
 }
 
-func cmdVersion(_ context.Context, _ []string, out, _ io.Writer) int {
+func cmdVersion(_ context.Context, args []string, out, errOut io.Writer) int {
+	fs := flag.NewFlagSet("lazyaria version", flag.ContinueOnError)
+	fs.SetOutput(errOut)
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+	if fs.NArg() > 0 {
+		fmt.Fprintf(errOut, "lazyaria version: unexpected argument %q. Run \"lazyaria help\" to see the commands.\n", fs.Arg(0))
+		return 2
+	}
 	fmt.Fprintf(out, "lazyaria %s (protocol %d)\n", buildinfo.Version, buildinfo.Protocol)
 	return 0
 }

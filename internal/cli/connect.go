@@ -196,6 +196,16 @@ func parseArgs(fs *flag.FlagSet, args []string) ([]string, error) {
 	}
 }
 
+// parseNoArgs is parseArgs for a command that takes flags only.
+func parseNoArgs(fs *flag.FlagSet, args []string) error {
+	pos, err := parseArgs(fs, args)
+	if err == nil && len(pos) > 0 {
+		err = usagef("unexpected argument %q. Run \"lazyaria help\" to see the commands.", pos[0])
+		fmt.Fprintf(fs.Output(), "%s: %v\n", fs.Name(), err)
+	}
+	return err
+}
+
 // newFlags returns a flag set that reports to errOut.
 func newFlags(name string, errOut io.Writer) *flag.FlagSet {
 	fs := flag.NewFlagSet("lazyaria "+name, flag.ContinueOnError)

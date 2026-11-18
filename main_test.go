@@ -38,6 +38,23 @@ func TestHelpFlagExitsZero(t *testing.T) {
 	}
 }
 
+// A command that takes no arguments refuses one with a usage error.
+func TestUnexpectedArgument(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("HOME", root)
+	t.Setenv("XDG_CONFIG_HOME", root+"/c")
+	t.Setenv("XDG_STATE_HOME", root+"/s")
+	t.Setenv("XDG_RUNTIME_DIR", root+"/r")
+	t.Setenv("LAZYARIA_DAEMON_AUTO_START", "false")
+	for _, c := range []string{"list", "status", "doctor", "logs", "version", "daemon"} {
+		var out, errb bytes.Buffer
+		code := run(context.Background(), []string{"lazyaria", c, "zz"}, &out, &errb)
+		if code != 2 || !strings.Contains(errb.String(), `unexpected argument "zz"`) {
+			t.Errorf("%s zz: exit %d, stderr %q; want 2 naming the argument", c, code, errb.String())
+		}
+	}
+}
+
 func TestRunUnknown(t *testing.T) {
 	var out, errb bytes.Buffer
 	code := run(context.Background(), []string{"lazyaria", "nope"}, &out, &errb)
