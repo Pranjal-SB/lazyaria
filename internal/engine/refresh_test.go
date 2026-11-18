@@ -55,7 +55,7 @@ func TestChangeURIOnStartedPausedStaysPaused(t *testing.T) {
 	if err := e.Pause(ctxT(t, 5*time.Second), ref); err != nil {
 		t.Fatal(err)
 	}
-	waitStatus(t, e, ref, 5*time.Second, func(s EngineStatus) bool { return s.State == "paused" })
+	paused := waitStatus(t, e, ref, 5*time.Second, func(s EngineStatus) bool { return s.State == "paused" })
 	got, err := e.ChangeURI(ctxT(t, 10*time.Second), ref, fs.URL("new.bin", testutil.ModeOK))
 	if err != nil {
 		t.Fatal(err)
@@ -72,19 +72,24 @@ func TestChangeURIOnStartedPausedStaysPaused(t *testing.T) {
 	if fs.Served("new.bin") != served {
 		t.Fatal("a paused download fetched from the new link")
 	}
-	rawCall(t, e, "aria2.changeOption", nil, string(ref), map[string]string{"max-download-limit": "0"})
+	// Still at 3M/s, a start-over could not be back at the paused count by
+	// the time aria2 knows the size again. Bytes served cannot show this:
+	// under load aria2 re-requests overlapping ranges.
 	if err := e.Resume(ctxT(t, 5*time.Second), ref); err != nil {
 		t.Fatal(err)
 	}
+	back := waitStatus(t, e, ref, 10*time.Second, func(s EngineStatus) bool { return s.Total > 0 })
+	if back.Done < paused.Done || back.Path != paused.Path {
+		t.Fatalf("after resume: %d bytes at %s, paused with %d at %s; the download started over",
+			back.Done, back.Path, paused.Done, paused.Path)
+	}
+	rawCall(t, e, "aria2.changeOption", nil, string(ref), map[string]string{"max-download-limit": "0"})
 	st := waitStatus(t, e, ref, 30*time.Second, func(s EngineStatus) bool { return s.State == "complete" || s.State == "error" })
 	if st.State != "complete" {
 		t.Fatalf("after resume: %s (%d %s)", st.State, st.ErrorCode, st.ErrorMsg)
 	}
 	if b, err := os.ReadFile(st.Path); err != nil || !bytes.Equal(b, big) {
 		t.Fatalf("payload differs after refresh and resume (%v)", err)
-	}
-	if fs.Served("new.bin") >= int64(len(big)) {
-		t.Fatal("the download started over instead of resuming")
 	}
 }
 
