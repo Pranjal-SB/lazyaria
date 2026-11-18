@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -58,6 +59,29 @@ func TestPauseResume(t *testing.T) {
 	if st := status(t, e, ref); st.State != "removed" || st.Known {
 		t.Fatalf("after remove: %+v", st)
 	}
+}
+
+// A plain resume of a paused download whose .aria2 control file is gone
+// has the same hazard as a refresh (see TestChangeURIOnPausedWithoutControlFile).
+func TestResumeWithoutControlFile(t *testing.T) {
+	t.Parallel()
+	e, _ := startEngine(t)
+	big := testutil.RandBytes(16 << 20) // above aria2's 5 MiB no-file-allocation-limit
+	fs := testutil.NewFaultServer(t, map[string][]byte{"r.bin": big})
+	ref := add(t, e, AddRequest{URIs: []string{fs.URL("r.bin", testutil.ModeOK)}, Options: map[string]string{"max-download-limit": "2M"}})
+	waitStatus(t, e, ref, 15*time.Second, func(s EngineStatus) bool { return s.Done > 1<<20 })
+	if err := e.Pause(ctxT(t, 5*time.Second), ref); err != nil {
+		t.Fatal(err)
+	}
+	paused := waitStatus(t, e, ref, 5*time.Second, func(s EngineStatus) bool { return s.State == "paused" })
+	if err := os.Remove(paused.Path + ".aria2"); err != nil {
+		t.Fatal(err)
+	}
+	rawCall(t, e, "aria2.changeOption", nil, string(ref), map[string]string{"max-download-limit": "0"})
+	if err := e.Resume(ctxT(t, 5*time.Second), ref); err != nil {
+		t.Fatal(err)
+	}
+	checkPayload(t, e, ref, big)
 }
 
 func TestRejectsDisallowedOption(t *testing.T) {
