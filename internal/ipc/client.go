@@ -146,7 +146,15 @@ func (c *Client) callOn(ctx context.Context, method string, params, result any) 
 	if result == nil {
 		result = new(json.RawMessage)
 	}
-	err := fromWire(rpc.CallResult(ctx, method, params, result))
+	raw := rpc.CallResult(ctx, method, params, result)
+	if raw != nil && ctx.Err() == nil && unsent(rpc, raw) {
+		// It never left: send it, read or write, on the next connection.
+		if next := c.reconnect(ctx, rpc); next != nil {
+			return next, fromWire(next.CallResult(ctx, method, params, result))
+		}
+		return nil, ErrNotSent
+	}
+	err := fromWire(raw)
 	if err == nil || ctx.Err() != nil || !hungUp(err) {
 		return rpc, err
 	}
@@ -160,6 +168,17 @@ func (c *Client) callOn(ctx context.Context, method string, params, result any) 
 		return nil, err
 	}
 	return next, fromWire(next.CallResult(ctx, method, params, result))
+}
+
+// unsent reports whether jrpc2 (v1.3.6) refused the call before writing it.
+// It checks for a stopped client under its lock before it writes, and then
+// returns the stop error as it is. A call that was written and then lost
+// ends as a *jrpc2.Error or a context error instead.
+func unsent(rpc *jrpc2.Client, raw error) bool {
+	if _, ok := errors.AsType[*jrpc2.Error](raw); ok || errors.Is(raw, context.Canceled) || errors.Is(raw, context.DeadlineExceeded) {
+		return false
+	}
+	return rpc.IsStopped()
 }
 
 // current waits for a reconnect under way and returns the connection to
