@@ -213,6 +213,28 @@ func TestHTTPTorrentAdoption(t *testing.T) {
 	if got := r.get(t, j.ID); got.Name != "Music" {
 		t.Fatalf("name %q, want the torrent's", got.Name)
 	}
+
+	// The job is kind torrent now, but a re-add after an engine restart
+	// fetches the .torrent again; the second adoption must drop it too.
+	if err := r.e.Remove(bg, "X"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.m.Reconcile(bg); err != nil {
+		t.Fatal(err)
+	}
+	again := r.ref(t, j.ID)
+	r.e.set(again, func(s *engine.EngineStatus) {
+		s.State, s.Path, s.Total, s.Done = "active", filepath.Join(r.dir, "x.torrent"), 900, 900
+	})
+	r.event(again, engine.KindStart)
+	r.e.set("Y", func(s *engine.EngineStatus) { s.State, s.IsBT, s.Name = "active", true, "Music" })
+	r.e.set(again, func(s *engine.EngineStatus) { s.State, s.FollowedBy = "complete", "Y" })
+	r.event(again, engine.KindComplete)
+	got = r.get(t, j.ID)
+	if *got.EngineRef != "Y" || got.Kind != "torrent" || got.Name != "download" || got.Out != nil || got.TotalBytes != nil || got.DoneBytes != nil {
+		t.Fatalf("second adoption: ref %s kind %q name %q out %v total %v done %v; want the .torrent file dropped again",
+			*got.EngineRef, got.Kind, got.Name, got.Out, got.TotalBytes, got.DoneBytes)
+	}
 }
 
 func TestExistsHints(t *testing.T) {

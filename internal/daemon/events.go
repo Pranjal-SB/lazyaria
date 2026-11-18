@@ -169,8 +169,11 @@ func (m *Manager) adopt(ctx context.Context, j *store.Job, st engine.EngineStatu
 	parent := refOf(j)
 	child := string(st.FollowedBy)
 	// A link's Out, name and byte counts were the .torrent or metalink
-	// file's. The child's status names the payload on the next read.
-	link := !isBT(j.Kind)
+	// file's. The child's status names the payload on the next read. The
+	// link, not the kind, decides: after one adoption the kind is torrent,
+	// yet a re-add fetches the .torrent again. A .torrent file is never
+	// followed, so only a magnet link is not one.
+	link := len(j.URIs) > 0 && jobKind(j.URIs, nil) != "magnet"
 	bt := false
 	if link {
 		if sts, err := m.e.Status(ctx, []engine.EngineRef{st.FollowedBy}); err == nil {
