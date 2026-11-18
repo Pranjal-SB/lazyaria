@@ -31,6 +31,7 @@ type fakeEngine struct {
 	onAdd       func(ref engine.EngineRef)
 	changeRef   engine.EngineRef // ChangeURI result when set
 	changeErr   error
+	restarted   string // Resume and ChangeURI report it as the old file
 	pauseErr    error
 	events      chan engine.EngineEvent
 }
@@ -102,17 +103,17 @@ func (f *fakeEngine) Pause(_ context.Context, ref engine.EngineRef) error {
 	return nil
 }
 
-func (f *fakeEngine) Resume(_ context.Context, ref engine.EngineRef) error {
+func (f *fakeEngine) Resume(_ context.Context, ref engine.EngineRef) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.resumed = append(f.resumed, ref)
 	st, ok := f.dl[ref]
 	if !ok || st.State != "paused" {
-		return fmt.Errorf("cannot unpause %s", ref)
+		return "", fmt.Errorf("cannot unpause %s", ref)
 	}
 	st.State = "waiting"
 	f.dl[ref] = st
-	return nil
+	return f.restarted, nil
 }
 
 func (f *fakeEngine) Remove(_ context.Context, ref engine.EngineRef) error {
@@ -123,18 +124,18 @@ func (f *fakeEngine) Remove(_ context.Context, ref engine.EngineRef) error {
 	return nil
 }
 
-func (f *fakeEngine) ChangeURI(_ context.Context, ref engine.EngineRef, _ string) (engine.EngineRef, error) {
+func (f *fakeEngine) ChangeURI(_ context.Context, ref engine.EngineRef, _ string) (engine.EngineRef, string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.changeErr != nil {
-		return "", f.changeErr
+		return "", "", f.changeErr
 	}
 	if f.changeRef != "" {
 		f.dl[f.changeRef] = engine.EngineStatus{Ref: f.changeRef, State: "waiting", Known: true}
 		delete(f.dl, ref)
-		return f.changeRef, nil
+		return f.changeRef, f.restarted, nil
 	}
-	return ref, nil
+	return ref, f.restarted, nil
 }
 
 func (f *fakeEngine) Status(_ context.Context, refs []engine.EngineRef) ([]engine.EngineStatus, error) {

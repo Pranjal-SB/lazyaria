@@ -22,19 +22,19 @@ var errStopped = errors.New("download stopped during refresh")
 // same gid (a paused one stays paused), and its .aria2 control file makes
 // it resume. Only if aria2 refuses the old gid does the download come back
 // under a new ref.
-func (e *aria2Engine) ChangeURI(ctx context.Context, ref EngineRef, uri string) (EngineRef, error) {
+func (e *aria2Engine) ChangeURI(ctx context.Context, ref EngineRef, uri string) (EngineRef, string, error) {
 	if err := checkRefreshURI(uri); err != nil {
-		return "", err
+		return "", "", err
 	}
 	auth := map[string]string{}
 	clean := SplitAuth([]string{uri}, "", "", auth)[0]
 	for {
 		var s aria2.Status
 		if err := e.call(ctx, "aria2.tellStatus", &s, string(ref), []string{"status", "dir", "files", "bittorrent", "completedLength"}); err != nil {
-			return "", fmt.Errorf("refresh %s: %w", ref, err)
+			return "", "", fmt.Errorf("refresh %s: %w", ref, err)
 		}
 		if s.Bittorrent != nil {
-			return "", ErrNotSupported
+			return "", "", ErrNotSupported
 		}
 		switch s.Status {
 		case "paused":
@@ -46,10 +46,10 @@ func (e *aria2Engine) ChangeURI(ctx context.Context, ref EngineRef, uri string) 
 			opts := e.keptOptions(ctx, ref)
 			opts["pause"] = "true"
 			if err := e.call(ctx, "aria2.remove", nil, string(ref)); err != nil {
-				return "", fmt.Errorf("refresh %s: %w", ref, err)
+				return "", "", fmt.Errorf("refresh %s: %w", ref, err)
 			}
 			if _, err := e.waitState(ctx, ref, stopped...); err != nil && !isNotFound(err) {
-				return "", fmt.Errorf("refresh %s: %w", ref, err)
+				return "", "", fmt.Errorf("refresh %s: %w", ref, err)
 			}
 			return e.readd(ctx, ref, &s, clean, auth, opts)
 		case "active", "waiting":
@@ -61,15 +61,15 @@ func (e *aria2Engine) ChangeURI(ctx context.Context, ref EngineRef, uri string) 
 				err = fmt.Errorf("refresh %s: %w", ref, err)
 			}
 			if err != nil {
-				return "", err
+				return "", "", err
 			}
-			return ref, nil
+			return ref, "", nil
 		case "error":
 			return e.readd(ctx, ref, &s, clean, auth, e.keptOptions(ctx, ref))
 		case "removed":
-			return "", fmt.Errorf("refresh %s: the download was removed; add the link again", ref)
+			return "", "", fmt.Errorf("refresh %s: the download was removed; add the link again", ref)
 		}
-		return "", ErrAlreadyComplete
+		return "", "", ErrAlreadyComplete
 	}
 }
 
@@ -150,7 +150,7 @@ func (e *aria2Engine) keptOptions(ctx context.Context, ref EngineRef) map[string
 
 // readd adds ref's download again from s with opts (see keptOptions), under
 // the same gid when aria2 allows it.
-func (e *aria2Engine) readd(ctx context.Context, ref EngineRef, s *aria2.Status, uri string, auth map[string]string, opts map[string]any) (EngineRef, error) {
+func (e *aria2Engine) readd(ctx context.Context, ref EngineRef, s *aria2.Status, uri string, auth map[string]string, opts map[string]any) (newRef EngineRef, restarted string, err error) {
 	for k, v := range auth {
 		opts[k] = v
 	}
@@ -168,13 +168,16 @@ func (e *aria2Engine) readd(ctx context.Context, ref EngineRef, s *aria2.Status,
 	// complete, so the download starts over beside it.
 	if s.CompletedLength == 0 || !derived || !hasControlFile(s.Files[0].Path) {
 		opts["continue"] = "false"
+		if s.CompletedLength > 0 && derived {
+			restarted = s.Files[0].Path
+		}
 	}
 	opts["allow-overwrite"] = "false" // see Add
 	// A failure here only means the gid is still taken; the add below says so.
 	_ = e.call(ctx, "aria2.removeDownloadResult", nil, string(ref))
 	opts["gid"] = string(ref)
 	var gid string
-	err := e.call(ctx, "aria2.addUri", &gid, []string{uri}, opts)
+	err = e.call(ctx, "aria2.addUri", &gid, []string{uri}, opts)
 	// Only a refusal from aria2 is safe to retry: after a timeout or a drop
 	// the first add may have gone through, and a second would duplicate it.
 	var rpcErr *aria2.RPCError
@@ -183,9 +186,9 @@ func (e *aria2Engine) readd(ctx context.Context, ref EngineRef, s *aria2.Status,
 		err = e.call(ctx, "aria2.addUri", &gid, []string{uri}, opts)
 	}
 	if err != nil {
-		return "", fmt.Errorf("refresh %s: re-add: %w", ref, err)
+		return "", "", fmt.Errorf("refresh %s: re-add: %w", ref, err)
 	}
-	return EngineRef(gid), nil
+	return EngineRef(gid), restarted, nil
 }
 
 // hasControlFile: path has the .aria2 control file a resume needs.

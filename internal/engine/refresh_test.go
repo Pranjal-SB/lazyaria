@@ -21,7 +21,7 @@ func TestChangeURIOnPaused(t *testing.T) {
 	}
 	waitStatus(t, e, ref, 5*time.Second, func(s EngineStatus) bool { return s.State == "paused" })
 
-	got, err := e.ChangeURI(ctxT(t, 10*time.Second), ref, fs.URL("new.bin", testutil.ModeOK))
+	got, _, err := e.ChangeURI(ctxT(t, 10*time.Second), ref, fs.URL("new.bin", testutil.ModeOK))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +31,7 @@ func TestChangeURIOnPaused(t *testing.T) {
 	if st := status(t, e, ref); st.State != "paused" {
 		t.Fatalf("a user-paused job must stay paused after refresh, got %s", st.State)
 	}
-	if err := e.Resume(ctxT(t, 5*time.Second), ref); err != nil {
+	if _, err := e.Resume(ctxT(t, 5*time.Second), ref); err != nil {
 		t.Fatal(err)
 	}
 	waitEvent(t, e, ref, KindComplete, 20*time.Second)
@@ -56,7 +56,7 @@ func TestChangeURIOnStartedPausedStaysPaused(t *testing.T) {
 		t.Fatal(err)
 	}
 	paused := waitStatus(t, e, ref, 5*time.Second, func(s EngineStatus) bool { return s.State == "paused" })
-	got, err := e.ChangeURI(ctxT(t, 10*time.Second), ref, fs.URL("new.bin", testutil.ModeOK))
+	got, _, err := e.ChangeURI(ctxT(t, 10*time.Second), ref, fs.URL("new.bin", testutil.ModeOK))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestChangeURIOnStartedPausedStaysPaused(t *testing.T) {
 	// Still at 3M/s, a start-over could not be back at the paused count by
 	// the time aria2 knows the size again. Bytes served cannot show this:
 	// under load aria2 re-requests overlapping ranges.
-	if err := e.Resume(ctxT(t, 5*time.Second), ref); err != nil {
+	if _, err := e.Resume(ctxT(t, 5*time.Second), ref); err != nil {
 		t.Fatal(err)
 	}
 	back := waitStatus(t, e, ref, 10*time.Second, func(s EngineStatus) bool { return s.Total > 0 })
@@ -99,7 +99,7 @@ func TestChangeURIOnActive(t *testing.T) {
 	fs := testutil.NewFaultServer(t, map[string][]byte{"old.bin": data, "new.bin": data})
 	ref := add(t, e, AddRequest{URIs: []string{fs.URL("old.bin", testutil.ModeSlow)}})
 	waitStatus(t, e, ref, 5*time.Second, func(s EngineStatus) bool { return s.Done > 0 })
-	got, err := e.ChangeURI(ctxT(t, 10*time.Second), ref, fs.URL("new.bin", testutil.ModeOK))
+	got, _, err := e.ChangeURI(ctxT(t, 10*time.Second), ref, fs.URL("new.bin", testutil.ModeOK))
 	if err != nil || got != ref {
 		t.Fatalf("ref %s err %v", got, err)
 	}
@@ -116,7 +116,7 @@ func TestReaddKeepsGID(t *testing.T) {
 	fs := testutil.NewFaultServer(t, map[string][]byte{"g.bin": data})
 	ref := add(t, e, AddRequest{URIs: []string{fs.URL("g.bin", testutil.Mode403)}})
 	waitEvent(t, e, ref, KindError, 10*time.Second)
-	got, err := e.ChangeURI(ctxT(t, 10*time.Second), ref, fs.URL("g.bin", testutil.ModeOK))
+	got, _, err := e.ChangeURI(ctxT(t, 10*time.Second), ref, fs.URL("g.bin", testutil.ModeOK))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +139,7 @@ func TestChangeURIOnError(t *testing.T) {
 	}
 	waitStatus(t, e, ref, 5*time.Second, func(s EngineStatus) bool { return s.State == "paused" })
 	fs.SetMode("e.bin", testutil.ModeExpire)
-	if err := e.Resume(ctxT(t, 5*time.Second), ref); err != nil {
+	if _, err := e.Resume(ctxT(t, 5*time.Second), ref); err != nil {
 		t.Fatal(err)
 	}
 	waitEvent(t, e, ref, KindError, 10*time.Second)
@@ -150,7 +150,7 @@ func TestChangeURIOnError(t *testing.T) {
 		t.Fatalf("want a partial code-22 error, got %+v", st)
 	}
 
-	got, err := e.ChangeURI(ctxT(t, 10*time.Second), ref, fs.URL("fresh.bin", testutil.ModeOK))
+	got, _, err := e.ChangeURI(ctxT(t, 10*time.Second), ref, fs.URL("fresh.bin", testutil.ModeOK))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +183,7 @@ func TestChangeURIAfterQuickError(t *testing.T) {
 		t.Fatalf("want a partial error, got %+v", st)
 	}
 
-	got, err := e.ChangeURI(ctxT(t, 10*time.Second), ref, fs.URL("fresh.bin", testutil.ModeOK))
+	got, _, err := e.ChangeURI(ctxT(t, 10*time.Second), ref, fs.URL("fresh.bin", testutil.ModeOK))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,11 +237,15 @@ func TestChangeURIOnPausedWithoutControlFile(t *testing.T) {
 	if err := os.Remove(paused.Path + ".aria2"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.ChangeURI(ctxT(t, 10*time.Second), ref, fs.URL("new.bin", testutil.ModeOK)); err != nil {
+	_, old, err := e.ChangeURI(ctxT(t, 10*time.Second), ref, fs.URL("new.bin", testutil.ModeOK))
+	if err != nil {
 		t.Fatal(err)
 	}
+	if old != paused.Path {
+		t.Fatalf("refresh reported %q as left behind, want %q", old, paused.Path)
+	}
 	rawCall(t, e, "aria2.changeOption", nil, string(ref), map[string]string{"max-download-limit": "0"})
-	if err := e.Resume(ctxT(t, 5*time.Second), ref); err != nil {
+	if _, err := e.Resume(ctxT(t, 5*time.Second), ref); err != nil {
 		t.Fatal(err)
 	}
 	checkPayload(t, e, ref, big)

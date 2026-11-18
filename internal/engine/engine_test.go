@@ -49,7 +49,7 @@ func TestPauseResume(t *testing.T) {
 	if err := e.Pause(ctxT(t, 5*time.Second), ref); err != nil {
 		t.Fatalf("second pause should be a no-op: %v", err)
 	}
-	if err := e.Resume(ctxT(t, 5*time.Second), ref); err != nil {
+	if _, err := e.Resume(ctxT(t, 5*time.Second), ref); err != nil {
 		t.Fatal(err)
 	}
 	waitStatus(t, e, ref, 5*time.Second, func(s EngineStatus) bool { return s.State == "active" })
@@ -78,8 +78,12 @@ func TestResumeWithoutControlFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	rawCall(t, e, "aria2.changeOption", nil, string(ref), map[string]string{"max-download-limit": "0"})
-	if err := e.Resume(ctxT(t, 5*time.Second), ref); err != nil {
+	old, err := e.Resume(ctxT(t, 5*time.Second), ref)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if old != paused.Path {
+		t.Fatalf("resume reported %q as left behind, want %q", old, paused.Path)
 	}
 	checkPayload(t, e, ref, big)
 }

@@ -255,3 +255,22 @@ func (p *pauseDown) Pause(context.Context, engine.EngineRef) error {
 	p.pauses++
 	return engine.ErrNotRunning
 }
+
+// A download that starts over because its .aria2 control file is gone
+// leaves its old file behind; the daemon log names it.
+func TestResumeLogsFileLeftBehind(t *testing.T) {
+	r := newRig(t)
+	var logs bytes.Buffer
+	r.m.log = slog.New(slog.NewTextHandler(&logs, nil))
+	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}})
+	if err := r.m.Pause(bg, []string{j.ID}); err != nil {
+		t.Fatal(err)
+	}
+	r.e.restarted = "/dl/a.iso"
+	if err := r.m.Resume(bg, []string{j.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(logs.String(), "level=WARN") || !strings.Contains(logs.String(), "path=/dl/a.iso") {
+		t.Fatalf("the old file was not logged: %q", logs.String())
+	}
+}

@@ -74,7 +74,7 @@ func (e *aria2Engine) Pause(ctx context.Context, ref EngineRef) error {
 	return e.toggle(ctx, ref, "aria2.pause", "paused")
 }
 
-func (e *aria2Engine) Resume(ctx context.Context, ref EngineRef) error {
+func (e *aria2Engine) Resume(ctx context.Context, ref EngineRef) (restarted string, err error) {
 	// A paused download with bytes but no .aria2 control file would trust
 	// its file, preallocated to full size, and end complete with zeroes in
 	// it; continue=false starts it over beside the file instead.
@@ -83,10 +83,14 @@ func (e *aria2Engine) Resume(ctx context.Context, ref EngineRef) error {
 		s.Status == "paused" && s.Bittorrent == nil && s.CompletedLength > 0 &&
 		len(s.Files) > 0 && s.Files[0].Path != "" && !hasControlFile(s.Files[0].Path) {
 		if err := e.call(ctx, "aria2.changeOption", nil, string(ref), map[string]string{"continue": "false"}); err != nil {
-			return fmt.Errorf("aria2.unpause %s: %w", ref, err)
+			return "", fmt.Errorf("aria2.unpause %s: %w", ref, err)
 		}
+		restarted = s.Files[0].Path
 	}
-	return e.toggle(ctx, ref, "aria2.unpause", "active", "waiting")
+	if err := e.toggle(ctx, ref, "aria2.unpause", "active", "waiting"); err != nil {
+		return "", err
+	}
+	return restarted, nil
 }
 
 // toggle makes pause/unpause idempotent: aria2 refuses to pause a paused

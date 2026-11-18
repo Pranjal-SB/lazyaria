@@ -13,9 +13,12 @@ type Engine interface {
 	Start(ctx context.Context) error // spawn or attach; blocks until RPC is ready
 	Add(ctx context.Context, req AddRequest) (EngineRef, error)
 	Pause(ctx context.Context, ref EngineRef) error
-	Resume(ctx context.Context, ref EngineRef) error
+	// Resume and ChangeURI return as restarted the old file of a download
+	// whose .aria2 control file is gone: it starts over under a new name
+	// and the old file, unfinished, is left behind.
+	Resume(ctx context.Context, ref EngineRef) (restarted string, err error)
 	Remove(ctx context.Context, ref EngineRef) error
-	ChangeURI(ctx context.Context, ref EngineRef, uri string) (EngineRef, error) // may return a new ref
+	ChangeURI(ctx context.Context, ref EngineRef, uri string) (newRef EngineRef, restarted string, err error) // may return a new ref
 	Status(ctx context.Context, refs []EngineRef) ([]EngineStatus, error)
 	List(ctx context.Context) ([]EngineStatus, error)                  // everything the engine knows, for reconcile
 	Details(ctx context.Context, ref EngineRef) (EngineDetails, error) // files, servers/peers

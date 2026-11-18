@@ -50,7 +50,7 @@ func TestReaddKeepsOptions(t *testing.T) {
 		User:    "u", Pass: "p",
 	})
 	waitEvent(t, e, ref, KindError, 10*time.Second)
-	got, err := e.ChangeURI(ctxT(t, 10*time.Second), ref, fs.URL("o.bin", testutil.ModeOK))
+	got, _, err := e.ChangeURI(ctxT(t, 10*time.Second), ref, fs.URL("o.bin", testutil.ModeOK))
 	if err != nil {
 		t.Fatal(err)
 	}

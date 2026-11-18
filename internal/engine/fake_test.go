@@ -103,7 +103,7 @@ func TestChangeURICompletesDuringPause(t *testing.T) {
 		return `"result":"OK"`
 	})
 	start := time.Now()
-	_, err := e.ChangeURI(context.Background(), "abc", "http://h/f")
+	_, _, err := e.ChangeURI(context.Background(), "abc", "http://h/f")
 	if !errors.Is(err, ErrAlreadyComplete) {
 		t.Fatalf("got %v", err)
 	}
@@ -122,7 +122,7 @@ func TestChangeURIUnpausesAfterWaitTimeout(t *testing.T) {
 		}
 		return `"result":"OK"`
 	})
-	if _, err := e.ChangeURI(ctxT(t, 500*time.Millisecond), "abc", "http://h/f"); err == nil {
+	if _, _, err := e.ChangeURI(ctxT(t, 500*time.Millisecond), "abc", "http://h/f"); err == nil {
 		t.Fatal("want a timeout")
 	}
 	if f.count("aria2.unpause") != 1 {
@@ -150,7 +150,7 @@ func TestReaddNoSecondAddUnlessRefused(t *testing.T) {
 	for name, reply := range map[string]string{"timeout": "", "garbled": `"result":123`} {
 		t.Run(name, func(t *testing.T) {
 			f, e := readdFake(t, func(int) string { return reply })
-			if _, err := e.ChangeURI(ctxT(t, time.Second), "abc", "http://h/f"); err == nil {
+			if _, _, err := e.ChangeURI(ctxT(t, time.Second), "abc", "http://h/f"); err == nil {
 				t.Fatal("want an error")
 			}
 			if n := f.count("aria2.addUri"); n != 1 {
@@ -167,7 +167,7 @@ func TestReaddFallsBackOnRefusal(t *testing.T) {
 		}
 		return `"result":"def"`
 	})
-	ref, err := e.ChangeURI(ctxT(t, 5*time.Second), "abc", "http://h/f")
+	ref, _, err := e.ChangeURI(ctxT(t, 5*time.Second), "abc", "http://h/f")
 	if err != nil || ref != "def" {
 		t.Fatalf("ref %q err %v", ref, err)
 	}
@@ -182,7 +182,7 @@ func TestChangeURIOnTorrent(t *testing.T) {
 	_, e := startFake(t, func(string, int) string {
 		return `"result":{"status":"active","bittorrent":{"info":{"name":"x"}}}`
 	})
-	if _, err := e.ChangeURI(ctxT(t, 5*time.Second), "abc", "http://h/f"); !errors.Is(err, ErrNotSupported) {
+	if _, _, err := e.ChangeURI(ctxT(t, 5*time.Second), "abc", "http://h/f"); !errors.Is(err, ErrNotSupported) {
 		t.Fatalf("got %v", err)
 	}
 }

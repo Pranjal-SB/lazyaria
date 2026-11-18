@@ -26,6 +26,9 @@ resume after a pause or a restart. aria2 deletes it when the download
 finishes. A file next to its `.aria2` file is not finished yet, even if it
 looks complete.
 
+If the `.aria2` file is gone, the download starts over under a new name,
+and the old file is unfinished and can be deleted.
+
 ## When a name is taken
 
 lazyaria does not write over existing files. By default, `add` refuses a

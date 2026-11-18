@@ -104,8 +104,9 @@ func (m *Manager) resume(ctx context.Context, j *store.Job) error {
 	switch j.State {
 	case store.Paused:
 		if j.EngineRef != nil {
-			err := m.e.Resume(ctx, refOf(j))
+			restarted, err := m.e.Resume(ctx, refOf(j))
 			if err == nil {
+				m.warnRestarted(j.ID, restarted)
 				m.to(ctx, j, store.Queued, "", nil)
 				return nil
 			}
@@ -126,6 +127,14 @@ func (m *Manager) resume(ctx context.Context, j *store.Job) error {
 	}
 	m.cancelRetry(j.ID)
 	return nil
+}
+
+// warnRestarted names the old file a download left behind when it started
+// over (see engine.Engine.Resume).
+func (m *Manager) warnRestarted(id, path string) {
+	if path != "" {
+		m.log.Warn("the .aria2 control file is gone, so the download starts over under a new name; the old file is unfinished and can be deleted", "job", id, "path", path)
+	}
 }
 
 // RefreshURI points a job at a new link (spec §4.7) and clears its error.
@@ -152,10 +161,11 @@ func (m *Manager) RefreshURI(ctx context.Context, id, uri string) (*store.Job, e
 	clean := engine.SplitAuth([]string{uri}, "", "", opts)[0]
 	newRef := ""
 	if j.EngineRef != nil {
-		r, err := m.e.ChangeURI(ctx, refOf(j), uri)
+		r, restarted, err := m.e.ChangeURI(ctx, refOf(j), uri)
 		if err != nil && !m.lost(ctx, refOf(j)) {
 			return nil, err
 		}
+		m.warnRestarted(id, restarted)
 		if err != nil {
 			// A paused download is removed before its re-add, which can
 			// fail. The new link is saved either way; the job is added
