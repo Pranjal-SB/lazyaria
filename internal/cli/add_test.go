@@ -105,9 +105,14 @@ func TestAddWaitFake(t *testing.T) {
 }
 
 // A job the daemon pauses (no space, disk full) will not finish by itself,
-// so --wait ends with the reason and exit 1.
+// so --wait ends with the reason and exit 1. A daemon older than the jobs
+// list in the disk_full banner is matched by folder.
 func TestAddWaitEndsOnSystemPause(t *testing.T) {
-	for _, kind := range []string{"no_space", "disk_full"} {
+	for _, tc := range []struct {
+		kind      string
+		oldDaemon bool
+	}{{"no_space", false}, {"disk_full", false}, {"disk_full", true}} {
+		kind := tc.kind
 		f := startFake(t)
 		go func() {
 			for {
@@ -122,13 +127,17 @@ func TestAddWaitEndsOnSystemPause(t *testing.T) {
 				f.jobs[0] = &j
 				f.mu.Unlock()
 				f.bus.Publish(daemon.Event{Type: "job.updated", Job: &j})
-				f.bus.Publish(daemon.Event{Type: "banner", Data: map[string]any{"kind": kind, "job": j.ID, "dir": j.Dir, "jobs": []string{j.ID}}})
+				data := map[string]any{"kind": kind, "job": j.ID, "dir": j.Dir, "jobs": []string{j.ID}}
+				if tc.oldDaemon {
+					delete(data, "jobs")
+				}
+				f.bus.Publish(daemon.Event{Type: "banner", Data: data})
 				return
 			}
 		}()
 		code, _, errOut := run(t, Add, "", "--wait", "https://a/b")
 		if code != exitRuntime || !strings.Contains(errOut, "paused") || !strings.Contains(errOut, "space") {
-			t.Errorf("%s: exit %d, stderr %q; want 1 with the reason", kind, code, errOut)
+			t.Errorf("%+v: exit %d, stderr %q; want 1 with the reason", tc, code, errOut)
 		}
 	}
 }

@@ -52,16 +52,16 @@ func waitJobs(ctx context.Context, c *ipc.Client, events <-chan daemon.Event, id
 	}
 	// A pause by the daemon itself (no space, disk full) never ends on its
 	// own; its banner follows the paused row and names the jobs it paused.
-	// A user's pause keeps waiting.
+	// A user's pause keeps waiting. An older daemon names only the folder.
 	systemPause := func(data map[string]any) {
 		kind, _ := data["kind"].(string)
-		jobs, _ := data["jobs"].([]any) // JSON
+		jobs, named := data["jobs"].([]any) // JSON
 		for id, j := range paused {
 			var why string
 			switch {
 			case kind == "no_space" && data["job"] == id:
 				why = "not enough free space in " + j.Dir
-			case kind == "disk_full" && slices.Contains(jobs, any(id)):
+			case kind == "disk_full" && (slices.Contains(jobs, any(id)) || !named && data["dir"] == j.Dir):
 				why = "the disk holding " + j.Dir + " is full"
 			default:
 				continue
