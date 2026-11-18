@@ -4,15 +4,19 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
-          go-version: "1.27"
+          go-version-file: go.mod
 
       - name: Install aria2
         run: |
@@ -40,23 +44,25 @@ jobs:
           pkgs=$(go list ./... | grep -v -e '/internal/cli$' -e '/lazyaria$')
           CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build $pkgs
 
+      # Only packages that declare a fuzz target, so the loop does not build
+      # and run every other test binary just to list nothing.
       - name: Fuzz smoke
         run: |
-          for pkg in $(go list ./...); do
-            for target in $(go test -list '^Fuzz' "$pkg" | grep '^Fuzz'); do
-              go test -run '^$' -fuzz "^${target}\$" -fuzztime 10s "$pkg"
+          for dir in $(grep -rl --include='*_test.go' '^func Fuzz' . | xargs -n1 dirname | sort -u); do
+            for target in $(go test -list '^Fuzz' "$dir" | grep '^Fuzz'); do
+              go test -run '^$' -fuzz "^${target}\$" -fuzztime 10s "$dir"
             done
           done
 
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
-          go-version: "1.27"
+          go-version-file: go.mod
 
       - name: Install aria2
         run: |
@@ -64,11 +70,14 @@ jobs:
           sudo apt-get install -y aria2
 
       # The disk-full test mounts a tmpfs in a user namespace. Ubuntu's
-      # AppArmor blocks that by default, and the test skips without it.
+      # AppArmor blocks that by default. The run is strict, so if this step
+      # cannot lift the block it fails here, not later in the test.
       - name: Allow user namespaces
-        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
       - name: End-to-end
         env:
           E2E_STRICT: "1"
-        run: go test -race -tags e2e -v ./e2e/
+        # About 3.5 minutes on a fast desktop; the default 10m limit is too
+        # tight for a slower runner under -race.
+        run: go test -race -timeout 20m -tags e2e -v ./e2e/
