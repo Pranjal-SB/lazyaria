@@ -95,19 +95,24 @@ func (e *ErrForeignDaemon) Error() string {
 
 // Subscribe asks for job events, and progress frames when progress is set.
 func (c *Client) Subscribe(ctx context.Context, progress bool) (<-chan daemon.Event, <-chan []daemon.ProgressItem, error) {
-	on, err := c.callOn(ctx, "jobs.subscribe", SubscribeParams{Progress: progress}, nil)
-	if err != nil {
-		return nil, nil, err
+	// Another call can reconnect just after this one subscribed, and the
+	// events go with the old connection; subscribe again on the new one.
+	// Redial is used once, so a second try cannot lose the same way.
+	for range 2 {
+		on, err := c.callOn(ctx, "jobs.subscribe", SubscribeParams{Progress: progress}, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+		c.mu.Lock()
+		if c.rpc == on {
+			c.subscribed = true
+			ev, pr := c.events, c.progress
+			c.mu.Unlock()
+			return ev, pr, nil
+		}
+		c.mu.Unlock()
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.rpc != on {
-		// Another call reconnected after this one subscribed; the events
-		// went with the old connection.
-		return nil, nil, ErrNotSent
-	}
-	c.subscribed = true
-	return c.events, c.progress, nil
+	return nil, nil, ErrNotSent
 }
 
 // ErrCutOff means the connection dropped in the middle of a call that
