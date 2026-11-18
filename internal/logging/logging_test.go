@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestRedact(t *testing.T) {
@@ -41,6 +42,15 @@ func TestRedactHandler(t *testing.T) {
 	}
 	if !strings.Contains(out, `"msg":"fetch https://h/x?…"`) {
 		t.Errorf("message not redacted as expected: %s", out)
+	}
+}
+
+// Durations read as "1m1.1s", not as nanoseconds.
+func TestDurationReadable(t *testing.T) {
+	var buf bytes.Buffer
+	newLogger(&buf, Options{}).Info("idle", "uptime", 61100*time.Millisecond, "group", slog.GroupValue(slog.Duration("wait", 30*time.Second)))
+	if out := buf.String(); !strings.Contains(out, `"uptime":"1m1.1s"`) || !strings.Contains(out, `"wait":"30s"`) {
+		t.Fatalf("durations not readable: %s", out)
 	}
 }
 

@@ -71,6 +71,8 @@ func redactAttr(a slog.Attr, urls bool) slog.Attr {
 	}
 	str := func(s string) string { return redact(s, urls) }
 	switch v := a.Value; v.Kind() {
+	case slog.KindDuration: // JSON would print nanoseconds
+		return slog.String(a.Key, v.Duration().String())
 	case slog.KindString:
 		return slog.String(a.Key, str(v.String()))
 	case slog.KindAny:
