@@ -37,7 +37,7 @@ WantedBy=default.target
 func Service(ctx context.Context, args []string, out, errOut io.Writer) int {
 	if len(args) != 1 || (args[0] != "install" && args[0] != "uninstall") {
 		fmt.Fprintln(errOut, "usage: lazyaria service install|uninstall")
-		return exitUsage
+		return helpExit(args)
 	}
 	exe, err := os.Executable()
 	if err == nil {

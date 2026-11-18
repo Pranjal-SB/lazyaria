@@ -4,7 +4,6 @@ package cli
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -18,12 +17,11 @@ const statusFDEnv = "LAZYARIA_STATUS_FD"
 
 // Daemon runs `lazyaria daemon [--detach] [--mode on-demand|always]`.
 func Daemon(ctx context.Context, args []string, _, errOut io.Writer) int {
-	fs := flag.NewFlagSet("daemon", flag.ContinueOnError)
-	fs.SetOutput(errOut)
+	fs := newFlags("daemon", errOut)
 	detach := fs.Bool("detach", false, "run in the background and return once the daemon is up")
 	mode := fs.String("mode", "", "on-demand or always (overrides daemon.mode)")
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return flagExit(err)
 	}
 	if fs.NArg() > 0 {
 		fmt.Fprintf(errOut, "lazyaria daemon: unexpected argument %q. Run \"lazyaria help\" to see the commands.\n", fs.Arg(0))

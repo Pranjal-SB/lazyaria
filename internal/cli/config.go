@@ -16,9 +16,9 @@ const configUsage = "usage: lazyaria config list [--json] | get KEY | set KEY VA
 
 // Config runs `lazyaria config list|get|set|reset|edit|path|keys`.
 func Config(ctx context.Context, args []string, out, errOut io.Writer) int {
-	if len(args) == 0 {
+	if len(args) == 0 || isHelp(args[0]) {
 		fmt.Fprintln(errOut, configUsage)
-		return exitUsage
+		return helpExit(args)
 	}
 	sub, rest := args[0], args[1:]
 	want := map[string]int{"list": 0, "keys": 0, "path": 0, "edit": 0, "get": 1, "reset": 1, "set": 2}

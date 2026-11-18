@@ -18,6 +18,16 @@ func TestRunVersion(t *testing.T) {
 	}
 }
 
+// -h prints help and exits 0 for every command.
+func TestHelpFlagExitsZero(t *testing.T) {
+	for name := range commands {
+		var out, errb bytes.Buffer
+		if code := run(context.Background(), []string{"lazyaria", name, "-h"}, &out, &errb); code != 0 {
+			t.Errorf("%s -h: exit %d, want 0 (stderr: %q)", name, code, errb.String())
+		}
+	}
+}
+
 func TestRunUnknown(t *testing.T) {
 	var out, errb bytes.Buffer
 	code := run(context.Background(), []string{"lazyaria", "nope"}, &out, &errb)

@@ -199,6 +199,20 @@ func newFlags(name string, errOut io.Writer) *flag.FlagSet {
 	return fs
 }
 
+// isHelp reports whether arg asks for help the way the flag package takes it.
+func isHelp(arg string) bool {
+	return arg == "-h" || arg == "--h" || arg == "-help" || arg == "--help"
+}
+
+// helpExit is the exit code after printing a command's usage: 0 when the
+// arguments were only a request for help.
+func helpExit(args []string) int {
+	if len(args) == 1 && isHelp(args[0]) {
+		return exitOK
+	}
+	return exitUsage
+}
+
 // flagExit is the exit code for a flag parse error: 0 for -h.
 func flagExit(err error) int {
 	if errors.Is(err, flag.ErrHelp) {
