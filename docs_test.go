@@ -122,7 +122,8 @@ earlier one:
 
 ` + "`lazyaria config list`" + ` shows every key, its current value and where the
 value came from. ` + "`lazyaria config list --json`" + ` prints the same as JSON,
-with the type, default, allowed values and help text of each key.
+with the type, default, allowed values and help text of each key, and
+` + "`not_used_yet`" + `, which is true for a setting nothing reads yet.
 
 In the config file, each section below is a TOML table:
 
