@@ -38,7 +38,7 @@ type Client struct {
 	// the client is shared.
 	Redial     func(context.Context) (*Client, error)
 	subscribed bool
-	dead       bool // the connection dropped and none replaced it
+	dead       bool // closed, or the connection dropped and none replaced it
 }
 
 var clientPeerUID = peerUID // swapped in tests
@@ -64,10 +64,13 @@ func Dial(ctx context.Context, p config.Paths) (*Client, error) {
 	return c, nil
 }
 
+// Close ends the connection. A call in flight fails rather than reconnect.
 func (c *Client) Close() error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.rpc.Close()
+	c.dead = true
+	rpc := c.rpc
+	c.mu.Unlock()
+	return rpc.Close()
 }
 
 // ErrForeignDaemon means the socket is served by another user.
@@ -155,7 +158,7 @@ func (c *Client) reconnect(ctx context.Context, old *jrpc2.Client) *jrpc2.Client
 	if c.rpc != old {
 		return c.rpc // another call already reconnected
 	}
-	if c.Redial == nil || c.subscribed {
+	if c.Redial == nil || c.subscribed || c.dead {
 		c.dead = true
 		return nil
 	}
