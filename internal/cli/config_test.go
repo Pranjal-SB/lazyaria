@@ -95,6 +95,22 @@ func TestConfigListJSONGolden(t *testing.T) {
 	golden(t, "config-list.golden", out)
 }
 
+// A config file that is not valid TOML is a config error like a bad value
+// (exit 2), and `config path` still says where the file is.
+func TestBrokenConfigFile(t *testing.T) {
+	p := isolate(t)
+	os.MkdirAll(filepath.Dir(p.ConfigFile), 0o700)
+	if err := os.WriteFile(p.ConfigFile, []byte("[downloads\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, errOut := run(t, List, ""); code != 2 || !strings.Contains(errOut, p.ConfigFile) {
+		t.Errorf("list: exit %d, stderr %q; want 2 naming the file", code, errOut)
+	}
+	if code, out, errOut := run(t, Config, "", "path"); code != 0 || out != p.ConfigFile+"\n" {
+		t.Errorf("path: exit %d, stdout %q, stderr %q", code, out, errOut)
+	}
+}
+
 func TestConfigPathAndKeys(t *testing.T) {
 	startFake(t)
 	_, p, _ := resolveLocal(os.Environ(), nil)

@@ -88,7 +88,7 @@ func loadFile(s *Settings, src map[string]Source, path string) ([]Warning, error
 	}
 	raw := map[string]any{}
 	if _, err := toml.Decode(string(data), &raw); err != nil {
-		return nil, fmt.Errorf("config %s: %w (run `lazyaria config path` to find the file)", path, err)
+		return nil, &ValueError{fmt.Errorf("config %s: %w (run `lazyaria config path` to find the file)", path, err)}
 	}
 	lines := lineIndex(data)
 	var warns []Warning

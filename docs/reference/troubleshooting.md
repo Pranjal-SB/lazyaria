@@ -188,6 +188,11 @@ allowed values and the default.
 An environment variable holds a bad value. Every command fails until you
 fix or unset it. A bad value in the config file also exits with 2.
 
+**`config .../config.toml: toml: line 2: ... (run `lazyaria config path` to find the file)`** (exit code 2)
+
+The config file is not valid TOML. The message gives the line. `lazyaria
+config path` still works and prints where the file is.
+
 **A setting I changed has no effect**
 
 Settings marked *restart* in [Settings](settings.md) take effect the next

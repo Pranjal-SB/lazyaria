@@ -236,7 +236,8 @@ func (f *field) fail(where string, line int, err error) error {
 }
 
 // ValueError is a setting given a value it does not accept, in the config
-// file, the environment or a flag. The CLI treats it as a usage error.
+// file, the environment or a flag, or a config file that is not valid TOML.
+// The CLI treats it as a usage error.
 type ValueError struct{ Err error }
 
 func (e *ValueError) Error() string { return e.Err.Error() }

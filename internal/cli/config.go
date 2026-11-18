@@ -47,7 +47,10 @@ func Config(ctx context.Context, args []string, out, errOut io.Writer) int {
 	}
 	switch sub {
 	case "path":
-		_, p, err := resolveLocal(os.Environ(), nil)
+		// The file's own location does not depend on any setting, so it is
+		// not read: it may be the broken file the user is looking for.
+		s, _, _, _ := config.Load("", nil, nil, nil)
+		p, err := config.ResolvePaths(s, os.Getenv)
 		if err != nil {
 			return fail(errOut, "config", err)
 		}
