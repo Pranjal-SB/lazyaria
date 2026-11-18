@@ -1,12 +1,18 @@
 package ipc
 
 import (
+	"bytes"
 	"context"
+	"io"
+	"net"
+	"path/filepath"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/Pranjal-SB/lazyaria/internal/config"
 	"github.com/Pranjal-SB/lazyaria/internal/daemon"
 	"github.com/Pranjal-SB/lazyaria/internal/store"
 )
@@ -40,7 +46,8 @@ func TestConcurrentCallsAcrossReconnect(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- Serve(ctx, l, h) }()
 
-	c, err := Dial(context.Background(), pA)
+	pR, sent := relay(t, pA.Socket)
+	c, err := Dial(context.Background(), pR)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,9 +66,14 @@ func TestConcurrentCallsAcrossReconnect(t *testing.T) {
 			errs <- err
 		})
 	}
-	for deadline := time.Now().Add(5 * time.Second); h.waiting.Load() < n; time.Sleep(time.Millisecond) {
+	// The daemon runs at most runtime.NumCPU() handlers per connection
+	// (jrpc2's default); the other calls wait in its queue, just as much in
+	// flight. So wait until every call is on the wire to the daemon and as
+	// many as can run are held there.
+	held := int32(min(n, runtime.NumCPU()))
+	for deadline := time.Now().Add(30 * time.Second); sent.Load() < n || h.waiting.Load() < held; time.Sleep(time.Millisecond) {
 		if time.Now().After(deadline) {
-			t.Fatalf("only %d of %d calls reached the daemon", h.waiting.Load(), n)
+			t.Fatalf("%d of %d calls sent, %d of %d held by the daemon", sent.Load(), n, h.waiting.Load(), held)
 		}
 	}
 	stopA()
@@ -79,4 +91,46 @@ func TestConcurrentCallsAcrossReconnect(t *testing.T) {
 	if _, err := c.List(context.Background(), false, 0); err != nil {
 		t.Errorf("call after the reconnect: %v", err)
 	}
+}
+
+// relay serves a socket that forwards each connection to sock and counts
+// the lines clients have written through to sock. When either side ends,
+// both are closed, so a hang-up reaches the client as it would directly.
+func relay(t *testing.T, sock string) (config.Paths, *atomic.Int32) {
+	t.Helper()
+	p := config.Paths{Socket: filepath.Join(shortDir(t), "r.sock")}
+	l, err := net.Listen("unix", p.Socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { l.Close() })
+	lines := new(atomic.Int32)
+	go func() {
+		for {
+			down, err := l.Accept()
+			if err != nil {
+				return
+			}
+			up, err := net.Dial("unix", sock)
+			if err != nil {
+				down.Close()
+				continue
+			}
+			end := sync.OnceFunc(func() { down.Close(); up.Close() })
+			go func() { io.Copy(lineCounter{up, lines}, down); end() }()
+			go func() { io.Copy(down, up); end() }()
+		}
+	}()
+	return p, lines
+}
+
+type lineCounter struct {
+	io.Writer
+	n *atomic.Int32
+}
+
+func (w lineCounter) Write(b []byte) (int, error) {
+	n, err := w.Writer.Write(b)
+	w.n.Add(int32(bytes.Count(b[:n], []byte("\n"))))
+	return n, err
 }
