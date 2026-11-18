@@ -68,7 +68,7 @@ func Serve(ctx context.Context, l net.Listener, h Handler) error {
 func (s *server) serveConn(ctx context.Context, c net.Conn) {
 	s.connected(1)
 	defer s.connected(-1)
-	cc := &conn{s: s}
+	cc := &conn{s: s, sock: c}
 	srv := jrpc2.NewServer(cc.methods(), &jrpc2.ServerOptions{AllowPush: true})
 	cc.srv = srv
 	srv.Start(lineChannel(deadlineConn{c}))
@@ -97,8 +97,9 @@ func (s *server) observe(delta int) {
 
 // conn is one client's session.
 type conn struct {
-	s   *server
-	srv *jrpc2.Server
+	s    *server
+	srv  *jrpc2.Server
+	sock net.Conn
 
 	mu       sync.Mutex // held across (un)subscribe so they never interleave
 	sub      *daemon.Sub
@@ -141,8 +142,10 @@ func (c *conn) push(sub *daemon.Sub, done chan struct{}) {
 			if !errors.Is(err, jrpc2.ErrConnClosed) {
 				slog.Warn("ipc: push failed, dropping the client", "err", err)
 			}
-			// Hang up so the client sees a disconnect and resyncs.
-			c.srv.Stop()
+			// Hang up so the client sees a disconnect and resyncs. Closing
+			// the socket ends the server from its reader; srv.Stop would
+			// race a request being read and panic in jrpc2 (see serveConn).
+			c.sock.Close()
 			return
 		}
 	}
