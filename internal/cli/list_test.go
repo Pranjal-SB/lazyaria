@@ -80,6 +80,17 @@ func TestStatusJSON(t *testing.T) {
 	golden(t, "status.golden", out)
 }
 
+// A removed job matches no prefix, and `list --all` does not show it
+// either, so the hint must not send the user there to find it.
+func TestIDPrefixNoMatchHint(t *testing.T) {
+	f := startFake(t)
+	f.jobs = sampleJobs()
+	code, _, errOut := run(t, Remove, "", "01JD")
+	if code != 2 || !strings.Contains(errOut, "removed jobs are not listed") {
+		t.Fatalf("exit %d, stderr %q; want 2 and a hint that removed jobs are not listed", code, errOut)
+	}
+}
+
 func TestIDPrefixAmbiguous(t *testing.T) {
 	f := startFake(t)
 	f.jobs = sampleJobs()

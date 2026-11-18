@@ -149,7 +149,7 @@ func resolveIDs(ctx context.Context, c *ipc.Client, prefixes []string) ([]string
 		}
 		switch len(match) {
 		case 0:
-			return nil, usagef("no job id starts with %q; see `lazyaria list --all`", p)
+			return nil, usagef("no job id starts with %q; removed jobs are not listed, the others are in `lazyaria list --all`", p)
 		case 1:
 			ids = append(ids, match[0])
 		default:
