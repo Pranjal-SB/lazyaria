@@ -32,6 +32,15 @@ func Daemon(ctx context.Context, args []string, _, errOut io.Writer) int {
 		return 2
 	}
 	if *detach {
+		// Report a bad setting here, with its exit code, rather than as a
+		// start-up failure of the background process.
+		flags := map[string]string{}
+		if *mode != "" {
+			flags["daemon.mode"] = *mode
+		}
+		if _, _, err := resolveLocal(os.Environ(), flags); err != nil {
+			return fail(errOut, "daemon", err)
+		}
 		return detachDaemon(*mode, errOut)
 	}
 

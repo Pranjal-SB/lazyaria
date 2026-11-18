@@ -72,6 +72,20 @@ func TestBadEnvValueExitsUsage(t *testing.T) {
 	}
 }
 
+// daemon --detach checks the settings before it starts anything, and says
+// so like the plain daemon command.
+func TestDetachBadSettingExitsUsage(t *testing.T) {
+	isolate(t)
+	t.Setenv("LAZYARIA_DAEMON_IDLE_EXIT", "banana")
+	code, _, errOut := run(t, Daemon, "", "--detach")
+	if code != 2 || !strings.HasPrefix(errOut, "lazyaria daemon: daemon.idle_exit from LAZYARIA_DAEMON_IDLE_EXIT") {
+		t.Fatalf("exit %d, stderr %q; want 2 and the reason after the command name", code, errOut)
+	}
+	if code, _, errOut := run(t, Daemon, "", "--detach", "--mode", "bogus"); code != 2 || !strings.HasPrefix(errOut, "lazyaria daemon: ") {
+		t.Fatalf("--mode bogus: exit %d, stderr %q", code, errOut)
+	}
+}
+
 func TestConfigListJSONGolden(t *testing.T) {
 	startFake(t)
 	code, out, errOut := run(t, Config, "", "list", "--json")
