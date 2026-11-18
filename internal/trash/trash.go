@@ -85,8 +85,9 @@ func pick(abs string, dev uint64) (dir, top string, err error) {
 }
 
 // topTrash returns $topdir/.Trash-$uid, made if missing. One found there
-// is used only as a real directory the user owns: on a shared drive
-// another user may have made it first, or planted a symlink.
+// is used only as a real directory the user owns and nobody else can
+// write to: on a shared drive another user may have made it first, or
+// planted a symlink.
 func topTrash(top string) (string, error) {
 	dir := filepath.Join(top, ".Trash-"+strconv.Itoa(os.Getuid()))
 	if err := os.Mkdir(dir, 0o700); err != nil && !errors.Is(err, fs.ErrExist) {
@@ -96,7 +97,7 @@ func topTrash(top string) (string, error) {
 	if err != nil || !fi.IsDir() { // a symlink is not a directory to Lstat
 		return "", ErrNoTrash
 	}
-	if uid, ok := owner(fi); !ok || uid != os.Getuid() {
+	if uid, ok := owner(fi); !ok || uid != os.Getuid() || fi.Mode().Perm()&0o022 != 0 {
 		return "", ErrNoTrash
 	}
 	if err := prepare(dir); err != nil {

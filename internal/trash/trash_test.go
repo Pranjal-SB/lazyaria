@@ -242,8 +242,9 @@ func TestTrashCrossDeviceIsNoTrash(t *testing.T) {
 	}
 }
 
-// $topdir/.Trash-$uid is used only as a real directory of the user's own:
-// a symlink or a file planted there is refused, never followed.
+// $topdir/.Trash-$uid is used only as a real directory of the user's own
+// that nobody else can write to: a symlink or a file planted there, or a
+// folder group or others can write to, is refused, never followed.
 func TestTopTrashRefusesPlanted(t *testing.T) {
 	name := ".Trash-" + strconv.Itoa(os.Getuid())
 	top := t.TempDir()
@@ -258,6 +259,8 @@ func TestTopTrashRefusesPlanted(t *testing.T) {
 	for _, plant := range []func(p string) error{
 		func(p string) error { return os.Symlink(elsewhere, p) },
 		func(p string) error { return os.WriteFile(p, nil, 0o600) },
+		func(p string) error { return mkdirMode(p, 0o770) },
+		func(p string) error { return mkdirMode(p, 0o703) },
 	} {
 		top := t.TempDir()
 		if err := plant(filepath.Join(top, name)); err != nil {
@@ -270,6 +273,14 @@ func TestTopTrashRefusesPlanted(t *testing.T) {
 	if ents, _ := os.ReadDir(elsewhere); len(ents) != 0 {
 		t.Fatalf("followed the symlink: %v", ents)
 	}
+}
+
+// mkdirMode makes p with exactly mode, past the umask.
+func mkdirMode(p string, mode os.FileMode) error {
+	if err := os.Mkdir(p, mode); err != nil {
+		return err
+	}
+	return os.Chmod(p, mode)
 }
 
 func TestMountTopResolvesSymlinks(t *testing.T) {
