@@ -161,3 +161,23 @@ func TestPublishNeverAdoptsAnotherJobsFile(t *testing.T) {
 		t.Fatalf("download folder holds %v", listDir(t, r.dir))
 	}
 }
+
+// A finished job's staging folder left behind (a crash after the done
+// update, or a failed removal) goes to the trash on the next Reconcile.
+func TestReconcileTrashesFinishedJobsStaging(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
+	r := newRig(t)
+	r.m.s.Load().Downloads.Dir = r.dir
+	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}})
+	stageFiles(t, j, map[string]string{"a.iso": "data"})
+	if got := r.complete(t, j, "a.iso"); got.State != store.Done {
+		t.Fatal(got.State)
+	}
+	wfile(t, filepath.Join(stagingDir(j), "a.iso.leftover"), "big copy")
+	if err := r.m.Reconcile(bg); err != nil {
+		t.Fatal(err)
+	}
+	if exists1(stagingDir(j)) || read(t, filepath.Join(r.dir, "a.iso")) != "data" {
+		t.Fatalf("staging there %v, download folder %v", exists1(stagingDir(j)), listDir(t, r.dir))
+	}
+}

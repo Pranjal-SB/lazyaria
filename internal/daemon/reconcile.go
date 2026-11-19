@@ -85,8 +85,9 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 }
 
 // trashOrphans moves to the trash every staging folder whose job is gone
-// (a crash between creating it and storing the row, or a lost row). It
-// looks in the folders of live jobs and in downloads.dir.
+// (a crash between creating it and storing the row, or a lost row) or is
+// no longer staged (left by a crash after publishing). It looks in the
+// folders of live jobs and in downloads.dir.
 func (m *Manager) trashOrphans(ctx context.Context, live []*store.Job) {
 	dirs := map[string]bool{m.s.Load().Downloads.Dir: true}
 	for _, j := range live {
@@ -102,7 +103,7 @@ func (m *Manager) trashOrphans(ctx context.Context, live []*store.Job) {
 			if !e.IsDir() {
 				continue
 			}
-			if _, err := m.st.GetJob(ctx, e.Name()); !errors.Is(err, store.ErrNotFound) {
+			if j, err := m.st.GetJob(ctx, e.Name()); err == nil && j.Staged || err != nil && !errors.Is(err, store.ErrNotFound) {
 				continue
 			}
 			p := filepath.Join(root, e.Name())
