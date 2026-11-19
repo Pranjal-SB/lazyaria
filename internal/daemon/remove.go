@@ -38,13 +38,16 @@ func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (t
 		if j.State == store.Removed {
 			return nil
 		}
-		if publishing(j) {
+		if publishing(j) && !m.copying[j.ID] {
 			// Finish the move first, so no published file is left that the
 			// row does not account for. If it fails, targets still covers
 			// the entries already moved.
 			if j2, err := m.publish(ctx, j); err == nil {
 				j = j2
 			}
+		}
+		if m.copying[j.ID] {
+			return fmt.Errorf("the finished download is being copied into %s; remove it again once that is done", j.Dir)
 		}
 		var listed []string
 		if deleteFiles {

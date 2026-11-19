@@ -232,6 +232,14 @@ func newRig(t *testing.T) *rig {
 	return r
 }
 
+// settle waits for publish copies running in the background.
+func (r *rig) settle() { r.m.copies.Wait() }
+
+// reconcile and resume run the manager's, then settle.
+func (r *rig) reconcile() error { err := r.m.Reconcile(bg); r.settle(); return err }
+
+func (r *rig) resume(ids []string) error { err := r.m.Resume(bg, ids); r.settle(); return err }
+
 func (r *rig) add(t *testing.T, p AddParams) *store.Job {
 	t.Helper()
 	if p.Dir == "" {

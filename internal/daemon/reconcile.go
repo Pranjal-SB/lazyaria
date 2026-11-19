@@ -218,7 +218,11 @@ func (m *Manager) readd(ctx context.Context, j *store.Job, paused bool, why stri
 		return j, errDirMissing
 	}
 	if publishing(j) { // finished; only the move into Dir is left
-		return m.publish(ctx, j)
+		j, err := m.publish(ctx, j)
+		if errors.Is(err, errCopying) {
+			err = nil // under way; it finishes on its own
+		}
+		return j, err
 	}
 	if done, ok := m.completedOffline(ctx, j); ok {
 		return done, nil

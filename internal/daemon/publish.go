@@ -30,6 +30,7 @@ var (
 var (
 	errPublishStopped = errors.New("publish stopped")
 	errStagingBusy    = errors.New("another download still writes into the staging folder")
+	errCopying        = errors.New("the finished download is being copied into the download folder")
 )
 
 // publish moves a complete staged job's payload into j.Dir following the
@@ -41,6 +42,9 @@ var (
 // error; resuming it publishes again.
 func (m *Manager) publish(ctx context.Context, j *store.Job) (*store.Job, error) {
 	staging := stagingDir(j)
+	if m.copying[j.ID] {
+		return j, errCopying
+	}
 	// A metalink's other files may still be downloading into the same
 	// folder; the poll tries again once they are done.
 	if refs, ok := m.stagingRefs(ctx, j); !ok || len(refs) > 0 {
@@ -79,7 +83,7 @@ func (m *Manager) publish(ctx context.Context, j *store.Job) (*store.Job, error)
 	for i := range p.Entries {
 		var err error
 		if j, err = m.publishEntry(ctx, j, p, i); err != nil {
-			if errors.Is(err, errPublishStopped) {
+			if errors.Is(err, errPublishStopped) || errors.Is(err, errCopying) {
 				return j, err
 			}
 			return m.publishFailed(ctx, j, err)
@@ -176,28 +180,62 @@ func (m *Manager) copyEntry(ctx context.Context, j *store.Job, p *store.Publish,
 	if publishStop("copy-temp") {
 		return j, errPublishStopped
 	}
-	tmp := filepath.Join(j.Dir, p.Temp)
-	err = m.copySpace(j, src)
-	if err == nil {
-		err = publishCopy(src, tmp) // removes its own partial on failure
+	if err := m.copySpace(j, src); err != nil {
+		return m.forgetTemp(ctx, j, p, err)
 	}
+	// The copy may take minutes: it runs without mu, and then continues
+	// the publish from the recorded intent.
+	m.copying[j.ID] = true
+	m.copies.Add(1)
+	go m.copyThenPublish(j.ID, src, filepath.Join(j.Dir, p.Temp))
+	return j, errCopying
+}
+
+// copyThenPublish copies src to tmp without holding mu, then records the
+// copy's identity and carries on with the publish.
+func (m *Manager) copyThenPublish(id, src, tmp string) {
+	defer m.copies.Done()
+	err := publishCopy(src, tmp) // removes its own partial on failure
+	var ino, dev uint64
 	if err == nil {
-		p.TempIno, p.TempDev, _, err = fsutil.FileID(tmp)
+		ino, dev, _, err = fsutil.FileID(tmp)
 	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.copying, id)
+	ctx := context.WithoutCancel(m.ctx)
+	j, gerr := m.st.GetJob(ctx, id)
+	if gerr != nil || !publishing(j) || j.Publish.Temp != filepath.Base(tmp) {
+		m.log.Warn("the job changed while its download was copied; the copy goes to the trash", "job", id, "path", tmp)
+		if err == nil {
+			m.trash(tmp)
+		}
+		return
+	}
+	p := clonePublish(j.Publish)
 	if err != nil {
-		// No temp of ours is left: forget the name, so nothing found there
-		// later passes for our copy.
-		p.Temp, p.TempIno, p.TempDev = "", 0, 0
-		j, _ = m.record(ctx, j, p)
-		return j, err
+		if j, err = m.forgetTemp(ctx, j, p, err); err != nil {
+			m.publishFailed(ctx, j, err)
+		}
+		return
 	}
+	p.TempIno, p.TempDev = ino, dev
 	if j, err = m.record(ctx, j, p); err != nil {
-		return j, err
+		m.publishFailed(ctx, j, err)
+		return
 	}
 	if publishStop("copied") {
-		return j, errPublishStopped
+		return
 	}
-	return m.place(ctx, j, p, i, tmp, src)
+	m.publish(ctx, j)
+}
+
+// forgetTemp clears the recorded temp after a failed copy: none of ours is
+// left, and nothing found at that name later may pass for our copy.
+func (m *Manager) forgetTemp(ctx context.Context, j *store.Job, p *store.Publish, err error) (*store.Job, error) {
+	p.Temp, p.TempIno, p.TempDev = "", 0, 0
+	j, _ = m.record(ctx, j, p)
+	return j, err
 }
 
 // place renames the finished temp copy tmp to entry i's name, moving on to

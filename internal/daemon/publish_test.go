@@ -33,6 +33,7 @@ func (r *rig) complete(t *testing.T, j *store.Job, path string) *store.Job {
 		}
 	})
 	r.event(ref, engine.KindComplete)
+	r.settle()
 	return r.get(t, j.ID)
 }
 
@@ -176,7 +177,7 @@ func TestPublishResumesAfterCrash(t *testing.T) {
 				t.Fatalf("after the crash: state %s publish %+v", got.State, got.Publish)
 			}
 			publishStop = func(string) bool { return false }
-			if err := r.m.Reconcile(bg); err != nil {
+			if err := r.reconcile(); err != nil {
 				t.Fatal(err)
 			}
 			check := func() {
@@ -193,7 +194,7 @@ func TestPublishResumesAfterCrash(t *testing.T) {
 				}
 			}
 			check()
-			if err := r.m.Reconcile(bg); err != nil {
+			if err := r.reconcile(); err != nil {
 				t.Fatal(err)
 			}
 			check()
@@ -268,7 +269,7 @@ func TestPublishCrossDevice(t *testing.T) {
 				wfile(t, temp, "half a co")
 			}
 			publishStop = func(string) bool { return false }
-			if err := r.m.Reconcile(bg); err != nil {
+			if err := r.reconcile(); err != nil {
 				t.Fatal(err)
 			}
 			if temp != "" && !slices.Equal(trashed, []string{temp}) {
@@ -329,7 +330,7 @@ func TestReconcileTrashesOrphanStaging(t *testing.T) {
 		trashed = append(trashed, p)
 		return trash.Trash(p)
 	}
-	if err := r.m.Reconcile(bg); err != nil {
+	if err := r.reconcile(); err != nil {
 		t.Fatal(err)
 	}
 	if !slices.Equal(trashed, []string{orphan}) || exists1(orphan) {

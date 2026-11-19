@@ -53,6 +53,11 @@ type Manager struct {
 	observers atomic.Int64
 	kick      chan struct{}
 	prog      *progress
+
+	// copying holds the jobs whose publish copies across filesystems right
+	// now, outside mu; copies counts those copies (tests wait on it).
+	copying map[string]bool
+	copies  sync.WaitGroup
 }
 
 func NewManager(e engine.Engine, st *store.Store, s *config.Settings, bus *Bus, log *slog.Logger) *Manager {
@@ -63,6 +68,7 @@ func NewManager(e engine.Engine, st *store.Store, s *config.Settings, bus *Bus, 
 		ctx:     context.Background(),
 		retries: map[string]*time.Timer{},
 		undo:    map[string]undoRecord{},
+		copying: map[string]bool{},
 		kick:    make(chan struct{}, 1),
 		prog:    newProgress(),
 	}

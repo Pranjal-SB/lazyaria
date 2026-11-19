@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"syscall"
 	"testing"
 
@@ -41,7 +42,7 @@ func TestPublishCopyFailureThenSameSizeFile(t *testing.T) {
 			wfile(t, filepath.Join(r.dir, "a.iso"), "user") // same size, other bytes
 			r.m.free = func(string) (uint64, error) { return 1 << 50, nil }
 			publishCopy = orig
-			if err := r.m.Resume(bg, []string{j.ID}); err != nil {
+			if err := r.resume([]string{j.ID}); err != nil {
 				t.Fatal(err)
 			}
 			got = r.get(t, j.ID)
@@ -68,7 +69,7 @@ func TestPublishFolderCopyFailureThenUserFolder(t *testing.T) {
 	}
 	wfile(t, filepath.Join(r.dir, "sub", "mine.txt"), "user")
 	r.m.free = func(string) (uint64, error) { return 1 << 50, nil }
-	if err := r.m.Resume(bg, []string{j.ID}); err != nil {
+	if err := r.resume([]string{j.ID}); err != nil {
 		t.Fatal(err)
 	}
 	if got := r.get(t, j.ID); got.State != store.Done || got.Name != "sub.1" {
@@ -107,7 +108,7 @@ func TestPublishStagingMissingKeepsIntent(t *testing.T) {
 	if err := os.Rename(aside, filepath.Join(r.dir, ".laria")); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.m.Resume(bg, []string{j.ID}); err != nil {
+	if err := r.resume([]string{j.ID}); err != nil {
 		t.Fatal(err)
 	}
 	if got := r.get(t, j.ID); got.State != store.Done || read(t, filepath.Join(r.dir, "a.iso")) != "data" || exists1(stagingDir(j)) {
@@ -127,7 +128,7 @@ func TestPublishResumesAfterDeviceChange(t *testing.T) {
 	r.complete(t, j, "a.bin")
 	publishStop = func(string) bool { return false }
 	r.m.dev = func(string) (uint64, error) { return 99, nil }
-	if err := r.m.Reconcile(bg); err != nil {
+	if err := r.reconcile(); err != nil {
 		t.Fatal(err)
 	}
 	if got := r.get(t, j.ID); got.State != store.Done {
@@ -153,7 +154,7 @@ func TestPublishNeverAdoptsAnotherJobsFile(t *testing.T) {
 	if got := r.complete(t, b, "a.iso"); got.State != store.Done || got.Name != "a.iso" {
 		t.Fatalf("job B: %s %q", got.State, got.Name)
 	}
-	if err := r.m.Resume(bg, []string{a.ID}); err != nil {
+	if err := r.resume([]string{a.ID}); err != nil {
 		t.Fatal(err)
 	}
 	if got := r.get(t, a.ID); got.State != store.Done || got.Name != "a.1.iso" {
@@ -176,7 +177,7 @@ func TestReconcileTrashesFinishedJobsStaging(t *testing.T) {
 		t.Fatal(got.State)
 	}
 	wfile(t, filepath.Join(stagingDir(j), "a.iso.leftover"), "big copy")
-	if err := r.m.Reconcile(bg); err != nil {
+	if err := r.reconcile(); err != nil {
 		t.Fatal(err)
 	}
 	if exists1(stagingDir(j)) || read(t, filepath.Join(r.dir, "a.iso")) != "data" {
@@ -224,7 +225,7 @@ func TestPublishLeavesWhatTheUserPutThere(t *testing.T) {
 	os.Remove(filepath.Join(stagingDir(j), "a.iso"))
 	user := filepath.Join(r.dir, "a.iso")
 	wfile(t, user, "the user's")
-	if err := r.m.Reconcile(bg); err != nil {
+	if err := r.reconcile(); err != nil {
 		t.Fatal(err)
 	}
 	if got := r.get(t, j.ID); got.State != store.Done {
@@ -238,6 +239,39 @@ func TestPublishLeavesWhatTheUserPutThere(t *testing.T) {
 	}
 	if read(t, user) != "the user's" {
 		t.Fatal("the user's file was trashed")
+	}
+}
+
+// A copy across filesystems can take minutes: it runs without the
+// manager's lock, and the job refuses a remove until it is done.
+func TestPublishCopiesWithoutTheLock(t *testing.T) {
+	r := newRig(t)
+	crossDevice(t)
+	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}})
+	stageFiles(t, j, map[string]string{"a.iso": "data"})
+	var locked bool
+	var removeErr error
+	orig := publishCopy
+	publishCopy = func(s, tmp string) error {
+		if r.m.mu.TryLock() {
+			r.m.mu.Unlock()
+		} else {
+			locked = true
+		}
+		_, _, removeErr = r.m.Remove(bg, []string{j.ID}, true)
+		return orig(s, tmp)
+	}
+	t.Cleanup(func() { publishCopy = orig })
+	r.complete(t, j, "a.iso")
+	r.settle()
+	if locked {
+		t.Fatal("the copy ran under the manager's lock")
+	}
+	if removeErr == nil || !strings.Contains(removeErr.Error(), "being copied") {
+		t.Fatalf("remove during the copy: %v", removeErr)
+	}
+	if got := r.get(t, j.ID); got.State != store.Done || read(t, filepath.Join(r.dir, "a.iso")) != "data" {
+		t.Fatalf("state %s, download folder %v", got.State, listDir(t, r.dir))
 	}
 }
 
@@ -272,7 +306,7 @@ func TestPublishFolderBuildResumes(t *testing.T) {
 		t.Fatalf("after the crash: publish %+v, download folder %v", got.Publish, listDir(t, r.dir))
 	}
 	publishMoveInto = origMove
-	if err := r.m.Reconcile(bg); err != nil {
+	if err := r.reconcile(); err != nil {
 		t.Fatal(err)
 	}
 	if got := r.get(t, j.ID); got.State != store.Done || got.Name != "album" {
