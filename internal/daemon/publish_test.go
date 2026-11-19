@@ -6,6 +6,7 @@ import (
 	"slices"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/Pranjal-SB/lazyaria/internal/engine"
 	"github.com/Pranjal-SB/lazyaria/internal/fsutil"
@@ -279,8 +280,15 @@ func TestReconcileTrashesOrphanStaging(t *testing.T) {
 	r.m.s.Load().Downloads.Dir = r.dir
 	live := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}})
 	stageFiles(t, live, map[string]string{"a.iso": "partial"})
+	// Only folders older than an hour: a fresh one may belong to another
+	// lazyaria sharing the download folder.
 	orphan := filepath.Join(r.dir, ".laria", store.NewID())
 	wfile(t, filepath.Join(orphan, "f"), "left by a crash")
+	old := r.clk.now().Add(-2 * time.Hour)
+	os.Chtimes(orphan, old, old)
+	fresh := filepath.Join(r.dir, ".laria", store.NewID())
+	wfile(t, filepath.Join(fresh, "f"), "another instance's")
+	os.Chtimes(fresh, r.clk.now(), r.clk.now())
 	var trashed []string
 	r.m.trash = func(p string) (trash.Entry, error) {
 		trashed = append(trashed, p)
@@ -294,5 +302,8 @@ func TestReconcileTrashesOrphanStaging(t *testing.T) {
 	}
 	if read(t, filepath.Join(stagingDir(live), "a.iso")) != "partial" {
 		t.Fatal("a live job's staging folder was touched")
+	}
+	if !exists1(fresh) {
+		t.Fatal("a fresh folder with no job was trashed")
 	}
 }

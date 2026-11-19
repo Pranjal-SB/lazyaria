@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/Pranjal-SB/lazyaria/internal/engine"
 	"github.com/Pranjal-SB/lazyaria/internal/store"
@@ -103,7 +104,13 @@ func (m *Manager) trashOrphans(ctx context.Context, live []*store.Job) {
 			if !e.IsDir() {
 				continue
 			}
-			if j, err := m.st.GetJob(ctx, e.Name()); err == nil && j.Staged || err != nil && !errors.Is(err, store.ErrNotFound) {
+			j, err := m.st.GetJob(ctx, e.Name())
+			if err == nil && j.Staged || err != nil && !errors.Is(err, store.ErrNotFound) {
+				continue
+			}
+			// With no row, the folder may be another lazyaria's that shares
+			// this download folder and has just created it.
+			if fi, ferr := e.Info(); err != nil && (ferr != nil || m.now().Sub(fi.ModTime()) < time.Hour) {
 				continue
 			}
 			p := filepath.Join(root, e.Name())
