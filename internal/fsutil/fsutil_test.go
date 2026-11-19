@@ -238,6 +238,41 @@ func TestCopyNoReplaceFolderRenameRefused(t *testing.T) {
 	}
 }
 
+// MoveInto builds dst file by file. Resumed, it continues into the dst it
+// made; a failure leaves dst as it is, since anything in it may matter.
+func TestMoveInto(t *testing.T) {
+	d := t.TempDir()
+	src, dst := filepath.Join(d, "tmp"), filepath.Join(d, "album")
+	write(t, filepath.Join(src, "a"), "alpha")
+	write(t, filepath.Join(src, "sub", "b"), "beta")
+	write(t, filepath.Join(src, "c"), "gamma")
+	// A first run that moved only a, then stopped.
+	write(t, filepath.Join(dst, "a"), "alpha")
+	os.Remove(filepath.Join(src, "a"))
+	if err := MoveInto(src, dst, false); !errors.Is(err, fs.ErrExist) {
+		t.Fatalf("fresh build onto an existing folder: err = %v, want fs.ErrExist", err)
+	}
+	if err := MoveInto(src, dst, true); err != nil {
+		t.Fatal(err)
+	}
+	gone(t, src)
+	if read(t, filepath.Join(dst, "a")) != "alpha" || read(t, filepath.Join(dst, "sub", "b")) != "beta" || read(t, filepath.Join(dst, "c")) != "gamma" {
+		t.Fatalf("dst holds %v", tree(t, dst))
+	}
+
+	// A clash halfway: the error comes back and nothing already built goes.
+	src2, dst2 := filepath.Join(d, "tmp2"), filepath.Join(d, "album2")
+	write(t, filepath.Join(src2, "a"), "alpha")
+	write(t, filepath.Join(src2, "b"), "beta")
+	write(t, filepath.Join(dst2, "b"), "a scanner's")
+	if err := MoveInto(src2, dst2, true); !errors.Is(err, fs.ErrExist) {
+		t.Fatalf("clash: err = %v, want fs.ErrExist", err)
+	}
+	if read(t, filepath.Join(dst2, "a")) != "alpha" || read(t, filepath.Join(dst2, "b")) != "a scanner's" {
+		t.Fatalf("dst2 holds %v", tree(t, dst2))
+	}
+}
+
 func TestLinkUnsupported(t *testing.T) {
 	for _, e := range []syscall.Errno{syscall.EPERM, syscall.ENOTSUP, syscall.EOPNOTSUPP, syscall.EXDEV, syscall.EMLINK} {
 		if !LinkUnsupported(&os.LinkError{Op: "link", Old: "a", New: "b", Err: e}) {

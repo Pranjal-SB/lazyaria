@@ -1,6 +1,7 @@
 package fsutil
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -19,11 +20,15 @@ func CopyNoReplace(src, tmp, dst string) error {
 	if err := CopyTree(src, tmp); err != nil {
 		return err
 	}
-	if err := Place(tmp, dst); err != nil {
-		os.RemoveAll(tmp)
+	err := RenameNoReplace(tmp, dst)
+	if fi, lerr := os.Lstat(tmp); IsCrossDevice(err) && lerr == nil && fi.IsDir() {
+		err = MoveInto(tmp, dst, false) // overlayfs refuses to rename a folder
+	}
+	if err != nil {
+		os.RemoveAll(tmp) // the hidden temp only; a half-built dst stays
 		return err
 	}
-	return nil
+	return SyncDir(filepath.Dir(dst))
 }
 
 // CopyTree creates dst fresh (O_EXCL, Mkdir) as a copy of the file or tree
@@ -41,53 +46,43 @@ func CopyTree(src, dst string) error {
 	return nil
 }
 
-// Place renames tmp to dst without replacing, then fsyncs dst's folder. It
-// fails with an error matching fs.ErrExist if dst exists.
-func Place(tmp, dst string) error {
-	err := RenameNoReplace(tmp, dst)
-	if fi, lerr := os.Lstat(tmp); IsCrossDevice(err) && lerr == nil && fi.IsDir() {
-		// overlayfs refuses to rename a folder even within one folder.
-		// shortcut: dst is visible while it fills and a crash leaves it
-		// half-built; fine for overlay, the only place this runs.
-		err = moveTree(tmp, dst)
-	}
-	if err != nil {
-		return err
-	}
-	return SyncDir(filepath.Dir(dst))
-}
-
-// moveTree makes the folder dst and moves src's contents into it file by
-// file, never replacing anything; on failure it removes the dst it made.
-func moveTree(src, dst string) error {
+// MoveInto builds the folder dst from the folder src by moving src's
+// contents in one by one, never replacing anything, then removes the
+// emptied src. It is for overlayfs, which refuses to rename a folder (EXDEV)
+// even within one folder. dst is visible while it fills. Fresh, dst must not
+// exist; with resume, an existing dst (an earlier, interrupted MoveInto) is
+// filled further. On failure dst is left as it is: anything already in it
+// may have been opened or added to.
+func MoveInto(src, dst string, resume bool) error {
 	fi, err := os.Lstat(src)
 	if err != nil {
 		return err
 	}
-	if err := os.Mkdir(dst, fi.Mode().Perm()); err != nil {
+	if err := os.Mkdir(dst, fi.Mode().Perm()); err != nil && !(resume && errors.Is(err, fs.ErrExist) && isDir(dst)) {
 		return err
 	}
 	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
 	for _, e := range entries {
-		if err != nil {
-			break
-		}
 		s, d := filepath.Join(src, e.Name()), filepath.Join(dst, e.Name())
 		if e.IsDir() {
-			err = moveTree(s, d)
+			err = MoveInto(s, d, resume)
 		} else {
 			err = RenameNoReplace(s, d)
 		}
+		if err != nil {
+			return err
+		}
 	}
-	if err == nil {
-		err = SyncDir(dst)
+	if err := SyncDir(dst); err != nil {
+		return err
 	}
-	if err == nil {
-		return os.Remove(src)
-	}
-	os.RemoveAll(dst)
-	return err
+	return os.Remove(src)
 }
+
+func isDir(p string) bool { fi, err := os.Lstat(p); return err == nil && fi.IsDir() }
 
 // copyEntry creates dst fresh as a copy of src; made reports whether dst was created.
 func copyEntry(src, dst string, made *bool) error {

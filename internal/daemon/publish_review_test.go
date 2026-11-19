@@ -181,3 +181,48 @@ func TestReconcileTrashesFinishedJobsStaging(t *testing.T) {
 		t.Fatalf("staging there %v, download folder %v", exists1(stagingDir(j)), listDir(t, r.dir))
 	}
 }
+
+// overlayfs refuses to rename a folder, so the copied folder is built in
+// the download folder file by file. A crash halfway resumes into the same
+// folder: no second copy beside it, and the half-built one is never removed.
+func TestPublishFolderBuildResumes(t *testing.T) {
+	r := newRig(t)
+	crossDevice(t)
+	origRename, origMove := publishRenameTemp, publishMoveInto
+	publishRenameTemp = func(old, new string) error {
+		if isDir(old) {
+			return &os.LinkError{Op: "rename", Old: old, New: new, Err: syscall.EXDEV}
+		}
+		return origRename(old, new)
+	}
+	publishMoveInto = func(src, dst string, resume bool) error {
+		// Build only a.flac, then crash.
+		if err := os.Mkdir(dst, 0o755); err != nil {
+			return err
+		}
+		if err := os.Rename(filepath.Join(src, "a.flac"), filepath.Join(dst, "a.flac")); err != nil {
+			return err
+		}
+		return errPublishStopped
+	}
+	t.Cleanup(func() { publishRenameTemp, publishMoveInto = origRename, origMove })
+	j := r.add(t, AddParams{URIs: []string{"http://example.com/m.meta4"}})
+	stageFiles(t, j, map[string]string{"album/a.flac": "A", "album/b.flac": "B"})
+	got := r.complete(t, j, "album/a.flac")
+	if got.Publish == nil || got.Publish.Building != "album" || !exists1(filepath.Join(r.dir, "album", "a.flac")) {
+		t.Fatalf("after the crash: publish %+v, download folder %v", got.Publish, listDir(t, r.dir))
+	}
+	publishMoveInto = origMove
+	if err := r.m.Reconcile(bg); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.get(t, j.ID); got.State != store.Done || got.Name != "album" {
+		t.Fatalf("state %s name %q", got.State, got.Name)
+	}
+	if names := listDir(t, r.dir); !slices.Equal(names, []string{"album"}) {
+		t.Fatalf("download folder holds %v", names)
+	}
+	if read(t, filepath.Join(r.dir, "album", "a.flac")) != "A" || read(t, filepath.Join(r.dir, "album", "b.flac")) != "B" {
+		t.Fatal("album incomplete")
+	}
+}

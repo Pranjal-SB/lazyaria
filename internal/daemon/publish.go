@@ -21,7 +21,10 @@ import (
 var (
 	publishRename = fsutil.RenameNoReplace
 	publishCopy   = fsutil.CopyTree
-	publishStop   = func(step string) bool { return false } // true: stop after step, as a crash would
+	// The temp copy into place, and its folder-by-folder fallback.
+	publishRenameTemp = fsutil.RenameNoReplace
+	publishMoveInto   = fsutil.MoveInto
+	publishStop       = func(step string) bool { return false } // true: stop after step, as a crash would
 )
 
 var (
@@ -121,7 +124,12 @@ func (m *Manager) publishEntry(ctx context.Context, j *store.Job, p *store.Publi
 		}
 		if p.Temp != "" { // a copy of this entry was under way
 			tmp := filepath.Join(j.Dir, p.Temp)
+			building := p.Building != "" && p.Building == e.Name && isDir(dst)
 			switch {
+			case building && p.TempIno != 0 && sameFile(tmp, p.TempIno, p.TempDev, -1):
+				return m.build(ctx, j, p, i, tmp, src, true) // half built
+			case building && !lexists(tmp):
+				return m.copied(ctx, j, p, i, src, dst) // built, not yet recorded
 			case p.TempIno != 0 && sameFile(tmp, p.TempIno, p.TempDev, -1):
 				return m.place(ctx, j, p, i, tmp, src) // copied, not yet in place
 			case p.TempIno != 0 && sameFile(dst, p.TempIno, p.TempDev, -1):
@@ -133,7 +141,7 @@ func (m *Manager) publishEntry(ctx context.Context, j *store.Job, p *store.Publi
 					return j, err
 				}
 			}
-			p.Temp, p.TempIno, p.TempDev = "", 0, 0
+			p.Temp, p.TempIno, p.TempDev, p.Building = "", 0, 0, ""
 		}
 		if !lexists(src) {
 			m.log.Warn("a finished file left the staging folder before publish; nothing to move", "job", j.ID, "path", src)
@@ -195,8 +203,14 @@ func (m *Manager) copyEntry(ctx context.Context, j *store.Job, p *store.Publish,
 func (m *Manager) place(ctx context.Context, j *store.Job, p *store.Publish, i int, tmp, src string) (*store.Job, error) {
 	for {
 		dst := filepath.Join(j.Dir, p.Entries[i].Name)
-		err := fsutil.Place(tmp, dst)
+		err := publishRenameTemp(tmp, dst)
+		if fsutil.IsCrossDevice(err) && isDir(tmp) {
+			return m.build(ctx, j, p, i, tmp, src, false)
+		}
 		if err == nil {
+			if err := fsutil.SyncDir(j.Dir); err != nil {
+				return j, err
+			}
 			return m.copied(ctx, j, p, i, src, dst)
 		}
 		if !errors.Is(err, fs.ErrExist) {
@@ -208,6 +222,34 @@ func (m *Manager) place(ctx context.Context, j *store.Job, p *store.Publish, i i
 	}
 }
 
+// build makes entry i's folder in j.Dir from the temp copy tmp file by
+// file, for overlayfs, which refuses to rename a folder. The folder is
+// recorded before it is made, so a resume continues into it rather than
+// starting a second copy, and a failure leaves it as it is.
+func (m *Manager) build(ctx context.Context, j *store.Job, p *store.Publish, i int, tmp, src string, resume bool) (*store.Job, error) {
+	for {
+		dst := filepath.Join(j.Dir, p.Entries[i].Name)
+		if !resume {
+			if lexists(dst) {
+				var err error
+				if j, err = m.nextName(ctx, j, p, i); err != nil {
+					return j, err
+				}
+				continue
+			}
+			p.Building = p.Entries[i].Name
+			var err error
+			if j, err = m.record(ctx, j, p); err != nil {
+				return j, err
+			}
+		}
+		if err := publishMoveInto(tmp, dst, resume); err != nil {
+			return j, err
+		}
+		return m.copied(ctx, j, p, i, src, dst)
+	}
+}
+
 // copied records the copy in place (its identity, no temp) and then
 // removes the source, so a crash in between finds the entry moved.
 func (m *Manager) copied(ctx context.Context, j *store.Job, p *store.Publish, i int, src, dst string) (*store.Job, error) {
@@ -216,7 +258,7 @@ func (m *Manager) copied(ctx context.Context, j *store.Job, p *store.Publish, i 
 	if e.Ino, e.Dev, e.Size, err = fsutil.FileID(dst); err != nil {
 		return j, err
 	}
-	p.Temp, p.TempIno, p.TempDev = "", 0, 0
+	p.Temp, p.TempIno, p.TempDev, p.Building = "", 0, 0, ""
 	if j, err = m.record(ctx, j, p); err != nil {
 		return j, err
 	}

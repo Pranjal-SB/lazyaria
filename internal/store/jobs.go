@@ -70,6 +70,9 @@ type Publish struct {
 	// The finished temp copy's identity; 0 while the copy is being written.
 	TempIno uint64 `json:"temp_ino,omitempty"`
 	TempDev uint64 `json:"temp_dev,omitempty"`
+	// Building is the entry name of a folder being built in Dir file by
+	// file, where the filesystem refuses to rename folders (overlayfs).
+	Building string `json:"building,omitempty"`
 }
 
 type PublishEntry struct {
