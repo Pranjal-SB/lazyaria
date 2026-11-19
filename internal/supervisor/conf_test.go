@@ -142,6 +142,16 @@ func TestWriteConfRejectsReservedExtraArgs(t *testing.T) {
 	}
 }
 
+func TestConfDisablesUploadMetadata(t *testing.T) {
+	s, p := testSettings(t)
+	if err := WriteConf(p.AriaConf, s, p, 1, "s"); err != nil {
+		t.Fatal(err)
+	}
+	if got := confLines(t, p.AriaConf)["rpc-save-upload-metadata"]; len(got) != 1 || got[0] != "false" {
+		t.Fatalf("rpc-save-upload-metadata = %v, want [false]", got)
+	}
+}
+
 func TestWriteConfTightensMode(t *testing.T) {
 	s, p := testSettings(t)
 	if err := os.WriteFile(p.AriaConf, []byte("old\n"), 0o644); err != nil {

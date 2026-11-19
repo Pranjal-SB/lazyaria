@@ -113,6 +113,8 @@ func (b *confBuilder) base(s *config.Settings, p config.Paths, port int, secret 
 	b.bool("check-certificate", s.Network.CheckCertificate)
 	b.add("follow-torrent", "true")
 	b.bool("bt-save-metadata", s.BT.SaveMetadata)
+	// Torrents added over RPC would otherwise leave <sha1>.torrent in the download folder; readd passes the bytes from the store.
+	b.add("rpc-save-upload-metadata", "false")
 	b.add("seed-ratio", strconv.FormatFloat(s.BT.SeedRatio, 'f', -1, 64))
 	// seed_minutes 0 means no seeding whatever the ratio, and seed-time=0 is
 	// what makes aria2 stop; seed-ratio=0 alone means "no ratio limit".
