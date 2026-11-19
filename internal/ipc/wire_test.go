@@ -41,7 +41,7 @@ func TestWireKeys(t *testing.T) {
 	job := &store.Job{ID: "a", Torrent: []byte("d8:announce")}
 	sameKeys(t, "Job", keys(t, job), `id kind engine engine_ref state error_kind error_code error_msg name uris
 		dir out dir_dev total_bytes done_bytes options limit_down limit_up category queue priority
-		retry_count retry_at referrer created_at started_at finished_at removed_at`)
+		retry_count retry_at referrer created_at started_at finished_at removed_at staged`)
 	sameKeys(t, "Event", keys(t, daemon.Event{Seq: 1, Type: "job.added", Job: job, Data: map[string]any{"x": 1}}), "seq type job data")
 	sameKeys(t, "Event without job", keys(t, daemon.Event{Seq: 1, Type: "resync_required"}), "seq type")
 

@@ -32,7 +32,8 @@
       "created_at": "2026-11-07T10:00:00Z",
       "started_at": null,
       "finished_at": null,
-      "removed_at": null
+      "removed_at": null,
+      "staged": false
     },
     {
       "id": "01JC0000000000000000000002",
@@ -64,7 +65,8 @@
       "created_at": "2026-11-07T10:00:00Z",
       "started_at": null,
       "finished_at": null,
-      "removed_at": null
+      "removed_at": null,
+      "staged": false
     }
   ]
 }

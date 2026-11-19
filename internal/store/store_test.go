@@ -65,22 +65,21 @@ func TestMigrationBackup(t *testing.T) {
 	}
 	j := job("keep", Queued)
 	s.InsertJob(ctx, j) // sits in the WAL until checkpoint
+	cur, _ := s.version()
 	s.Close()
-	base, _ := fs.Sub(migrationsFS, "migrations")
-	body, _ := fs.ReadFile(base, "0001_init.sql")
-	m := fstest.MapFS{
-		"0001_init.sql": {Data: body},
-		"0002_x.sql":    {Data: []byte("CREATE TABLE x(a);")},
-	}
+	next := cur + 1
+	m := migrations(t, cur)
+	m[fmt.Sprintf("%04d_x.sql", next)] = &fstest.MapFile{Data: []byte("CREATE TABLE x(a);")}
 	s, err = openWith(p, m)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if _, err := os.Stat(p + ".bak-v2"); err != nil {
+	bak := fmt.Sprintf("%s.bak-v%d", p, next)
+	if _, err := os.Stat(bak); err != nil {
 		t.Fatal(err)
 	}
-	bs, err := Open(p + ".bak-v2")
+	bs, err := Open(bak)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,8 +87,8 @@ func TestMigrationBackup(t *testing.T) {
 	if _, err := bs.GetJob(ctx, j.ID); err != nil {
 		t.Fatalf("backup lacks row: %v", err)
 	}
-	if v, _ := s.version(); v != 2 {
-		t.Fatalf("version %d", v)
+	if v, _ := s.version(); v != next {
+		t.Fatalf("version %d, want %d", v, next)
 	}
 }
 
@@ -338,13 +337,10 @@ func TestSearchURIsNotJSON(t *testing.T) {
 func TestFailedMigrationRollsBack(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "l.db")
 	s, _ := Open(p)
+	cur, _ := s.version()
 	s.Close()
-	base, _ := fs.Sub(migrationsFS, "migrations")
-	body, _ := fs.ReadFile(base, "0001_init.sql")
-	m := fstest.MapFS{
-		"0001_init.sql": {Data: body},
-		"0002_bad.sql":  {Data: []byte("CREATE TABLE partial(a); INSERT INTO nope VALUES(1);")},
-	}
+	m := migrations(t, cur)
+	m[fmt.Sprintf("%04d_bad.sql", cur+1)] = &fstest.MapFile{Data: []byte("CREATE TABLE partial(a); INSERT INTO nope VALUES(1);")}
 	if _, err := openWith(p, m); err == nil {
 		t.Fatal("want error")
 	}
@@ -353,8 +349,8 @@ func TestFailedMigrationRollsBack(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if v, _ := s.version(); v != 1 {
-		t.Fatalf("version %d", v)
+	if v, _ := s.version(); v != cur {
+		t.Fatalf("version %d, want %d", v, cur)
 	}
 	var n int
 	s.db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE name='partial'`).Scan(&n)

@@ -140,6 +140,8 @@ func (s *Store) migrate(p string, migs fs.FS) error {
 	if cur > latest {
 		return ErrNewerSchema{cur}
 	}
+	fresh := cur == 0 // nothing worth saving on a fresh database
+
 	for _, name := range files {
 		n, err := migrationNum(name)
 		if err != nil {
@@ -148,7 +150,7 @@ func (s *Store) migrate(p string, migs fs.FS) error {
 		if n <= cur {
 			continue
 		}
-		if cur > 0 { // nothing worth saving on a fresh database
+		if !fresh {
 			if err := s.backup(p, n); err != nil {
 				return fmt.Errorf("back up before migration %d: %w", n, err)
 			}
@@ -159,7 +161,7 @@ func (s *Store) migrate(p string, migs fs.FS) error {
 		}
 		if err := s.apply(n, string(body)); err != nil {
 			hint := ""
-			if cur > 0 {
+			if !fresh {
 				hint = fmt.Sprintf(" (restore %s.bak-v%d if needed)", p, n)
 			}
 			return fmt.Errorf("migration %s: %w%s", name, err, hint)

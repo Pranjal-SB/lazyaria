@@ -57,6 +57,22 @@ type Job struct {
 	StartedAt  *time.Time        `json:"started_at"`
 	FinishedAt *time.Time        `json:"finished_at"`
 	RemovedAt  *time.Time        `json:"removed_at"`
+	Staged     bool              `json:"staged"` // files live in the job's staging folder
+	Publish    *Publish          `json:"-"`      // the move into Dir in progress, if any
+}
+
+// Publish is the recorded plan of a move from staging into Dir. It never
+// leaves the daemon.
+type Publish struct {
+	Name    string         `json:"name"` // final top-level name chosen in Dir (may differ from Out)
+	Entries []PublishEntry `json:"entries"`
+	Temp    string         `json:"temp,omitempty"` // copy-fallback temp name in Dir, if one is in progress
+}
+
+type PublishEntry struct {
+	Rel  string `json:"rel"`  // path relative to the staging folder, top-level entry
+	Size int64  `json:"size"` // regular files: byte size; directories: 0
+	Ino  uint64 `json:"ino"`
 }
 
 // Filter narrows ListJobs. Without IncludeHistory, done and removed jobs are hidden.
@@ -72,7 +88,8 @@ type Filter struct {
 // and only InsertJob writes it.
 const cols = `id, kind, engine, engine_ref, state, error_kind, error_code, error_msg, name, uris,
 	dir, out, dir_dev, total_bytes, done_bytes, options, limit_down, limit_up, category,
-	queue, priority, retry_count, retry_at, referrer, created_at, started_at, finished_at, removed_at`
+	queue, priority, retry_count, retry_at, referrer, created_at, started_at, finished_at, removed_at,
+	staged, publish`
 
 // smartOrder: needs-attention, active, waiting, then finished newest first.
 const smartOrder = `ORDER BY CASE state WHEN 'error' THEN 0 WHEN 'active' THEN 1
@@ -99,16 +116,22 @@ func tm(n sql.NullInt64) *time.Time {
 func scanJob(r scanner) (*Job, error) {
 	var j Job
 	var uris, opts string
+	var publish sql.NullString
 	var errCode, dev, total, done, retryAt, created, started, finished, removed sql.NullInt64
 	var state string
 	err := r.Scan(&j.ID, &j.Kind, &j.Engine, &j.EngineRef, &state, &j.ErrorKind, &errCode, &j.ErrorMsg,
 		&j.Name, &uris, &j.Dir, &j.Out, &dev, &total, &done, &opts, &j.LimitDown, &j.LimitUp,
 		&j.Category, &j.Queue, &j.Priority, &j.RetryCount, &retryAt, &j.Referrer, &created, &started,
-		&finished, &removed, &j.Torrent)
+		&finished, &removed, &j.Staged, &publish, &j.Torrent)
 	if err != nil {
 		return nil, err
 	}
 	j.State = State(state)
+	if publish.Valid {
+		if err := json.Unmarshal([]byte(publish.String), &j.Publish); err != nil {
+			return nil, err
+		}
+	}
 	if err := json.Unmarshal([]byte(uris), &j.URIs); err != nil {
 		return nil, err
 	}
@@ -161,7 +184,12 @@ func args(j *Job, keys ...string) ([]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	var code, dev any
+	var code, dev, publish any
+	if j.Publish != nil {
+		if publish, err = marshal(j.Publish); err != nil {
+			return nil, err
+		}
+	}
 	if j.ErrorCode != nil {
 		code = *j.ErrorCode
 	}
@@ -171,7 +199,7 @@ func args(j *Job, keys ...string) ([]any, error) {
 	return []any{j.ID, j.Kind, j.Engine, j.EngineRef, string(j.State), j.ErrorKind, code, j.ErrorMsg,
 		j.Name, uris, j.Dir, j.Out, dev, j.TotalBytes, j.DoneBytes, opts,
 		j.LimitDown, j.LimitUp, j.Category, j.Queue, j.Priority, j.RetryCount, ms(j.RetryAt), j.Referrer,
-		j.CreatedAt.UnixMilli(), ms(j.StartedAt), ms(j.FinishedAt), ms(j.RemovedAt), normJSON}, nil
+		j.CreatedAt.UnixMilli(), ms(j.StartedAt), ms(j.FinishedAt), ms(j.RemovedAt), j.Staged, publish, normJSON}, nil
 }
 
 // marshal skips HTML escaping so & < > stay literal in stored JSON.
@@ -192,7 +220,7 @@ func nonNil(s []string) []string {
 	return s
 }
 
-const placeholders = `?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?`
+const placeholders = `?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?`
 
 // InsertJob stores a new job. keys are extra strings FindByNormalizedURL
 // matches it by, such as a .torrent's info-hash; they last until its URIs
