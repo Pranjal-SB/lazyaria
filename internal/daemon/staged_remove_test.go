@@ -191,7 +191,7 @@ func TestRemoveDuringPublish(t *testing.T) {
 			t.Fatal(err)
 		}
 		got := r.get(t, j.ID)
-		if got.State != store.Removed || got.Staged || got.Publish != nil || read(t, filepath.Join(r.dir, "a.iso")) != "data" || exists1(stagingDir(j)) {
+		if got.State != store.Removed || got.Staged || publishing(got) || read(t, filepath.Join(r.dir, "a.iso")) != "data" || exists1(stagingDir(j)) {
 			t.Fatalf("state %s staged %v publish %+v", got.State, got.Staged, got.Publish)
 		}
 	})

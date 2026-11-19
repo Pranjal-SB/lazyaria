@@ -7,6 +7,8 @@ import (
 	"syscall"
 	"testing"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/Pranjal-SB/lazyaria/internal/engine"
 	"github.com/Pranjal-SB/lazyaria/internal/store"
 )
@@ -179,6 +181,31 @@ func TestReconcileTrashesFinishedJobsStaging(t *testing.T) {
 	}
 	if exists1(stagingDir(j)) || read(t, filepath.Join(r.dir, "a.iso")) != "data" {
 		t.Fatalf("staging there %v, download folder %v", exists1(stagingDir(j)), listDir(t, r.dir))
+	}
+}
+
+// A metalink publishes several entries; each is the job's, for the origin
+// stamp and for remove --delete-files, not only the first.
+func TestPublishedEntriesAllTracked(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
+	r := newRig(t)
+	r.m.s.Load().Privacy.StampOriginXattr = true
+	j := r.add(t, AddParams{URIs: []string{"http://example.com/m.meta4"}})
+	stageFiles(t, j, map[string]string{"a.bin": "A", "b.bin": "B"})
+	if got := r.complete(t, j, "a.bin"); got.State != store.Done {
+		t.Fatalf("state %s", got.State)
+	}
+	a, b := filepath.Join(r.dir, "a.bin"), filepath.Join(r.dir, "b.bin")
+	if err := unix.Setxattr(a, "user.probe", []byte("1"), 0); err == nil {
+		if origin(a) == "" || origin(b) == "" {
+			t.Fatalf("stamped: a %q b %q", origin(a), origin(b))
+		}
+	}
+	if _, _, err := r.m.Remove(bg, []string{j.ID}, true); err != nil {
+		t.Fatal(err)
+	}
+	if names := listDir(t, r.dir); len(names) != 0 {
+		t.Fatalf("download folder holds %v", names)
 	}
 }
 

@@ -72,7 +72,7 @@ func TestPublishMovesFileUp(t *testing.T) {
 	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}})
 	stageFiles(t, j, map[string]string{"a.iso": "data"})
 	got := r.complete(t, j, "a.iso")
-	if got.State != store.Done || got.Staged || got.Publish != nil || got.Out == nil || *got.Out != "a.iso" || got.Name != "a.iso" || got.FinishedAt == nil {
+	if got.State != store.Done || got.Staged || publishing(got) || got.Out == nil || *got.Out != "a.iso" || got.Name != "a.iso" || got.FinishedAt == nil {
 		t.Fatalf("job: state %s staged %v publish %+v out %v name %q", got.State, got.Staged, got.Publish, got.Out, got.Name)
 	}
 	if read(t, filepath.Join(r.dir, "a.iso")) != "data" {
@@ -139,7 +139,7 @@ func TestPublishSkipsControlFiles(t *testing.T) {
 	j := r.add(t, AddParams{URIs: []string{"http://example.com/x.bin"}})
 	stageFiles(t, j, map[string]string{"x.bin": "x", "x.bin.aria2": "c", "abc.torrent": "t", "m.meta4": "m"})
 	got := r.complete(t, j, "x.bin")
-	if got.State != store.Done || got.Publish != nil {
+	if got.State != store.Done || publishing(got) {
 		t.Fatalf("state %s publish %+v", got.State, got.Publish)
 	}
 	if names := listDir(t, r.dir); !slices.Equal(names, []string{"x.bin"}) {
@@ -182,7 +182,7 @@ func TestPublishResumesAfterCrash(t *testing.T) {
 			check := func() {
 				t.Helper()
 				got := r.get(t, j.ID)
-				if got.State != store.Done || got.Publish != nil || got.Staged || got.Name != "a.bin" {
+				if got.State != store.Done || publishing(got) || got.Staged || got.Name != "a.bin" {
 					t.Fatalf("state %s publish %+v name %q", got.State, got.Publish, got.Name)
 				}
 				if names := listDir(t, r.dir); !slices.Equal(names, []string{"a.bin", "b.bin"}) {
@@ -233,7 +233,7 @@ func TestPublishCrossDevice(t *testing.T) {
 		}
 		t.Cleanup(func() { publishCopy = orig })
 		got := r.complete(t, j, "a.iso")
-		if copies != 1 || got.State != store.Done || got.Publish != nil {
+		if copies != 1 || got.State != store.Done || publishing(got) {
 			t.Fatalf("copies %d state %s publish %+v", copies, got.State, got.Publish)
 		}
 		if names := listDir(t, r.dir); !slices.Equal(names, []string{"a.iso"}) || read(t, filepath.Join(r.dir, "a.iso")) != "data" {
@@ -275,7 +275,7 @@ func TestPublishCrossDevice(t *testing.T) {
 				t.Fatalf("trashed %v; want the unfinished temp in the trash", trashed)
 			}
 			got = r.get(t, j.ID)
-			if got.State != store.Done || got.Publish != nil || got.Name != "a.iso" {
+			if got.State != store.Done || publishing(got) || got.Name != "a.iso" {
 				t.Fatalf("state %s publish %+v name %q", got.State, got.Publish, got.Name)
 			}
 			if names := listDir(t, r.dir); !slices.Equal(names, []string{"a.iso"}) || read(t, filepath.Join(r.dir, "a.iso")) != "data" {

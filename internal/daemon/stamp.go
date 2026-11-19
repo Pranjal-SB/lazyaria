@@ -22,7 +22,11 @@ func (m *Manager) stampOrigin(ctx context.Context, j *store.Job) {
 		ref = *j.Referrer
 	}
 	// Only the job's own files: its folder may hold the user's too.
-	for _, f := range inPayload(p, m.downloadFiles(ctx, j)) {
+	fs := inPayload(p, m.downloadFiles(ctx, j))
+	if j.Publish != nil && !j.Staged {
+		fs = publishedFiles(j, m.downloadFiles(ctx, j))
+	}
+	for _, f := range fs {
 		if err := xattr.StampOrigin(f, j.URIs[0], ref); err != nil {
 			m.log.Debug("stamp origin", "job", j.ID, "path", f, "err", err)
 		}

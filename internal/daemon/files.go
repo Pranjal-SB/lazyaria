@@ -77,11 +77,29 @@ func targets(j *store.Job, files []string) []string {
 		}
 		return out
 	}
+	if j.Publish != nil {
+		return publishedFiles(j, files)
+	}
 	p, ok := payloadPath(j)
 	if !ok || (j.State != store.Done && j.State != store.Seeding) {
 		return nil
 	}
 	return inPayload(p, files)
+}
+
+// publishedFiles lists what a finished job put in Dir, from its publish
+// record: each entry still there as published, and for a folder entry only
+// the listed files inside it (it may hold the user's files by now).
+func publishedFiles(j *store.Job, files []string) []string {
+	var out []string
+	for _, p := range published(j) {
+		if isDir(p) {
+			out = append(out, inPayload(p, files)...)
+		} else {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func lexists(p string) bool { _, err := os.Lstat(p); return err == nil }

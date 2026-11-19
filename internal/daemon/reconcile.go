@@ -36,7 +36,7 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 			m.stopLegacy(ctx, j)
 			continue
 		}
-		if j.Publish != nil { // a publish a crash interrupted
+		if publishing(j) { // a publish a crash interrupted
 			if m.dirMissing(j) {
 				m.markDirMissing(ctx, j)
 			} else {
@@ -186,7 +186,7 @@ func (m *Manager) dirMissing(j *store.Job) bool {
 	if j.DirDev == nil || d == *j.DirDev || j.StartedAt == nil {
 		return false
 	}
-	if j.Publish != nil { // its first entry may already be in Dir
+	if publishing(j) { // its first entry may already be in Dir
 		return !lexists(stagingDir(j)) && !allPublished(j)
 	}
 	name := j.Name
@@ -217,7 +217,7 @@ func (m *Manager) readd(ctx context.Context, j *store.Job, paused bool, why stri
 		m.markDirMissing(ctx, j)
 		return j, errDirMissing
 	}
-	if j.Publish != nil { // finished; only the move into Dir is left
+	if publishing(j) { // finished; only the move into Dir is left
 		return m.publish(ctx, j)
 	}
 	if done, ok := m.completedOffline(ctx, j); ok {

@@ -34,7 +34,8 @@ var (
 
 // publish moves a complete staged job's payload into j.Dir following the
 // recorded intent and returns the updated job (state done, Staged false,
-// Publish nil, Out/Name = the final name). Safe to call again on a job
+// Out/Name = the first entry's final name). The finished row keeps Publish
+// as the record of every entry it put in Dir. Safe to call again on a job
 // whose intent is already recorded: every step can be repeated after a
 // crash (decision 63). A failure leaves the intent and puts the job in
 // error; resuming it publishes again.
@@ -91,8 +92,9 @@ func (m *Manager) publish(ctx context.Context, j *store.Job) (*store.Job, error)
 		m.log.Warn("sync the download folder after publish", "job", j.ID, "dir", j.Dir, "err", err)
 	}
 	name, now := p.Name, m.now()
+	p.Temp, p.TempIno, p.TempDev, p.Building = "", 0, 0, ""
 	j2, err := m.change(ctx, j.ID, "published", name, func(x *store.Job) {
-		x.State, x.Staged, x.Publish = store.Done, false, nil
+		x.State, x.Staged, x.Publish = store.Done, false, p
 		x.Out, x.Name = &name, name
 		x.FinishedAt, x.RetryCount, x.RetryAt = &now, 0, nil
 		x.ErrorKind, x.ErrorCode, x.ErrorMsg = nil, nil, nil
@@ -372,6 +374,25 @@ func tempName(dir, name string) string {
 		t = "." + name + ".laria-copy" + strconv.Itoa(n)
 	}
 	return t
+}
+
+// publishing: j is finished and its move into Dir is recorded but not
+// done. A finished row keeps Publish too, with Staged false.
+func publishing(j *store.Job) bool { return j.Staged && j.Publish != nil }
+
+// published lists the entries of a finished job's record that are still
+// in Dir as it put them there (same inode, device and size).
+func published(j *store.Job) []string {
+	var out []string
+	if j.Staged || j.Publish == nil {
+		return nil
+	}
+	for _, e := range j.Publish.Entries {
+		if p := filepath.Join(j.Dir, e.Name); sameFile(p, e.Ino, e.Dev, e.Size) {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // allPublished: every entry of j's recorded intent is already in Dir.

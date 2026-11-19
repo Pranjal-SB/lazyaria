@@ -38,7 +38,7 @@ func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (t
 		if j.State == store.Removed {
 			return nil
 		}
-		if j.Publish != nil {
+		if publishing(j) {
 			// Finish the move first, so no published file is left that the
 			// row does not account for. If it fails, targets still covers
 			// the entries already moved.
