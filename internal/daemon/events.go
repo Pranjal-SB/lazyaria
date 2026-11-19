@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -107,8 +108,8 @@ func setBytes(x *store.Job, st engine.EngineStatus) {
 }
 
 // setDone records done bytes, but a 0 never lowers a positive count: a
-// retry that failed before any reply must not cost the job ownership of
-// its file. trackName resets the count when the file changes.
+// retry that failed before any reply still has its partial. trackName
+// resets the count when the file changes.
 func setDone(x *store.Job, done int64) {
 	if done > 0 || x.DoneBytes == nil || *x.DoneBytes <= 0 {
 		x.DoneBytes = &done
@@ -135,6 +136,13 @@ func (m *Manager) trackName(ctx context.Context, j *store.Job, st engine.EngineS
 	kind := ""
 	if j.Out != nil {
 		kind = "renamed"
+		if j.Staged {
+			// aria2 started over beside its old file (no control file to
+			// resume from); in staging that file is only ever the job's own.
+			old := filepath.Join(stagingDir(j), *j.Out)
+			os.Remove(old)
+			os.Remove(old + ".aria2")
+		}
 	}
 	name := filepath.Base(rel)
 	done := st.Done // the bytes counted so far were for another file

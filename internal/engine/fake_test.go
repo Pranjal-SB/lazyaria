@@ -249,7 +249,7 @@ func TestAddGIDAndFallback(t *testing.T) {
 		}
 		return `"result":"00000000000000bb"`
 	})
-	ref, err := e.Add(context.Background(), AddRequest{URIs: []string{"http://h/f"}, GID: "00000000000000aa", NoContinue: true})
+	ref, err := e.Add(context.Background(), AddRequest{URIs: []string{"http://h/f"}, GID: "00000000000000aa"})
 	if err != nil || ref != "00000000000000bb" {
 		t.Fatalf("ref %q err %v", ref, err)
 	}
@@ -259,7 +259,7 @@ func TestAddGIDAndFallback(t *testing.T) {
 	var first, second map[string]string
 	json.Unmarshal(f.paramsOf("aria2.addUri", 1)[1], &first)
 	json.Unmarshal(f.paramsOf("aria2.addUri", 2)[1], &second)
-	if first["gid"] != "00000000000000aa" || first["continue"] != "false" {
+	if first["gid"] != "00000000000000aa" {
 		t.Fatalf("first add options %v", first)
 	}
 	if first["allow-overwrite"] != "false" {

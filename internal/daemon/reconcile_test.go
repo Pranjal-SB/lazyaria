@@ -268,46 +268,6 @@ func TestRetryIntoMissingDir(t *testing.T) {
 	}
 }
 
-func TestCompletedOfflineNotRedownloaded(t *testing.T) {
-	r := newRig(t)
-	started := r.clk.now()
-	out := "full.bin"
-	total := int64(5)
-	wrote := int64(3)
-	j := r.insert(t, store.Active, "old1", func(j *store.Job) {
-		j.Out, j.StartedAt, j.TotalBytes, j.DoneBytes = &out, &started, &total, &wrote
-	})
-	wfile(t, filepath.Join(workDir(j), out), "12345")
-	if err := r.m.Reconcile(bg); err != nil {
-		t.Fatal(err)
-	}
-	if adds, _ := r.e.count(); adds != 0 {
-		t.Fatalf("adds %d, want 0", adds)
-	}
-	if got := r.get(t, j.ID); got.State != store.Done || !r.hasEvent(t, j.ID, "completed-offline") {
-		t.Fatalf("state %s", got.State)
-	}
-	// A short file is a partial download and is re-added.
-	short := "short.bin"
-	k := r.insert(t, store.Active, "old2", func(j *store.Job) {
-		j.Out, j.StartedAt, j.TotalBytes, j.DoneBytes = &short, &started, &total, &wrote
-	})
-	wfile(t, filepath.Join(workDir(k), short), "12")
-	r.m.Reconcile(bg)
-	if adds, _ := r.e.count(); adds != 1 || r.get(t, k.ID).State != store.Queued {
-		t.Fatalf("short file: adds %d", adds)
-	}
-	// A same-size file at Out that the job never wrote to is not adopted;
-	// the re-add renames beside it.
-	foreign := "foreign.bin"
-	f := r.insert(t, store.Active, "old3", func(j *store.Job) { j.Out, j.StartedAt, j.TotalBytes = &foreign, &started, &total })
-	wfile(t, filepath.Join(workDir(f), foreign), "abcde")
-	r.m.Reconcile(bg)
-	if adds, _ := r.e.count(); adds != 2 || r.get(t, f.ID).State == store.Done || !r.e.adds[1].NoContinue || !exists(filepath.Join(workDir(f), foreign)) {
-		t.Fatalf("foreign file: adds %d state %s", adds, r.get(t, f.ID).State)
-	}
-}
-
 // The job list leaves the .torrent out; a re-add must still send it.
 func TestReconcile_ReaddTorrentSendsMetadata(t *testing.T) {
 	r := newRig(t)

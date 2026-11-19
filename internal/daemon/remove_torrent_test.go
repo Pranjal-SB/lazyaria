@@ -12,20 +12,22 @@ import (
 	"github.com/Pranjal-SB/lazyaria/internal/store"
 )
 
-// liveTorrent starts a multi-file torrent job named Music that aria2 reports
-// writing a.flac and b.flac.
+// liveTorrent makes a finished multi-file torrent job named Music, published
+// into the download folder, whose files aria2 still lists: a.flac and b.flac.
 func liveTorrent(t *testing.T, r *rig) (id, music string) {
 	t.Helper()
 	j := r.add(t, AddParams{Torrent: []byte("d4:infod4:name5:Musicee")})
 	ref := r.ref(t, j.ID)
-	music = filepath.Join(stagingDir(j), "Music")
+	music = filepath.Join(r.dir, "Music")
 	r.e.set(ref, func(s *engine.EngineStatus) {
-		s.State, s.IsBT, s.Name, s.Path, s.Done, s.Total = "active", true, "Music", music, 4, 100
+		s.State, s.IsBT, s.Name, s.Path, s.Done, s.Total = "complete", true, "Music", music, 100, 100
 	})
 	r.e.details[ref] = engine.EngineDetails{Files: []engine.EngineFile{
 		{Path: filepath.Join(music, "a.flac"), Selected: true}, {Path: filepath.Join(music, "sub", "b.flac"), Selected: true},
 	}}
-	r.event(ref, engine.KindStart)
+	if _, err := r.m.change(bg, j.ID, "", "", func(x *store.Job) { x.State, x.Name, x.Staged = store.Done, "Music", false }); err != nil {
+		t.Fatal(err)
+	}
 	return j.ID, music
 }
 
@@ -39,7 +41,6 @@ func TestRemoveTorrentKeepsFolderItDidNotCreate(t *testing.T) {
 	wfile(t, filepath.Join(music, "mine.flac"), "the user's")
 	wfile(t, filepath.Join(music, "a.flac"), "a")
 	wfile(t, filepath.Join(music, "sub", "b.flac"), "b")
-	wfile(t, music+".aria2", "ctl")
 
 	tok, _, err := r.m.Remove(bg, []string{id}, true)
 	if err != nil {
@@ -48,7 +49,7 @@ func TestRemoveTorrentKeepsFolderItDidNotCreate(t *testing.T) {
 	if !exists1(filepath.Join(music, "mine.flac")) {
 		t.Fatal("the user's mine.flac was trashed")
 	}
-	for _, p := range []string{filepath.Join(music, "a.flac"), filepath.Join(music, "sub"), music + ".aria2"} {
+	for _, p := range []string{filepath.Join(music, "a.flac"), filepath.Join(music, "sub")} {
 		if exists1(p) {
 			t.Errorf("%s left behind", p)
 		}

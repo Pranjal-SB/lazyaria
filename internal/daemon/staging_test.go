@@ -22,8 +22,8 @@ func TestAddDownloadsIntoStaging(t *testing.T) {
 		t.Fatalf("stagingDir = %s, want %s", got, want)
 	}
 	req := r.e.adds[0]
-	if req.Dir != want || req.Out != "" || req.NoContinue {
-		t.Fatalf("request dir %q out %q continue=false %v; want dir %q, no out, continue allowed", req.Dir, req.Out, req.NoContinue, want)
+	if req.Dir != want || req.Out != "" {
+		t.Fatalf("request dir %q out %q; want dir %q, no out", req.Dir, req.Out, want)
 	}
 	fi, err := os.Stat(want)
 	if err != nil || !fi.IsDir() || fi.Mode().Perm() != 0o755 {

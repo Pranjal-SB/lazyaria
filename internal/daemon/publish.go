@@ -24,7 +24,10 @@ var (
 	publishStop   = func(step string) bool { return false } // true: stop after step, as a crash would
 )
 
-var errPublishStopped = errors.New("publish stopped")
+var (
+	errPublishStopped = errors.New("publish stopped")
+	errStagingBusy    = errors.New("another download still writes into the staging folder")
+)
 
 // publish moves a complete staged job's payload into j.Dir following the
 // recorded intent and returns the updated job (state done, Staged false,
@@ -34,6 +37,11 @@ var errPublishStopped = errors.New("publish stopped")
 // error; resuming it publishes again.
 func (m *Manager) publish(ctx context.Context, j *store.Job) (*store.Job, error) {
 	staging := stagingDir(j)
+	// A metalink's other files may still be downloading into the same
+	// folder; the poll tries again once they are done.
+	if refs, ok := m.stagingRefs(ctx, j); !ok || len(refs) > 0 {
+		return j, errStagingBusy
+	}
 	if j.Publish == nil {
 		entries, err := publishEntries(staging)
 		if err != nil {

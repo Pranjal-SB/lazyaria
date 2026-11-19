@@ -90,7 +90,10 @@ func waitJob(t *testing.T, st *store.Store, id string, d time.Duration, ok func(
 	}
 }
 
-func TestUnknownSize_NoPrecheck_RestartBeside(t *testing.T) {
+// A download with no size and no ranges has no control file, so a restart
+// starts it over in its emptied staging folder; the download folder sees
+// nothing until the one complete file appears.
+func TestUnknownSize_NoPrecheck_RestartInStaging(t *testing.T) {
 	testutil.RequireAria2(t)
 	data := testutil.RandBytes(2 << 20)
 	srv := testutil.NewFaultServer(t, map[string][]byte{"norange.bin": data})
@@ -113,6 +116,10 @@ func TestUnknownSize_NoPrecheck_RestartBeside(t *testing.T) {
 	if got, _ := st.GetJob(bg, j.ID); got.State == store.Paused || got.State == store.Done {
 		t.Fatalf("state %s before restart", got.State)
 	}
+	dl := filepath.Join(root, "dl")
+	if names := dirNames(t, dl); len(names) != 1 || names[0] != ".laria" {
+		t.Fatalf("download folder holds %v while downloading", names)
+	}
 	d.stop(t)
 
 	d = startLive(t, st, root, nil, tiny)
@@ -127,19 +134,30 @@ func TestUnknownSize_NoPrecheck_RestartBeside(t *testing.T) {
 	if n := srv.Served("norange.bin"); n <= int64(len(data)) {
 		t.Fatalf("served %d bytes; the download did not start over", n)
 	}
-	// An unknown size cannot tell the partial from a complete file, so it
-	// is left alone and the restart goes beside it.
-	if *got.Out != "norange.1.bin" {
-		t.Fatalf("finished as %s, want norange.1.bin beside the partial", *got.Out)
+	if *got.Out != "norange.bin" || got.Staged {
+		t.Fatalf("finished as %s (staged %v), want norange.bin published", *got.Out, got.Staged)
 	}
-	if fi, err := os.Stat(filepath.Join(workDir(got), "norange.bin")); err != nil || fi.Size() >= int64(len(data)) {
-		t.Fatalf("the partial norange.bin was not left alone: %v", err)
+	if names := dirNames(t, dl); len(names) != 1 || names[0] != "norange.bin" {
+		t.Fatalf("download folder holds %v, want only norange.bin", names)
 	}
-	path := filepath.Join(workDir(got), *got.Out)
+	path := filepath.Join(dl, *got.Out)
 	want := testutil.SHA256File(t, writeFile(t, data))
 	if testutil.SHA256File(t, path) != want {
 		t.Fatalf("sha mismatch for %s", path)
 	}
+}
+
+func dirNames(t *testing.T, dir string) []string {
+	t.Helper()
+	es, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, e := range es {
+		out = append(out, e.Name())
+	}
+	return out
 }
 
 func eventSeen(t *testing.T, st *store.Store, id, kind string) bool {

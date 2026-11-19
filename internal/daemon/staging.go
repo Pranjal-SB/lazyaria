@@ -2,8 +2,13 @@ package daemon
 
 import (
 	"context"
+	"errors"
+	"io/fs"
+	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/Pranjal-SB/lazyaria/internal/engine"
 	"github.com/Pranjal-SB/lazyaria/internal/store"
 )
 
@@ -18,6 +23,51 @@ func workDir(j *store.Job) string {
 		return stagingDir(j)
 	}
 	return j.Dir
+}
+
+// resumable: aria2 can resume j's staged file from its control file.
+func resumable(j *store.Job) bool {
+	return j.Out != nil && exists(filepath.Join(stagingDir(j), *j.Out)+".aria2")
+}
+
+// emptyStaging removes everything in j's staging folder, which the job owns
+// by construction. Without a control file aria2 cannot resume, and with
+// continue=true it would take a stale file for finished (decision 64).
+func emptyStaging(j *store.Job) error {
+	dir := stagingDir(j)
+	es, err := os.ReadDir(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for _, e := range es {
+		if err := os.RemoveAll(filepath.Join(dir, e.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// stagingRefs lists the engine downloads other than j's own that write into
+// j's staging folder (a metalink's further files) and are not finished.
+// ok is false when the engine cannot say.
+func (m *Manager) stagingRefs(ctx context.Context, j *store.Job) (refs []engine.EngineRef, ok bool) {
+	list, err := m.e.List(ctx)
+	if err != nil {
+		return nil, false
+	}
+	prefix := stagingDir(j) + string(filepath.Separator)
+	for _, st := range list {
+		if (j.EngineRef != nil && st.Ref == refOf(j)) || !strings.HasPrefix(st.Path, prefix) {
+			continue
+		}
+		if st.State == "active" || st.State == "waiting" || st.State == "paused" {
+			refs = append(refs, st.Ref)
+		}
+	}
+	return refs, true
 }
 
 // legacy means an unfinished job from before staging (decision 67): it

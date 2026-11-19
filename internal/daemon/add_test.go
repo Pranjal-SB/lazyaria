@@ -274,8 +274,8 @@ func TestAddOnExists(t *testing.T) {
 		r := setup(t, "rename")
 		j := r.add(t, AddParams{URIs: []string{"http://example.com/ex.bin"}})
 		req := r.e.adds[0]
-		if j.Name != "ex.bin" || j.Out != nil || req.Out != "" || req.NoContinue || req.Dir != stagingDir(j) {
-			t.Fatalf("name %q out %q; request out %q dir %q continue=false %v", j.Name, deref(j.Out), req.Out, req.Dir, req.NoContinue)
+		if j.Name != "ex.bin" || j.Out != nil || req.Out != "" || req.Dir != stagingDir(j) {
+			t.Fatalf("name %q out %q; request out %q dir %q", j.Name, deref(j.Out), req.Out, req.Dir)
 		}
 		// An explicit --out with Force, under the default duplicates mode.
 		r.m.s.Load().Reliability.Duplicates = "ask"
@@ -293,8 +293,8 @@ func TestAddOnExists(t *testing.T) {
 		os.WriteFile(orig, []byte("mine"), 0o600)
 		j := r.add(t, AddParams{URIs: []string{"http://example.com/ex.torrent"}})
 		req := r.e.adds[0]
-		if _, ok := req.Options["allow-overwrite"]; ok || j.Name != "ex.torrent" || j.Out != nil || req.NoContinue {
-			t.Fatalf("name %q out %q options %v continue=false %v", j.Name, deref(j.Out), req.Options, req.NoContinue)
+		if _, ok := req.Options["allow-overwrite"]; ok || j.Name != "ex.torrent" || j.Out != nil {
+			t.Fatalf("name %q out %q options %v", j.Name, deref(j.Out), req.Options)
 		}
 		if exists(orig) {
 			t.Fatal("the existing file is still in place")
@@ -325,7 +325,7 @@ func TestAddOnExists(t *testing.T) {
 		// The server names the file inside the empty staging folder.
 		r := setup(t, "rename")
 		j := r.add(t, AddParams{URIs: []string{"http://example.com/"}})
-		if req := r.e.adds[0]; j.Out != nil || req.Out != "" || req.NoContinue {
+		if req := r.e.adds[0]; j.Out != nil || req.Out != "" {
 			t.Fatalf("out %q request %+v", deref(j.Out), req)
 		}
 	})

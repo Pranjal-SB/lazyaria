@@ -38,9 +38,6 @@ func (e *aria2Engine) Add(ctx context.Context, req AddRequest) (EngineRef, error
 	if req.Paused {
 		opts["pause"] = "true"
 	}
-	if req.NoContinue {
-		opts["continue"] = "false"
-	}
 	// Per download, so an attached aria2 whose own config allows overwrite
 	// still never overwrites a file.
 	opts["allow-overwrite"] = "false"

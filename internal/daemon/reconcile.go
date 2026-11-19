@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -214,44 +213,14 @@ func (m *Manager) readd(ctx context.Context, j *store.Job, paused bool, why stri
 	} else {
 		req.GID = newGID()
 	}
-	// A job owns its file only once it has written bytes to it. A file it
-	// does not own is never written into: continue=false makes aria2 rename
-	// beside it, and a partial with its .aria2 still resumes.
-	owned := ownsFile(j)
-	req.NoContinue = !owned
-	if owned && j.StartedAt != nil && !isBT(j.Kind) && !exists(filepath.Join(workDir(j), *j.Out)+".aria2") {
-		// No control file (a server without ranges, or an unknown size), so
-		// aria2 cannot resume. A true partial of ours goes to the trash and
-		// the job starts over in place; anything else is left alone and the
-		// new download goes beside it. Nothing is ever deleted.
-		req.NoContinue = true
-		p := filepath.Join(workDir(j), *j.Out)
-		fi, err := os.Lstat(p)
-		gone := errors.Is(err, fs.ErrNotExist)
-		partial := err == nil && m.ownPartial(j, fi)
-		otherDrive := err == nil && !m.sameDev(j) // the file there is not ours
-		if gone || partial || otherDrive {
-			// Disown first, durably: should the trash, the add or the process
-			// fail after this, the job owns nothing at Out, so a file saved
-			// there later is never taken for its partial.
-			if _, err := m.change(ctx, j.ID, "", "", func(x *store.Job) {
-				zero := int64(0)
-				x.DoneBytes = &zero
-			}); err != nil {
-				m.log.Warn("disown before restart; downloading beside it", "job", j.ID, "err", err)
-				partial = false
-			}
-			// The cached progress still counts the old bytes; a pause
-			// before the next poll would store them and re-own Out.
-			m.prog.forget(j.ID)
+	emptied := j.Staged && !isBT(j.Kind) && !resumable(j)
+	if emptied {
+		// Nothing to resume from: start over in an empty staging folder
+		// (decision 64). The old download was dropped above.
+		if err := emptyStaging(j); err != nil {
+			return j, fmt.Errorf("empty the staging folder %s to start over: %w", stagingDir(j), err)
 		}
-		if partial {
-			if e, err := m.trash(p); err != nil {
-				m.log.Warn("trash own partial; downloading beside it", "job", j.ID, "err", err)
-			} else if err := m.st.AddEvent(ctx, j.ID, "trashed-partial", e.TrashedPath); err != nil {
-				m.log.Warn("record job event", "job", j.ID, "err", err)
-			}
-		}
+		m.prog.forget(j.ID)
 	}
 	ref, err := m.e.Add(ctx, req)
 	if err != nil {
@@ -269,49 +238,31 @@ func (m *Manager) readd(ctx context.Context, j *store.Job, paused bool, why stri
 			x.DirDev = &dev
 		}
 		x.ErrorKind, x.ErrorCode, x.ErrorMsg = nil, nil, nil
+		if emptied {
+			zero := int64(0)
+			x.DoneBytes = &zero
+		}
 		if why != "retry" {
 			x.RetryCount = 0
 		}
 	})
 }
 
-// ownPartial: fi, at j's Out, is the job's own unfinished file, safe to
-// trash for a restart: same drive, a regular file, shorter than the known
-// total. An unknown total cannot tell a partial from a complete file.
-func (m *Manager) ownPartial(j *store.Job, fi os.FileInfo) bool {
-	return m.sameDev(j) && fi.Mode().IsRegular() && j.TotalBytes != nil && *j.TotalBytes > 0 && fi.Size() < *j.TotalBytes
-}
-
-func (m *Manager) sameDev(j *store.Job) bool {
-	d, err := m.dev(j.Dir)
-	return err == nil && j.DirDev != nil && d == *j.DirDev
-}
-
-// ownsFile: the job has written bytes to the file at its Out.
-func ownsFile(j *store.Job) bool {
-	return j.Out != nil && j.DoneBytes != nil && *j.DoneBytes > 0
-}
-
-// completedOffline catches a download that finished while its completion
-// went unseen: the file has its full size and no control file. Re-adding it
-// would delete it and download it again.
+// completedOffline catches a staged download that finished while its
+// completion went unseen: its file has the known full size and no control
+// file. It is published instead of downloaded again.
 func (m *Manager) completedOffline(ctx context.Context, j *store.Job) (*store.Job, bool) {
-	// A same-size file the job never wrote to is someone else's.
-	if !ownsFile(j) || j.TotalBytes == nil || *j.TotalBytes <= 0 {
+	if !j.Staged || isBT(j.Kind) || j.Out == nil || j.TotalBytes == nil || *j.TotalBytes <= 0 {
 		return j, false
 	}
-	p := filepath.Join(workDir(j), *j.Out)
+	p := filepath.Join(stagingDir(j), *j.Out)
 	fi, err := os.Stat(p)
 	if err != nil || !fi.Mode().IsRegular() || fi.Size() != *j.TotalBytes || exists(p+".aria2") {
 		return j, false
 	}
-	now := m.now()
 	total := *j.TotalBytes
 	m.prog.forget(j.ID)
-	j = m.set(ctx, j, "completed-offline", p, func(x *store.Job) {
-		x.State, x.FinishedAt, x.DoneBytes, x.RetryAt = store.Done, &now, &total, nil
-		x.ErrorKind, x.ErrorCode, x.ErrorMsg = nil, nil, nil
-	})
-	m.stampOrigin(ctx, j)
+	j = m.set(ctx, j, "completed-offline", p, func(x *store.Job) { x.DoneBytes = &total })
+	j, _ = m.publish(ctx, j) // a failure is recorded on the job
 	return j, true
 }

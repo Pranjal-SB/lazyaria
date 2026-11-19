@@ -10,16 +10,15 @@ import (
 func TestUndoRetrySkipsEntriesAlreadyRestored(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
 	r := newRig(t)
-	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}, Out: "a.iso"})
-	payload := filepath.Join(stagingDir(j), "a.iso")
-	wfile(t, payload, "data")
-	r.wrote(t, j.ID)
-	wfile(t, payload+".aria2", "ctl")
-	tok, _, err := r.m.Remove(bg, []string{j.ID}, true)
+	id, music := liveTorrent(t, r)
+	a, b := filepath.Join(music, "a.flac"), filepath.Join(music, "sub", "b.flac")
+	wfile(t, a, "a")
+	wfile(t, b, "b")
+	tok, _, err := r.m.Remove(bg, []string{id}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	es := r.m.undo[tok].files[j.ID]
+	es := r.m.undo[tok].files[id]
 	if len(es) != 2 {
 		t.Fatalf("want 2 trashed entries, got %d", len(es))
 	}
@@ -30,7 +29,7 @@ func TestUndoRetrySkipsEntriesAlreadyRestored(t *testing.T) {
 	if err := r.m.Undo(bg, tok); err != nil {
 		t.Fatalf("retry: %v", err)
 	}
-	if !exists1(payload) || !exists1(payload+".aria2") {
+	if !exists1(a) || !exists1(b) {
 		t.Fatal("files not back")
 	}
 }

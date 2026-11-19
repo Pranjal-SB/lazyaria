@@ -38,6 +38,14 @@ func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (t
 		if j.State == store.Removed {
 			return nil
 		}
+		if j.Publish != nil {
+			// Finish the move first, so no published file is left that the
+			// row does not account for. If it fails, targets still covers
+			// the entries already moved.
+			if j2, err := m.publish(ctx, j); err == nil {
+				j = j2
+			}
+		}
 		var listed []string
 		if deleteFiles {
 			listed = m.downloadFiles(ctx, j)
@@ -47,9 +55,9 @@ func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (t
 		}
 		if j.EngineRef != nil {
 			if deleteFiles && (j.State == store.Active || j.State == store.Queued || j.State == store.Seeding) {
-				// The row lags behind polling; ownership needs the live file
-				// name (aria2 may have renamed it) and byte count. When aria2
-				// does not answer, the last poll is the best there is.
+				// Pausing first makes aria2 write its control file, so an
+				// Undo resumes. The row lags behind polling: the live file
+				// name and byte count come from aria2, or the last poll.
 				st, ok := m.pauseAndWait(ctx, j)
 				if !ok {
 					st, ok = m.prog.lastStatus(j.ID)
@@ -62,6 +70,15 @@ func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (t
 			// Without an engine there is nothing to stop; a fresh one starts empty.
 			if err := m.e.Remove(ctx, refOf(j)); err != nil && !errors.Is(err, engine.ErrNotRunning) {
 				return err
+			}
+		}
+		if j.Staged {
+			// A metalink's other files write into the same staging folder.
+			refs, _ := m.stagingRefs(ctx, j)
+			for _, r := range refs {
+				if err := m.e.Remove(ctx, r); err != nil && !errors.Is(err, engine.ErrNotRunning) {
+					return err
+				}
 			}
 		}
 		m.cancelRetry(j.ID)
@@ -82,7 +99,7 @@ func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (t
 		now := m.now()
 		_, err := m.changeAs(ctx, "job.removed", j.ID, "removed", "", func(x *store.Job) {
 			x.State, x.RemovedAt, x.RetryAt = store.Removed, &now, nil
-			x.DoneBytes = j.DoneBytes // so a row brought back by Undo still owns its file
+			x.DoneBytes = j.DoneBytes // the live count, for a row brought back by Undo
 		})
 		if err != nil {
 			if rerr := m.Files.RestoreFiles(ctx, es); rerr != nil {

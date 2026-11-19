@@ -34,8 +34,9 @@ func (e *NeedsConfirmError) Error() string {
 	return fmt.Sprintf("no trash is available for %s; the files are untouched and the job was kept (paused, if it was running). Remove the job without --delete-files, then move or delete the files yourself", e.Path)
 }
 
-// TrashFiles is the default FileRemover: it moves the payload and its
-// .aria2 control file to the freedesktop trash and never deletes anything.
+// TrashFiles is the default FileRemover: it moves what targets lists (a
+// staged job's staging folder, a finished job's payload) to the
+// freedesktop trash and never deletes anything.
 type TrashFiles struct {
 	trash func(string) (trash.Entry, error) // tests inject failures
 	check func(string) error
@@ -55,26 +56,32 @@ func (t *TrashFiles) probe(p string) error {
 	return trash.Check(p)
 }
 
-// targets lists what removing j may trash. The payload counts only when the
-// job provably owns it: it wrote bytes there, or finished. So a duplicate
-// "download anyway", a job that failed before its first byte, or a magnet
-// still named "download" never takes a file that was already there.
-// A payload folder may predate the job and hold other files, so only the
-// listed files inside it are taken, never the folder itself.
+// targets lists what removing j may trash. A staged job owns its whole
+// staging folder, plus what a recorded publish already moved into Dir
+// (matched by inode). A finished job owns its payload in Dir; a payload
+// folder may predate the job and hold other files, so only the listed
+// files inside it are taken, never the folder itself. Anything else, such
+// as an unfinished job from before staging, owns nothing.
 func targets(j *store.Job, files []string) []string {
+	if j.Staged {
+		var out []string
+		if j.Publish != nil {
+			for _, e := range j.Publish.Entries {
+				if p := filepath.Join(j.Dir, e.Name); sameFile(p, &e) {
+					out = append(out, p)
+				}
+			}
+		}
+		if lexists(stagingDir(j)) {
+			out = append(out, stagingDir(j))
+		}
+		return out
+	}
 	p, ok := payloadPath(j)
-	if !ok {
+	if !ok || (j.State != store.Done && j.State != store.Seeding) {
 		return nil
 	}
-	var out []string
-	owned := (j.DoneBytes != nil && *j.DoneBytes > 0) || j.State == store.Done || j.State == store.Seeding
-	if owned {
-		out = inPayload(p, files)
-	}
-	if lexists(p + ".aria2") {
-		out = append(out, p+".aria2")
-	}
-	return out
+	return inPayload(p, files)
 }
 
 func lexists(p string) bool { _, err := os.Lstat(p); return err == nil }
@@ -115,11 +122,14 @@ func (t *TrashFiles) RemoveFiles(_ context.Context, j *store.Job, files []string
 		}
 		done = append(done, e)
 	}
-	if p, ok := payloadPath(j); ok {
+	if p, ok := payloadPath(j); ok && !j.Staged {
 		// The trash records resolved paths; match them.
 		if real, err := filepath.EvalSymlinks(p); err == nil {
 			pruneEmpty(real, done)
 		}
+	}
+	if j.Staged {
+		os.Remove(filepath.Dir(stagingDir(j))) // .laria, once no job uses it
 	}
 	return done, nil
 }

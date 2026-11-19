@@ -123,6 +123,7 @@ func TestRemoveRenameFailureReaddsPaused(t *testing.T) {
 	r.event(ref, engine.KindStart)
 	payload := filepath.Join(stagingDir(j), "a.iso")
 	wfile(t, payload, "data")
+	wfile(t, payload+".aria2", "ctl") // the pause before remove saves it
 	r.wrote(t, j.ID)
 	_, _, err := r.m.Remove(bg, []string{j.ID}, true)
 	var nc *NeedsConfirmError
@@ -181,7 +182,7 @@ func TestUndoStaysRemovedWhenFilesCannotReturn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wfile(t, payload, "newcomer")
+	wfile(t, stagingDir(j), "newcomer") // something took the staging folder's place
 	err = r.m.Undo(bg, tok)
 	if err == nil || !strings.Contains(err.Error(), j.ID) {
 		t.Fatalf("want error naming the job, got %v", err)
@@ -189,10 +190,10 @@ func TestUndoStaysRemovedWhenFilesCannotReturn(t *testing.T) {
 	if got := r.get(t, j.ID); got.State != store.Removed {
 		t.Fatalf("state %s", got.State)
 	}
-	if b, _ := os.ReadFile(payload); string(b) != "newcomer" {
+	if b, _ := os.ReadFile(stagingDir(j)); string(b) != "newcomer" {
 		t.Fatal("newcomer overwritten")
 	}
-	os.Remove(payload)
+	os.Remove(stagingDir(j))
 	if err := r.m.Undo(bg, tok); err != nil {
 		t.Fatalf("retry: %v", err)
 	}
@@ -214,15 +215,15 @@ func TestRemoveRollsBackOnPartialTrash(t *testing.T) {
 		}
 		return trash.Trash(p)
 	}}
-	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}, Out: "a.iso"})
-	payload := filepath.Join(stagingDir(j), "a.iso")
-	wfile(t, payload, "data")
-	r.wrote(t, j.ID)
-	wfile(t, payload+".aria2", "ctl")
-	_, _, err := r.m.Remove(bg, []string{j.ID}, true)
+	// A finished torrent's two files: the second one fails.
+	id, music := liveTorrent(t, r)
+	a, b := filepath.Join(music, "a.flac"), filepath.Join(music, "sub", "b.flac")
+	wfile(t, a, "a")
+	wfile(t, b, "b")
+	_, _, err := r.m.Remove(bg, []string{id}, true)
 	var nc *NeedsConfirmError
-	if !errors.As(err, &nc) || !exists1(payload) || !exists1(payload+".aria2") {
-		t.Fatalf("err %v, payload back %v", err, exists1(payload))
+	if !errors.As(err, &nc) || !exists1(a) || !exists1(b) {
+		t.Fatalf("err %v, files back %v %v", err, exists1(a), exists1(b))
 	}
 }
 
