@@ -256,12 +256,23 @@ func TestPublishCrossDevice(t *testing.T) {
 			if got.Publish == nil || got.Publish.Temp == "" {
 				t.Fatalf("after the crash: publish %+v", got.Publish)
 			}
+			var trashed []string
+			r.m.trash = func(p string) (trash.Entry, error) {
+				trashed = append(trashed, p)
+				return trash.Trash(p)
+			}
+			t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
+			var temp string
 			if step == "copy-temp" {
-				wfile(t, filepath.Join(r.dir, got.Publish.Temp), "half a co")
+				temp = filepath.Join(r.dir, got.Publish.Temp)
+				wfile(t, temp, "half a co")
 			}
 			publishStop = func(string) bool { return false }
 			if err := r.m.Reconcile(bg); err != nil {
 				t.Fatal(err)
+			}
+			if temp != "" && !slices.Equal(trashed, []string{temp}) {
+				t.Fatalf("trashed %v; want the unfinished temp in the trash", trashed)
 			}
 			got = r.get(t, j.ID)
 			if got.State != store.Done || got.Publish != nil || got.Name != "a.iso" {
@@ -271,6 +282,30 @@ func TestPublishCrossDevice(t *testing.T) {
 				t.Fatalf("download folder holds %v", names)
 			}
 		})
+	}
+}
+
+// A copy refused because something took the temp name is not ours: the
+// name is not kept, and that file is left alone.
+func TestPublishTempNameTakenIsNotKept(t *testing.T) {
+	r := newRig(t)
+	crossDevice(t)
+	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}})
+	stageFiles(t, j, map[string]string{"a.iso": "data"})
+	var temp string
+	orig := publishCopy
+	publishCopy = func(s, tmp string) error {
+		temp = tmp
+		wfile(t, tmp, "someone else's")
+		return orig(s, tmp)
+	}
+	t.Cleanup(func() { publishCopy = orig })
+	got := r.complete(t, j, "a.iso")
+	if got.State != store.Error || got.Publish == nil || got.Publish.Temp != "" {
+		t.Fatalf("state %s publish %+v", got.State, got.Publish)
+	}
+	if read(t, temp) != "someone else's" {
+		t.Fatal("the file at the temp name changed")
 	}
 }
 

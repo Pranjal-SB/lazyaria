@@ -127,8 +127,9 @@ func (m *Manager) publishEntry(ctx context.Context, j *store.Job, p *store.Publi
 			case p.TempIno != 0 && sameFile(dst, p.TempIno, p.TempDev, -1):
 				return m.copied(ctx, j, p, i, src, dst) // in place, not yet recorded
 			case p.TempIno == 0 && lexists(tmp):
-				// Unfinished: the temp is ours, it was recorded before it was made.
-				if err := os.RemoveAll(tmp); err != nil {
+				// Unfinished, and recorded before it was made, so most likely
+				// ours; the trash keeps it in case it is not.
+				if _, err := m.trash(tmp); err != nil {
 					return j, err
 				}
 			}
