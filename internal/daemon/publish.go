@@ -42,6 +42,11 @@ func (m *Manager) publish(ctx context.Context, j *store.Job) (*store.Job, error)
 	if refs, ok := m.stagingRefs(ctx, j); !ok || len(refs) > 0 {
 		return j, errStagingBusy
 	}
+	// A missing staging folder is a drive not mounted, not a finished move:
+	// the intent stays until it is back.
+	if !lexists(staging) && !allPublished(j) {
+		return m.publishFailed(ctx, j, fmt.Errorf("staging folder %s: %w", staging, errDirMissing))
+	}
 	if j.Publish == nil {
 		entries, err := publishEntries(staging)
 		if err != nil {
@@ -269,7 +274,10 @@ func (m *Manager) record(ctx context.Context, j *store.Job, p *store.Publish) (*
 func (m *Manager) publishFailed(ctx context.Context, j *store.Job, err error) (*store.Job, error) {
 	kind := "publish-failed"
 	msg := fmt.Sprintf("the download finished in %s but moving it into %s failed: %v; fix the folder, then resume the job", stagingDir(j), j.Dir, err)
-	if ns, ok := errors.AsType[*NoSpaceError](err); ok {
+	if errors.Is(err, errDirMissing) {
+		kind = "dir-missing"
+		msg = fmt.Sprintf("the finished download's folder %s is missing or on a different drive; mount it, then resume the job", stagingDir(j))
+	} else if ns, ok := errors.AsType[*NoSpaceError](err); ok {
 		kind = "no_space"
 		msg = fmt.Sprintf("the download finished in %s but %s has too little space to copy it there: need %d bytes, %d free; free some space, then resume the job", stagingDir(j), ns.Dir, ns.Need, ns.Free)
 	}
@@ -321,6 +329,19 @@ func tempName(dir, name string) string {
 		t = "." + name + ".laria-copy" + strconv.Itoa(n)
 	}
 	return t
+}
+
+// allPublished: every entry of j's recorded intent is already in Dir.
+func allPublished(j *store.Job) bool {
+	if j.Publish == nil {
+		return false
+	}
+	for _, e := range j.Publish.Entries {
+		if !sameFile(filepath.Join(j.Dir, e.Name), e.Ino, e.Dev, e.Size) {
+			return false
+		}
+	}
+	return true
 }
 
 // sameFile: path is the file with this inode and device, and this size

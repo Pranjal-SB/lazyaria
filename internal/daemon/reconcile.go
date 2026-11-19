@@ -36,7 +36,11 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 			continue
 		}
 		if j.Publish != nil { // a publish a crash interrupted
-			m.publish(ctx, j)
+			if m.dirMissing(j) {
+				m.markDirMissing(ctx, j)
+			} else {
+				m.publish(ctx, j)
+			}
 			continue
 		}
 		if j.State == store.RetryWait {
@@ -174,12 +178,21 @@ func (m *Manager) dirMissing(j *store.Job) bool {
 	if j.DirDev == nil || d == *j.DirDev || j.StartedAt == nil {
 		return false
 	}
+	if j.Publish != nil { // its first entry may already be in Dir
+		return !lexists(stagingDir(j)) && !allPublished(j)
+	}
 	name := j.Name
 	if j.Out != nil {
 		name = *j.Out
 	}
 	p := filepath.Join(workDir(j), name)
 	return !exists(p) && !exists(p+".aria2")
+}
+
+func (m *Manager) markDirMissing(ctx context.Context, j *store.Job) {
+	kind := "dir-missing"
+	msg := fmt.Sprintf("%s is missing or on a different drive; mount it and retry", j.Dir)
+	m.to(ctx, j, store.Error, kind, func(x *store.Job) { x.ErrorKind, x.ErrorMsg, x.RetryAt = &kind, &msg, nil })
 }
 
 // readd hands j to the engine again from its stored row, dropping the old
@@ -190,16 +203,14 @@ func (m *Manager) readd(ctx context.Context, j *store.Job, paused bool, why stri
 	if legacy(j) {
 		return j, &BadRequestError{errors.New(legacyMsg(j))}
 	}
-	if j.Publish != nil { // finished; only the move into Dir is left
-		return m.publish(ctx, j)
-	}
 	// Every re-add path checks the drive: a retry into an unmounted mount
 	// point would fill the root filesystem.
 	if m.dirMissing(j) {
-		kind := "dir-missing"
-		msg := fmt.Sprintf("%s is missing or on a different drive; mount it and retry", j.Dir)
-		m.to(ctx, j, store.Error, kind, func(x *store.Job) { x.ErrorKind, x.ErrorMsg, x.RetryAt = &kind, &msg, nil })
+		m.markDirMissing(ctx, j)
 		return j, errDirMissing
+	}
+	if j.Publish != nil { // finished; only the move into Dir is left
+		return m.publish(ctx, j)
 	}
 	if done, ok := m.completedOffline(ctx, j); ok {
 		return done, nil

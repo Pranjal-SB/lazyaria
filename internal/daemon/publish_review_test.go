@@ -7,6 +7,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/Pranjal-SB/lazyaria/internal/engine"
 	"github.com/Pranjal-SB/lazyaria/internal/store"
 )
 
@@ -76,6 +77,62 @@ func TestPublishFolderCopyFailureThenUserFolder(t *testing.T) {
 	}
 	if read(t, filepath.Join(r.dir, "sub.1", "b.bin")) != "BBBB" {
 		t.Fatal("ours not at sub.1")
+	}
+}
+
+// The staging folder is not there when the publish resumes (its drive is
+// not mounted yet): the job waits in dir-missing with its intent, and
+// publishes once the folder is back.
+func TestPublishStagingMissingKeepsIntent(t *testing.T) {
+	r := newRig(t)
+	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}})
+	stageFiles(t, j, map[string]string{"a.iso": "data"})
+	stopAt(t, "intent")
+	r.complete(t, j, "a.iso")
+	publishStop = func(string) bool { return false }
+	aside := filepath.Join(t.TempDir(), "unmounted")
+	if err := os.Rename(filepath.Join(r.dir, ".laria"), aside); err != nil {
+		t.Fatal(err)
+	}
+	r.m.Reconcile(bg)
+	got := r.get(t, j.ID)
+	if got.State != store.Error || got.ErrorKind == nil || *got.ErrorKind != "dir-missing" || got.Publish == nil || !got.Staged {
+		t.Fatalf("state %s kind %v publish %+v staged %v", got.State, got.ErrorKind, got.Publish, got.Staged)
+	}
+	if names := listDir(t, r.dir); len(names) != 0 {
+		t.Fatalf("download folder holds %v", names)
+	}
+	if err := os.Rename(aside, filepath.Join(r.dir, ".laria")); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.m.Resume(bg, []string{j.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.get(t, j.ID); got.State != store.Done || read(t, filepath.Join(r.dir, "a.iso")) != "data" || exists1(stagingDir(j)) {
+		t.Fatalf("after the folder came back: state %s, download folder %v", got.State, listDir(t, r.dir))
+	}
+}
+
+// After a reboot the device number may differ (btrfs, overlay); a publish
+// whose first entry is already in Dir is not taken for a missing drive.
+func TestPublishResumesAfterDeviceChange(t *testing.T) {
+	r := newRig(t)
+	j := r.add(t, AddParams{URIs: []string{"http://example.com/m.meta4"}})
+	stageFiles(t, j, map[string]string{"a.bin": "A", "b.bin": "B"})
+	r.e.set(r.ref(t, j.ID), func(s *engine.EngineStatus) { s.State = "active" })
+	r.event(r.ref(t, j.ID), engine.KindStart) // started, so the device check applies
+	stopAt(t, "moved")
+	r.complete(t, j, "a.bin")
+	publishStop = func(string) bool { return false }
+	r.m.dev = func(string) (uint64, error) { return 99, nil }
+	if err := r.m.Reconcile(bg); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.get(t, j.ID); got.State != store.Done {
+		t.Fatalf("state %s kind %v", got.State, got.ErrorKind)
+	}
+	if names := listDir(t, r.dir); !slices.Equal(names, []string{"a.bin", "b.bin"}) {
+		t.Fatalf("download folder holds %v", names)
 	}
 }
 
