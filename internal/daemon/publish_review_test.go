@@ -209,6 +209,38 @@ func TestPublishedEntriesAllTracked(t *testing.T) {
 	}
 }
 
+// The staged file left before the move (the user took it), and something
+// else now sits at its name in Dir: that file is not stamped, and remove
+// --delete-files leaves it.
+func TestPublishLeavesWhatTheUserPutThere(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
+	r := newRig(t)
+	r.m.s.Load().Privacy.StampOriginXattr = true
+	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}})
+	stageFiles(t, j, map[string]string{"a.iso": "ours"})
+	stopAt(t, "intent")
+	r.complete(t, j, "a.iso")
+	publishStop = func(string) bool { return false }
+	os.Remove(filepath.Join(stagingDir(j), "a.iso"))
+	user := filepath.Join(r.dir, "a.iso")
+	wfile(t, user, "the user's")
+	if err := r.m.Reconcile(bg); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.get(t, j.ID); got.State != store.Done {
+		t.Fatalf("state %s", got.State)
+	}
+	if err := unix.Setxattr(user, "user.probe", []byte("1"), 0); err == nil && origin(user) != "" {
+		t.Fatalf("the user's file was stamped with %q", origin(user))
+	}
+	if _, _, err := r.m.Remove(bg, []string{j.ID}, true); err != nil {
+		t.Fatal(err)
+	}
+	if read(t, user) != "the user's" {
+		t.Fatal("the user's file was trashed")
+	}
+}
+
 // overlayfs refuses to rename a folder, so the copied folder is built in
 // the download folder file by file. A crash halfway resumes into the same
 // folder: no second copy beside it, and the half-built one is never removed.
