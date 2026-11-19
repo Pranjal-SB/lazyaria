@@ -36,7 +36,7 @@ func (m *Manager) downloadFiles(ctx context.Context, j *store.Job) []string {
 	if j.Options["select-file"] != "" {
 		return nil // the .torrent cannot say which files were picked
 	}
-	return torrentPaths(m.torrent(ctx, j), j.Dir)
+	return torrentPaths(m.torrent(ctx, j), workDir(j))
 }
 
 // torrent returns j's .torrent bytes, reading them from the store when j

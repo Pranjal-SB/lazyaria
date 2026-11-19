@@ -154,7 +154,7 @@ func TestAutoRenameTracked(t *testing.T) {
 	r := newRig(t)
 	j := r.add(t, AddParams{URIs: []string{"http://example.com/file.zip"}, Out: "file.zip"})
 	ref := r.ref(t, j.ID)
-	r.e.set(ref, func(s *engine.EngineStatus) { s.State, s.Path = "complete", r.dir+"/file.1.zip" })
+	r.e.set(ref, func(s *engine.EngineStatus) { s.State, s.Path = "complete", stagingDir(j)+"/file.1.zip" })
 	r.event(ref, engine.KindComplete)
 	got := r.get(t, j.ID)
 	if got.Out == nil || *got.Out != "file.1.zip" || got.Name != "file.1.zip" {
@@ -198,7 +198,7 @@ func TestHTTPTorrentAdoption(t *testing.T) {
 	j := r.add(t, AddParams{URIs: []string{"http://example.com/x.torrent"}})
 	parent := r.ref(t, j.ID)
 	r.e.set(parent, func(s *engine.EngineStatus) {
-		s.State, s.Path, s.Total, s.Done = "active", filepath.Join(r.dir, "x.torrent"), 900, 900
+		s.State, s.Path, s.Total, s.Done = "active", filepath.Join(stagingDir(j), "x.torrent"), 900, 900
 	})
 	r.event(parent, engine.KindStart)
 	r.e.set("X", func(s *engine.EngineStatus) { s.State, s.IsBT, s.Name = "active", true, "Music" })
@@ -224,7 +224,7 @@ func TestHTTPTorrentAdoption(t *testing.T) {
 	}
 	again := r.ref(t, j.ID)
 	r.e.set(again, func(s *engine.EngineStatus) {
-		s.State, s.Path, s.Total, s.Done = "active", filepath.Join(r.dir, "x.torrent"), 900, 900
+		s.State, s.Path, s.Total, s.Done = "active", filepath.Join(stagingDir(j), "x.torrent"), 900, 900
 	})
 	r.event(again, engine.KindStart)
 	r.e.set("Y", func(s *engine.EngineStatus) { s.State, s.IsBT, s.Name = "active", true, "Music" })
@@ -258,7 +258,7 @@ func TestExistsHints(t *testing.T) {
 func TestDoneBytesKeepOwnership(t *testing.T) {
 	r := newRig(t)
 	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.bin"}, Out: "a.bin"})
-	path := filepath.Join(r.dir, "a.bin")
+	path := filepath.Join(stagingDir(j), "a.bin")
 	j = r.m.apply(bg, j, engine.EngineStatus{State: "active", Done: 100, Total: 1000, Path: path}, "")
 	if !ownsFile(j) {
 		t.Fatalf("done %v: not owned after writing", j.DoneBytes)
@@ -269,7 +269,7 @@ func TestDoneBytesKeepOwnership(t *testing.T) {
 	}
 	j = r.get(t, j.ID)
 	j.State = store.Active
-	j = r.m.trackName(bg, j, engine.EngineStatus{Path: filepath.Join(r.dir, "a.1.bin")})
+	j = r.m.trackName(bg, j, engine.EngineStatus{Path: filepath.Join(stagingDir(j), "a.1.bin")})
 	if ownsFile(j) || *j.Out != "a.1.bin" {
 		t.Fatalf("after a rename out %q done %v", *j.Out, *j.DoneBytes)
 	}

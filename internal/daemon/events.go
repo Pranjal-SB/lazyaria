@@ -124,7 +124,7 @@ func (m *Manager) trackName(ctx context.Context, j *store.Job, st engine.EngineS
 	if st.Path == "" {
 		return j
 	}
-	rel, err := filepath.Rel(j.Dir, st.Path)
+	rel, err := filepath.Rel(workDir(j), st.Path)
 	if err != nil || rel == "." || strings.HasPrefix(rel, "..") || (j.Out != nil && *j.Out == rel) {
 		return j
 	}

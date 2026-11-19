@@ -17,6 +17,9 @@ import (
 
 func wfile(t *testing.T, p, s string) {
 	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(p, []byte(s), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +42,7 @@ func TestRemoveUndo(t *testing.T) {
 	ref := r.ref(t, j.ID)
 	r.e.setState(ref, "active")
 	r.event(ref, engine.KindStart)
-	payload := filepath.Join(r.dir, "a.iso")
+	payload := filepath.Join(stagingDir(j), "a.iso")
 	wfile(t, payload, "data")
 	r.wrote(t, j.ID)
 	wfile(t, payload+".aria2", "ctl")
@@ -85,7 +88,7 @@ func TestRemoveNoTrashNeedsConfirm(t *testing.T) {
 	r.e.setState(ref, "active")
 	r.event(ref, engine.KindStart)
 	before := r.get(t, j.ID)
-	payload := filepath.Join(r.dir, "a.iso")
+	payload := filepath.Join(stagingDir(j), "a.iso")
 	wfile(t, payload, "data")
 	r.wrote(t, j.ID)
 	tok, _, err := r.m.Remove(bg, []string{j.ID}, true)
@@ -118,7 +121,7 @@ func TestRemoveRenameFailureReaddsPaused(t *testing.T) {
 	ref := r.ref(t, j.ID)
 	r.e.setState(ref, "active")
 	r.event(ref, engine.KindStart)
-	payload := filepath.Join(r.dir, "a.iso")
+	payload := filepath.Join(stagingDir(j), "a.iso")
 	wfile(t, payload, "data")
 	r.wrote(t, j.ID)
 	_, _, err := r.m.Remove(bg, []string{j.ID}, true)
@@ -171,7 +174,7 @@ func TestUndoStaysRemovedWhenFilesCannotReturn(t *testing.T) {
 	ref := r.ref(t, j.ID)
 	r.e.setState(ref, "active")
 	r.event(ref, engine.KindStart)
-	payload := filepath.Join(r.dir, "a.iso")
+	payload := filepath.Join(stagingDir(j), "a.iso")
 	wfile(t, payload, "data")
 	r.wrote(t, j.ID)
 	tok, _, err := r.m.Remove(bg, []string{j.ID}, true)
@@ -212,7 +215,7 @@ func TestRemoveRollsBackOnPartialTrash(t *testing.T) {
 		return trash.Trash(p)
 	}}
 	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}, Out: "a.iso"})
-	payload := filepath.Join(r.dir, "a.iso")
+	payload := filepath.Join(stagingDir(j), "a.iso")
 	wfile(t, payload, "data")
 	r.wrote(t, j.ID)
 	wfile(t, payload+".aria2", "ctl")
@@ -228,7 +231,7 @@ func finish(t *testing.T, r *rig, p AddParams, file string) *store.Job {
 	t.Helper()
 	j := r.add(t, p)
 	if file != "" {
-		wfile(t, filepath.Join(r.dir, file), "data")
+		wfile(t, filepath.Join(stagingDir(j), file), "data")
 	}
 	ref := r.ref(t, j.ID)
 	r.e.set(ref, func(s *engine.EngineStatus) { s.State = "complete" })
@@ -249,9 +252,9 @@ func TestDoneStampsXattr(t *testing.T) {
 	for _, on := range []bool{true, false} {
 		r := newRig(t)
 		r.m.s.Load().Privacy.StampOriginXattr = on
-		payload := filepath.Join(r.dir, "a.iso")
 		ref := "http://u:pw@example.com/a.iso"
 		j := finish(t, r, AddParams{URIs: []string{ref}, Out: "a.iso"}, "a.iso")
+		payload, _ := payloadPath(j)
 		if err := unix.Setxattr(payload, "user.probe", []byte("1"), 0); err != nil {
 			t.Skipf("no user xattrs here: %v", err)
 		}
@@ -286,11 +289,12 @@ func TestDoneStampsReferrerWithoutUserinfo(t *testing.T) {
 	if _, err := r.st.UpdateJob(bg, j.ID, func(x *store.Job) error { x.Referrer = &ref; return nil }); err != nil {
 		t.Fatal(err)
 	}
-	payload := filepath.Join(r.dir, "a.iso")
+	payload := filepath.Join(stagingDir(j), "a.iso")
 	wfile(t, payload, "data")
 	eref := r.ref(t, j.ID)
 	r.e.set(eref, func(s *engine.EngineStatus) { s.State = "complete" })
 	r.event(eref, engine.KindComplete)
+	payload, _ = payloadPath(r.get(t, j.ID))
 	buf := make([]byte, 256)
 	n, err := unix.Getxattr(payload, "user.xdg.referrer.url", buf)
 	if err != nil {
@@ -331,7 +335,7 @@ func TestRemoveRunningTrashesPartial(t *testing.T) {
 	ref := r.ref(t, j.ID)
 	r.e.setState(ref, "active")
 	r.event(ref, engine.KindStart)
-	payload := filepath.Join(r.dir, "a.iso")
+	payload := filepath.Join(stagingDir(j), "a.iso")
 	wfile(t, payload, "data")
 	wfile(t, payload+".aria2", "ctl")
 	r.e.set(ref, func(s *engine.EngineStatus) { s.Done, s.Total = 4, 100 })

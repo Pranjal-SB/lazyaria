@@ -32,6 +32,10 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 	var down error
 	left := 0
 	for _, j := range js {
+		if legacy(j) {
+			m.stopLegacy(ctx, j)
+			continue
+		}
 		if j.State == store.RetryWait {
 			m.armRetry(j)
 			continue
@@ -139,7 +143,7 @@ func (m *Manager) dirMissing(j *store.Job) bool {
 	if j.Out != nil {
 		name = *j.Out
 	}
-	p := filepath.Join(j.Dir, name)
+	p := filepath.Join(workDir(j), name)
 	return !exists(p) && !exists(p+".aria2")
 }
 
@@ -148,6 +152,9 @@ func (m *Manager) dirMissing(j *store.Job) bool {
 // but an automatic retry also resets the retry count.
 func (m *Manager) readd(ctx context.Context, j *store.Job, paused bool, why string) (*store.Job, error) {
 	ctx = context.WithoutCancel(ctx) // see Add
+	if legacy(j) {
+		return j, &BadRequestError{errors.New(legacyMsg(j))}
+	}
 	// Every re-add path checks the drive: a retry into an unmounted mount
 	// point would fill the root filesystem.
 	if m.dirMissing(j) {
@@ -173,13 +180,13 @@ func (m *Manager) readd(ctx context.Context, j *store.Job, paused bool, why stri
 	// beside it, and a partial with its .aria2 still resumes.
 	owned := ownsFile(j)
 	req.NoContinue = !owned
-	if owned && j.StartedAt != nil && !isBT(j.Kind) && !exists(filepath.Join(j.Dir, *j.Out)+".aria2") {
+	if owned && j.StartedAt != nil && !isBT(j.Kind) && !exists(filepath.Join(workDir(j), *j.Out)+".aria2") {
 		// No control file (a server without ranges, or an unknown size), so
 		// aria2 cannot resume. A true partial of ours goes to the trash and
 		// the job starts over in place; anything else is left alone and the
 		// new download goes beside it. Nothing is ever deleted.
 		req.NoContinue = true
-		p := filepath.Join(j.Dir, *j.Out)
+		p := filepath.Join(workDir(j), *j.Out)
 		fi, err := os.Lstat(p)
 		gone := errors.Is(err, fs.ErrNotExist)
 		partial := err == nil && m.ownPartial(j, fi)
@@ -254,7 +261,7 @@ func (m *Manager) completedOffline(ctx context.Context, j *store.Job) (*store.Jo
 	if !ownsFile(j) || j.TotalBytes == nil || *j.TotalBytes <= 0 {
 		return j, false
 	}
-	p := filepath.Join(j.Dir, *j.Out)
+	p := filepath.Join(workDir(j), *j.Out)
 	fi, err := os.Stat(p)
 	if err != nil || !fi.Mode().IsRegular() || fi.Size() != *j.TotalBytes || exists(p+".aria2") {
 		return j, false

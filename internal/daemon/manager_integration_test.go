@@ -132,10 +132,10 @@ func TestUnknownSize_NoPrecheck_RestartBeside(t *testing.T) {
 	if *got.Out != "norange.1.bin" {
 		t.Fatalf("finished as %s, want norange.1.bin beside the partial", *got.Out)
 	}
-	if fi, err := os.Stat(filepath.Join(got.Dir, "norange.bin")); err != nil || fi.Size() >= int64(len(data)) {
+	if fi, err := os.Stat(filepath.Join(workDir(got), "norange.bin")); err != nil || fi.Size() >= int64(len(data)) {
 		t.Fatalf("the partial norange.bin was not left alone: %v", err)
 	}
-	path := filepath.Join(got.Dir, *got.Out)
+	path := filepath.Join(workDir(got), *got.Out)
 	want := testutil.SHA256File(t, writeFile(t, data))
 	if testutil.SHA256File(t, path) != want {
 		t.Fatalf("sha mismatch for %s", path)
@@ -166,8 +166,8 @@ func writeFile(t *testing.T, b []byte) string {
 }
 
 // A file that appears between the on_exists check and aria2's start, under
-// a name taken from the URL (no --out), is renamed beside by aria2 and
-// never written into; the job follows the new name (spec G7).
+// a name taken from the URL (no --out), is never written into: aria2 works
+// in the job's staging folder.
 func TestFreshAddNeverOverwritesLateFile(t *testing.T) {
 	testutil.RequireAria2(t)
 	data := testutil.RandBytes(256 << 10)
@@ -200,22 +200,20 @@ func TestFreshAddNeverOverwritesLateFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The returned row may already carry aria2's new name; what matters is
-	// that the daemon itself did not pick one.
 	if out := spy.first().Out; out != "" {
-		t.Fatalf("out %q sent by the daemon; this case is aria2's rename", out)
+		t.Fatalf("out %q sent by the daemon", out)
 	}
 	got := waitJob(t, st, j.ID, 30*time.Second, func(j *store.Job) bool { return j.State == store.Done || j.State == store.Error })
 	if got.State != store.Done {
 		t.Fatalf("state %s kind %v msg %v", got.State, got.ErrorKind, got.ErrorMsg)
 	}
-	if got.Name != "late.1.bin" || got.Out == nil || *got.Out != got.Name {
-		t.Fatalf("name %q out %v; want the renamed file tracked", got.Name, got.Out)
+	if got.Name != "late.bin" || got.Out == nil || *got.Out != got.Name {
+		t.Fatalf("name %q out %v; want late.bin in staging", got.Name, got.Out)
 	}
 	if b, _ := os.ReadFile(orig); string(b) != string(old) {
 		t.Fatalf("the existing file was changed (now %d bytes)", len(b))
 	}
-	if testutil.SHA256File(t, filepath.Join(got.Dir, got.Name)) != testutil.SHA256File(t, writeFile(t, data)) {
+	if testutil.SHA256File(t, filepath.Join(workDir(got), got.Name)) != testutil.SHA256File(t, writeFile(t, data)) {
 		t.Fatal("sha mismatch")
 	}
 }
@@ -277,10 +275,10 @@ func TestRetryNeverResumesIntoUnownedFile(t *testing.T) {
 	if b, _ := os.ReadFile(orig); string(b) != string(old) {
 		t.Fatalf("the existing file was changed (now %d bytes)", len(b))
 	}
-	if got.Name != "report.1.pdf" || got.Out == nil || *got.Out != got.Name {
-		t.Fatalf("name %q out %v; want report.1.pdf tracked", got.Name, got.Out)
+	if got.Name != "report.pdf" || got.Out == nil || *got.Out != got.Name {
+		t.Fatalf("name %q out %v; want report.pdf in staging", got.Name, got.Out)
 	}
-	if testutil.SHA256File(t, filepath.Join(got.Dir, got.Name)) != testutil.SHA256File(t, writeFile(t, data)) {
+	if testutil.SHA256File(t, filepath.Join(workDir(got), got.Name)) != testutil.SHA256File(t, writeFile(t, data)) {
 		t.Fatal("sha mismatch")
 	}
 }

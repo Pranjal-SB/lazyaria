@@ -159,7 +159,7 @@ func (t *TrashFiles) RestoreFiles(_ context.Context, es []trash.Entry) error {
 	return errors.Join(errs...)
 }
 
-// payloadPath is where a job's download lands: dir/out, or dir/name for a
+// payloadPath is where a job's download lands, under workDir: dir/out, or dir/name for a
 // torrent's file or top-level directory. It refuses anything outside dir,
 // dir itself, and the placeholder name of a torrent whose metadata is missing.
 func payloadPath(j *store.Job) (string, bool) {
@@ -172,7 +172,7 @@ func payloadPath(j *store.Job) (string, bool) {
 	if j.Dir == "" || name == "" || filepath.Clean(name) == "." || !filepath.IsLocal(name) {
 		return "", false
 	}
-	return filepath.Join(j.Dir, name), true
+	return filepath.Join(workDir(j), name), true
 }
 
 // inPayload lists the payload p when it is a file, else those of files

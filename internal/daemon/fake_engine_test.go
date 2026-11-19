@@ -281,12 +281,13 @@ func (r *rig) hasEvent(t *testing.T, id, kind string) bool {
 	return false
 }
 
-// insert stores a job row directly, as if written by an earlier daemon.
+// insert stores a staged job row directly, as if written by an earlier
+// daemon run; mod may clear Staged for a pre-staging row.
 func (r *rig) insert(t *testing.T, state store.State, ref string, mod func(*store.Job)) *store.Job {
 	t.Helper()
 	j := &store.Job{ID: store.NewID(), Kind: "http", Engine: "aria2", State: state, Name: "f.bin",
 		URIs: []string{"http://example.com/f.bin"}, Dir: r.dir, Options: map[string]string{},
-		Queue: "main", CreatedAt: r.clk.now()}
+		Queue: "main", CreatedAt: r.clk.now(), Staged: true}
 	if ref != "" {
 		j.EngineRef = &ref
 	}

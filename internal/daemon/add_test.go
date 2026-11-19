@@ -269,19 +269,18 @@ func TestAddOnExists(t *testing.T) {
 		return r
 	}
 	t.Run("rename", func(t *testing.T) {
+		// The download runs in its staging folder under its own name;
+		// publish picks the free name at the end.
 		r := setup(t, "rename")
 		j := r.add(t, AddParams{URIs: []string{"http://example.com/ex.bin"}})
 		req := r.e.adds[0]
-		if j.Name != "ex.2.bin" || deref(j.Out) != "ex.2.bin" || req.Out != "ex.2.bin" || !req.NoContinue {
-			t.Fatalf("name %q out %q; request out %q continue=false %v", j.Name, deref(j.Out), req.Out, req.NoContinue)
-		}
-		if got := r.get(t, j.ID); deref(got.Out) != "ex.2.bin" {
-			t.Fatalf("db out %q", deref(got.Out))
+		if j.Name != "ex.bin" || j.Out != nil || req.Out != "" || req.NoContinue || req.Dir != stagingDir(j) {
+			t.Fatalf("name %q out %q; request out %q dir %q continue=false %v", j.Name, deref(j.Out), req.Out, req.Dir, req.NoContinue)
 		}
 		// An explicit --out with Force, under the default duplicates mode.
 		r.m.s.Load().Reliability.Duplicates = "ask"
 		j, err := r.m.Add(bg, AddParams{URIs: []string{"http://example.com/x"}, Out: "my.iso", Dir: r.dir, Force: true})
-		if err != nil || j.Name != "my.1.iso" || r.e.adds[1].Out != "my.1.iso" {
+		if err != nil || j.Name != "my.iso" || r.e.adds[1].Out != "my.iso" {
 			t.Fatalf("forced --out: %v name %q", err, j.Name)
 		}
 	})
@@ -294,7 +293,7 @@ func TestAddOnExists(t *testing.T) {
 		os.WriteFile(orig, []byte("mine"), 0o600)
 		j := r.add(t, AddParams{URIs: []string{"http://example.com/ex.torrent"}})
 		req := r.e.adds[0]
-		if _, ok := req.Options["allow-overwrite"]; ok || j.Name != "ex.torrent" || j.Out != nil || !req.NoContinue {
+		if _, ok := req.Options["allow-overwrite"]; ok || j.Name != "ex.torrent" || j.Out != nil || req.NoContinue {
 			t.Fatalf("name %q out %q options %v continue=false %v", j.Name, deref(j.Out), req.Options, req.NoContinue)
 		}
 		if exists(orig) {
@@ -323,10 +322,10 @@ func TestAddOnExists(t *testing.T) {
 		}
 	})
 	t.Run("no-out", func(t *testing.T) {
-		// The server names the file: aria2 renames it, guarded by continue=false.
+		// The server names the file inside the empty staging folder.
 		r := setup(t, "rename")
 		j := r.add(t, AddParams{URIs: []string{"http://example.com/"}})
-		if req := r.e.adds[0]; j.Out != nil || req.Out != "" || !req.NoContinue {
+		if req := r.e.adds[0]; j.Out != nil || req.Out != "" || req.NoContinue {
 			t.Fatalf("out %q request %+v", deref(j.Out), req)
 		}
 	})
@@ -337,7 +336,7 @@ func TestAddOnExists(t *testing.T) {
 func TestAddOptionsOutIsChecked(t *testing.T) {
 	r := newRig(t)
 	os.WriteFile(filepath.Join(r.dir, "taken.bin"), []byte("mine"), 0o600)
-	for _, c := range []struct{ out, want string }{{"../x", "x"}, {"taken.bin", "taken.1.bin"}} {
+	for _, c := range []struct{ out, want string }{{"../x", "x"}, {"taken.bin", "taken.bin"}} {
 		j := r.add(t, AddParams{URIs: []string{"http://example.com/" + c.out}, Options: map[string]string{"out": c.out}, Force: true})
 		req := r.e.adds[len(r.e.adds)-1]
 		if j.Out == nil || *j.Out != c.want || req.Out != c.want {
@@ -366,40 +365,20 @@ func TestAddBTRejectsOut(t *testing.T) {
 	}
 }
 
-// A name held by a live job is taken even when its .aria2 sits there: that
-// control file is the other job's progress.
-func TestAddHeldPartialIsRenamed(t *testing.T) {
+// Two live jobs with the same name each download in their own staging
+// folder, so neither can adopt the other's partial.
+func TestAddSameNameJobsAreSeparate(t *testing.T) {
 	r := newRig(t)
-	part := filepath.Join(r.dir, "ex.bin")
+	a := r.add(t, AddParams{URIs: []string{"http://a.example.com/ex.bin"}})
+	part := filepath.Join(stagingDir(a), "ex.bin")
 	os.WriteFile(part, []byte("half"), 0o600)
 	os.WriteFile(part+".aria2", []byte("ctl"), 0o600)
-	a := r.add(t, AddParams{URIs: []string{"http://a.example.com/ex.bin"}})
-	if err := r.m.Pause(bg, []string{a.ID}); err != nil {
-		t.Fatal(err)
-	}
 	b, err := r.m.Add(bg, AddParams{URIs: []string{"http://b.example.com/ex.bin"}, Dir: r.dir + "/"})
-	if err != nil || b.Name != "ex.1.bin" || r.e.adds[1].Out != "ex.1.bin" {
-		t.Fatalf("job B: %v name %q", err, b.Name)
+	if err != nil || b.Name != "ex.bin" || r.e.adds[1].Dir == r.e.adds[0].Dir {
+		t.Fatalf("job B: %v name %q, dirs %q %q", err, b.Name, r.e.adds[0].Dir, r.e.adds[1].Dir)
 	}
 	if got, _ := os.ReadFile(part); string(got) != "half" {
 		t.Fatal("job A's file changed")
-	}
-}
-
-// Live jobs hold their names before their files exist on disk.
-func TestAddRenameSkipsHeldNames(t *testing.T) {
-	r := newRig(t)
-	os.WriteFile(filepath.Join(r.dir, "ex.bin"), []byte("mine"), 0o600)
-	var names []string
-	for range 2 {
-		j, err := r.m.Add(bg, AddParams{URIs: []string{"http://example.com/ex.bin"}, Dir: r.dir, Force: true})
-		if err != nil {
-			t.Fatal(err)
-		}
-		names = append(names, j.Name)
-	}
-	if names[0] != "ex.1.bin" || names[1] != "ex.2.bin" {
-		t.Fatalf("names %v, want ex.1.bin then ex.2.bin", names)
 	}
 }
 

@@ -1,7 +1,6 @@
 package daemon
 
 import (
-	"context"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -9,7 +8,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/Pranjal-SB/lazyaria/internal/fsinfo"
-	"github.com/Pranjal-SB/lazyaria/internal/store"
 	"github.com/Pranjal-SB/lazyaria/internal/textutil"
 )
 
@@ -43,25 +41,6 @@ func targetName(dir string, p AddParams) string {
 		return ""
 	}
 	return textutil.SanitizeName(name, fsinfo.IsFAT(dir))
-}
-
-// heldNames are the names live jobs in dir will write, which may not be
-// on disk yet.
-func (m *Manager) heldNames(ctx context.Context, dir string) (map[string]bool, error) {
-	js, err := m.st.ListJobs(ctx, store.Filter{})
-	if err != nil {
-		return nil, fmt.Errorf("list jobs to pick a free name: %w", err)
-	}
-	held := map[string]bool{}
-	for _, j := range js {
-		if filepath.Clean(j.Dir) == filepath.Clean(dir) {
-			held[j.Name] = true
-			if j.Out != nil {
-				held[*j.Out] = true
-			}
-		}
-	}
-	return held, nil
 }
 
 // freeName picks the name aria2 itself would rename path to: the first

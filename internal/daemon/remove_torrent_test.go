@@ -18,7 +18,7 @@ func liveTorrent(t *testing.T, r *rig) (id, music string) {
 	t.Helper()
 	j := r.add(t, AddParams{Torrent: []byte("d4:infod4:name5:Musicee")})
 	ref := r.ref(t, j.ID)
-	music = filepath.Join(r.dir, "Music")
+	music = filepath.Join(stagingDir(j), "Music")
 	r.e.set(ref, func(s *engine.EngineStatus) {
 		s.State, s.IsBT, s.Name, s.Path, s.Done, s.Total = "active", true, "Music", music, 4, 100
 	})
@@ -98,7 +98,7 @@ func TestRemoveFinishedTorrentUsesStoredFileList(t *testing.T) {
 	r := newRig(t)
 	tor := "d4:infod5:filesld6:lengthi1e4:pathl6:a.flaceed6:lengthi1e4:pathl3:sub6:b.flaceee4:name5:Musicee"
 	j := r.add(t, AddParams{Torrent: []byte(tor)})
-	if _, err := r.m.change(bg, j.ID, "", "", func(x *store.Job) { x.State, x.Name, x.EngineRef = store.Done, "Music", nil }); err != nil {
+	if _, err := r.m.change(bg, j.ID, "", "", func(x *store.Job) { x.State, x.Name, x.EngineRef, x.Staged = store.Done, "Music", nil, false }); err != nil {
 		t.Fatal(err)
 	}
 	music := filepath.Join(r.dir, "Music")
@@ -171,7 +171,7 @@ func TestRemoveFinishedTorrentWithSelectFileKeepsFiles(t *testing.T) {
 	r := newRig(t)
 	tor := "d4:infod5:filesld6:lengthi1e4:pathl6:a.flaceed6:lengthi1e4:pathl3:sub6:b.flaceee4:name5:Musicee"
 	j := r.add(t, AddParams{Torrent: []byte(tor), Options: map[string]string{"select-file": "1"}})
-	if _, err := r.m.change(bg, j.ID, "", "", func(x *store.Job) { x.State, x.Name, x.EngineRef = store.Done, "Music", nil }); err != nil {
+	if _, err := r.m.change(bg, j.ID, "", "", func(x *store.Job) { x.State, x.Name, x.EngineRef, x.Staged = store.Done, "Music", nil, false }); err != nil {
 		t.Fatal(err)
 	}
 	music := filepath.Join(r.dir, "Music")
@@ -220,7 +220,7 @@ func TestDoneStampsOnlyTheTorrentsFiles(t *testing.T) {
 	r.m.s.Load().Privacy.StampOriginXattr = true
 	j := r.add(t, AddParams{URIs: []string{"magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567"}})
 	ref := r.ref(t, j.ID)
-	music := filepath.Join(r.dir, "Music")
+	music := filepath.Join(stagingDir(j), "Music")
 	os.MkdirAll(music, 0o755)
 	mine, ours := filepath.Join(music, "mine.flac"), filepath.Join(music, "a.flac")
 	wfile(t, mine, "the user's")
@@ -250,7 +250,7 @@ func TestRemoveFinishedMagnetReportsKeptFolder(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
 	r := newRig(t)
 	j := r.add(t, AddParams{URIs: []string{"magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567"}})
-	if _, err := r.m.change(bg, j.ID, "", "", func(x *store.Job) { x.State, x.Name, x.EngineRef = store.Done, "Music", nil }); err != nil {
+	if _, err := r.m.change(bg, j.ID, "", "", func(x *store.Job) { x.State, x.Name, x.EngineRef, x.Staged = store.Done, "Music", nil, false }); err != nil {
 		t.Fatal(err)
 	}
 	music := filepath.Join(r.dir, "Music")

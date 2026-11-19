@@ -156,6 +156,8 @@ func (m *Manager) RefreshURI(ctx context.Context, id, uri string) (*store.Job, e
 		return nil, &BadRequestError{errors.New("the job was removed; add the link again")}
 	case j.Kind == "torrent" || j.Kind == "magnet":
 		return nil, &BadRequestError{engine.ErrNotSupported}
+	case legacy(j):
+		return nil, &BadRequestError{errors.New(legacyMsg(j))}
 	}
 	opts := maps.Clone(j.Options)
 	clean := engine.SplitAuth([]string{uri}, "", "", opts)[0]

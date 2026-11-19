@@ -11,7 +11,7 @@ func TestUndoRetrySkipsEntriesAlreadyRestored(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
 	r := newRig(t)
 	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}, Out: "a.iso"})
-	payload := filepath.Join(r.dir, "a.iso")
+	payload := filepath.Join(stagingDir(j), "a.iso")
 	wfile(t, payload, "data")
 	r.wrote(t, j.ID)
 	wfile(t, payload+".aria2", "ctl")

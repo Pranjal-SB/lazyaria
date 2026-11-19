@@ -92,23 +92,10 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 			return nil, &DuplicateError{Path: target}
 		}
 	}
+	// The download runs in its own staging folder, so a taken name only
+	// matters at publish, which picks a free one then (rename).
 	overwrite := false
-	// shortcut: a server-chosen name (Content-Disposition, no URL basename)
-	// is unknown here, so aria2 may adopt another live job's partial through
-	// its .aria2; v0.2 probes the name first and writes .laria files.
-	name := targetName(dir, p)
-	var held map[string]bool
-	if name != "" {
-		var err error
-		if held, err = m.heldNames(ctx, dir); err != nil {
-			return nil, err
-		}
-	}
-	if onExists := m.s.Load().Downloads.OnExists; target != "" || held[name] {
-		if held[name] {
-			// Another live job writes this name; any .aria2 there is its own.
-			onExists = "rename"
-		}
+	if onExists := m.s.Load().Downloads.OnExists; target != "" {
 		if fi, err := os.Lstat(target); onExists == "overwrite" && (err != nil || !fi.Mode().IsRegular()) {
 			onExists = "rename" // only a regular file goes to the trash
 		}
@@ -117,12 +104,6 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 			overwrite = true
 		case "ask":
 			return nil, &ExistsError{Path: target}
-		default: // rename
-			name, err := freeName(filepath.Join(dir, name), held)
-			if err != nil {
-				return nil, err
-			}
-			p.Out = name
 		}
 	}
 	if ns := m.noSpace(dir, p.Total, 0); ns != nil {
@@ -130,7 +111,12 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 	}
 	paused := p.StartPaused || m.s.Load().Downloads.StartPaused
 	j := m.newJob(dir, p, paused)
+	// Before the row: a crash in between leaves an orphan folder Reconcile clears.
+	if err := os.MkdirAll(stagingDir(j), 0o755); err != nil {
+		return nil, fmt.Errorf("create the staging folder: %w; nothing was added. Check that %s is writable", err, dir)
+	}
 	if err := m.st.InsertJob(ctx, j, keys...); err != nil {
+		os.Remove(stagingDir(j))
 		return nil, fmt.Errorf("save the new job: %w", err)
 	}
 	// Overwrite never reaches aria2 (allow-overwrite would pass on to a
@@ -142,6 +128,8 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 		if err != nil {
 			if derr := m.st.DeleteJob(ctx, j.ID); derr != nil {
 				err = errors.Join(err, derr)
+			} else {
+				os.Remove(stagingDir(j))
 			}
 			return nil, fmt.Errorf("move %s to the trash before overwriting it: %w; nothing was added. Move it aside, or set downloads.on_exists to rename", target, err)
 		}
@@ -153,11 +141,8 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 		m.log.Warn("record job event", "job", j.ID, "err", err)
 	}
 	m.bus.Publish(Event{Type: "job.added", Job: j})
+	// The staging folder is new and empty, so continue=true adopts nothing.
 	req := m.request(j, paused)
-	// A fresh job owns no file yet: continue=false makes aria2 rename beside
-	// a finished file that appears after the check above (one with a .aria2
-	// is adopted and resumed). readd decides by ownership.
-	req.NoContinue = true
 	ref, err := m.e.Add(ctx, req)
 	if engineDown(err) {
 		// The add may or may not have landed under the job's gid; the poll
@@ -252,6 +237,7 @@ func (m *Manager) newJob(dir string, p AddParams, paused bool) *store.Job {
 		ID: store.NewID(), Kind: kind, Engine: "aria2", State: store.Queued,
 		Name: textutil.SanitizeName(displayName(p.Out, uris), fat),
 		URIs: uris, Torrent: p.Torrent, Dir: dir, Options: opts, Queue: "main", CreatedAt: m.now(),
+		Staged: true,
 	}
 	if paused {
 		j.State = store.Paused
@@ -272,7 +258,7 @@ func (m *Manager) newJob(dir string, p AddParams, paused bool) *store.Job {
 }
 
 func (m *Manager) request(j *store.Job, paused bool) engine.AddRequest {
-	req := engine.AddRequest{URIs: j.URIs, Torrent: j.Torrent, Dir: j.Dir, Options: j.Options, Paused: paused}
+	req := engine.AddRequest{URIs: j.URIs, Torrent: j.Torrent, Dir: workDir(j), Options: j.Options, Paused: paused}
 	if j.Out != nil {
 		req.Out = *j.Out
 	}

@@ -56,7 +56,7 @@ func TestReaddOwnership(t *testing.T) {
 		}
 		var p string
 		if j.Out != nil {
-			p = filepath.Join(r.dir, *j.Out)
+			p = filepath.Join(workDir(j), *j.Out)
 			if c.dir {
 				os.Mkdir(p, 0o700)
 			} else {
@@ -90,7 +90,7 @@ func TestReaddOwnership(t *testing.T) {
 func noRangePartial(t *testing.T, r *rig) (*store.Job, string) {
 	t.Helper()
 	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.bin"}, Out: "a.bin"})
-	path := filepath.Join(r.dir, "a.bin")
+	path := filepath.Join(stagingDir(j), "a.bin")
 	j = r.m.apply(bg, j, engine.EngineStatus{State: "active", Done: 100, Total: 1000, Path: path}, "")
 	os.WriteFile(path, []byte("partial"), 0o600)
 	r.m.apply(bg, j, engine.EngineStatus{State: "error", ErrorCode: 1, Path: path}, "")
@@ -176,15 +176,15 @@ func TestTrashedPartialIsRestorable(t *testing.T) {
 }
 
 // on_exists = overwrite trashes only a regular file; a directory there is
-// renamed beside. A trash failure leaves no job row behind.
+// left for publish to name. A trash failure leaves no job row behind.
 func TestOverwriteOnlyRegularAndUndoneOnTrashFailure(t *testing.T) {
 	r := newRig(t)
 	r.m.s.Load().Reliability.Duplicates = "allow"
 	r.m.s.Load().Downloads.OnExists = "overwrite"
 	os.Mkdir(filepath.Join(r.dir, "d.bin"), 0o700)
 	j := r.add(t, AddParams{URIs: []string{"http://example.com/d.bin"}})
-	if j.Name != "d.1.bin" {
-		t.Fatalf("directory target: name %q, want d.1.bin", j.Name)
+	if j.Name != "d.bin" || j.Out != nil {
+		t.Fatalf("directory target: name %q out %v, want d.bin, no out (publish picks the free name)", j.Name, j.Out)
 	}
 	os.WriteFile(filepath.Join(r.dir, "f.bin"), []byte("mine"), 0o600)
 	r.m.trash = func(string) (trash.Entry, error) { return trash.Entry{}, trash.ErrNoTrash }
