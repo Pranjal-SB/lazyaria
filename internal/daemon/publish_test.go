@@ -93,7 +93,7 @@ func TestPublishPicksFreeNameAtTheEnd(t *testing.T) {
 	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}})
 	user := filepath.Join(r.dir, "a.iso")
 	wfile(t, user, "the user's")
-	ino, _, _ := fsutil.FileID(user)
+	ino, _, _, _ := fsutil.FileID(user)
 	stageFiles(t, j, map[string]string{"a.iso": "ours"})
 	got := r.complete(t, j, "a.iso")
 	if got.State != store.Done || got.Name != "a.1.iso" || *got.Out != "a.1.iso" {
@@ -102,7 +102,7 @@ func TestPublishPicksFreeNameAtTheEnd(t *testing.T) {
 	if read(t, user) != "the user's" {
 		t.Fatal("the user's file changed")
 	}
-	if ino2, _, _ := fsutil.FileID(user); ino2 != ino {
+	if ino2, _, _, _ := fsutil.FileID(user); ino2 != ino {
 		t.Fatal("the user's file was replaced")
 	}
 	if read(t, filepath.Join(r.dir, "a.1.iso")) != "ours" {
@@ -219,14 +219,14 @@ func TestPublishCrossDevice(t *testing.T) {
 		src := filepath.Join(stagingDir(j), "a.iso")
 		copies := 0
 		orig := publishCopy
-		publishCopy = func(s, tmp, dst string) error {
+		publishCopy = func(s, tmp string) error {
 			copies++
 			if p := r.get(t, j.ID).Publish; p == nil || p.Temp == "" || filepath.Join(r.dir, p.Temp) != tmp {
 				t.Errorf("temp not recorded before the copy: %+v, copying through %s", p, tmp)
 			}
-			err := orig(s, tmp, dst)
+			err := orig(s, tmp)
 			if !exists1(src) {
-				t.Error("source removed before the copy was in place")
+				t.Error("source removed during the copy")
 			}
 			return err
 		}

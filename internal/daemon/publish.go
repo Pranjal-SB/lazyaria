@@ -20,7 +20,7 @@ import (
 // Test hooks: tests inject EXDEV and crashes through these.
 var (
 	publishRename = fsutil.RenameNoReplace
-	publishCopy   = fsutil.CopyNoReplace
+	publishCopy   = fsutil.CopyTree
 	publishStop   = func(step string) bool { return false } // true: stop after step, as a crash would
 )
 
@@ -104,29 +104,30 @@ func (m *Manager) publish(ctx context.Context, j *store.Job) (*store.Job, error)
 }
 
 // publishEntry moves entry i of p into j.Dir: rename, or copy where the
-// rename crosses filesystems. Each name and temp is recorded before use.
+// rename crosses filesystems. Each name and temp is recorded before use,
+// and an earlier attempt's work is recognised only by inode and device.
 func (m *Manager) publishEntry(ctx context.Context, j *store.Job, p *store.Publish, i int) (*store.Job, error) {
 	e := &p.Entries[i]
 	src := filepath.Join(stagingDir(j), e.Rel)
 	for {
 		dst := filepath.Join(j.Dir, e.Name)
-		if sameFile(dst, e) {
+		if sameFile(dst, e.Ino, e.Dev, e.Size) {
 			return j, nil // moved before a crash
 		}
 		if p.Temp != "" { // a copy of this entry was under way
 			tmp := filepath.Join(j.Dir, p.Temp)
-			if lexists(tmp) {
+			switch {
+			case p.TempIno != 0 && sameFile(tmp, p.TempIno, p.TempDev, -1):
+				return m.place(ctx, j, p, i, tmp, src) // copied, not yet in place
+			case p.TempIno != 0 && sameFile(dst, p.TempIno, p.TempDev, -1):
+				return m.copied(ctx, j, p, i, src, dst) // in place, not yet recorded
+			case p.TempIno == 0 && lexists(tmp):
 				// Unfinished: the temp is ours, it was recorded before it was made.
 				if err := os.RemoveAll(tmp); err != nil {
 					return j, err
 				}
-			} else if lexists(src) && copiedSize(dst, e) {
-				// shortcut: a finished copy is told from a file someone made at
-				// that name in the moment before the copy only by size; record
-				// the copy's inode inside fsutil if that ever matters.
-				return m.copied(ctx, j, p, i, src, dst)
 			}
-			p.Temp = ""
+			p.Temp, p.TempIno, p.TempDev = "", 0, 0
 		}
 		if !lexists(src) {
 			m.log.Warn("a finished file left the staging folder before publish; nothing to move", "job", j.ID, "path", src)
@@ -141,23 +142,17 @@ func (m *Manager) publishEntry(ctx context.Context, j *store.Job, p *store.Publi
 				return j, err
 			}
 		case fsutil.IsCrossDevice(err):
-			if j, err = m.copyEntry(ctx, j, p, i, src, dst); err != nil || p.Temp == "" {
-				return j, err
-			}
-			p.Temp = "" // the name was taken meanwhile; try the next one
-			if j, err = m.nextName(ctx, j, p, i); err != nil {
-				return j, err
-			}
+			return m.copyEntry(ctx, j, p, i, src)
 		default:
 			return j, err
 		}
 	}
 }
 
-// copyEntry copies src to dst through a recorded temp name, then records
-// the copy and removes src. It leaves p.Temp set only when dst was taken.
-func (m *Manager) copyEntry(ctx context.Context, j *store.Job, p *store.Publish, i int, src, dst string) (*store.Job, error) {
-	p.Temp = tempName(j.Dir, p.Entries[i].Name)
+// copyEntry copies src into j.Dir under a recorded temp name, records the
+// copy's identity, then puts it in place.
+func (m *Manager) copyEntry(ctx context.Context, j *store.Job, p *store.Publish, i int, src string) (*store.Job, error) {
+	p.Temp, p.TempIno, p.TempDev = tempName(j.Dir, p.Entries[i].Name), 0, 0
 	j, err := m.record(ctx, j, p)
 	if err != nil {
 		return j, err
@@ -165,30 +160,57 @@ func (m *Manager) copyEntry(ctx context.Context, j *store.Job, p *store.Publish,
 	if publishStop("copy-temp") {
 		return j, errPublishStopped
 	}
-	if err := m.copySpace(j, src); err != nil {
-		return j, err
+	tmp := filepath.Join(j.Dir, p.Temp)
+	err = m.copySpace(j, src)
+	if err == nil {
+		err = publishCopy(src, tmp) // removes its own partial on failure
 	}
-	err = publishCopy(src, filepath.Join(j.Dir, p.Temp), dst)
-	if errors.Is(err, fs.ErrExist) && !lexists(filepath.Join(j.Dir, p.Temp)) {
-		return j, nil // dst taken; the caller picks another name
+	if err == nil {
+		p.TempIno, p.TempDev, _, err = fsutil.FileID(tmp)
 	}
 	if err != nil {
+		// No temp of ours is left: forget the name, so nothing found there
+		// later passes for our copy.
+		p.Temp, p.TempIno, p.TempDev = "", 0, 0
+		j, _ = m.record(ctx, j, p)
+		return j, err
+	}
+	if j, err = m.record(ctx, j, p); err != nil {
 		return j, err
 	}
 	if publishStop("copied") {
 		return j, errPublishStopped
 	}
-	return m.copied(ctx, j, p, i, src, dst)
+	return m.place(ctx, j, p, i, tmp, src)
 }
 
-// copied records the finished copy (its inode, no temp) and then removes
-// the source, so a crash in between finds the entry moved.
+// place renames the finished temp copy tmp to entry i's name, moving on to
+// the next free name while one is taken; a duplicate beats a loss.
+func (m *Manager) place(ctx context.Context, j *store.Job, p *store.Publish, i int, tmp, src string) (*store.Job, error) {
+	for {
+		dst := filepath.Join(j.Dir, p.Entries[i].Name)
+		err := fsutil.Place(tmp, dst)
+		if err == nil {
+			return m.copied(ctx, j, p, i, src, dst)
+		}
+		if !errors.Is(err, fs.ErrExist) {
+			return j, err
+		}
+		if j, err = m.nextName(ctx, j, p, i); err != nil {
+			return j, err
+		}
+	}
+}
+
+// copied records the copy in place (its identity, no temp) and then
+// removes the source, so a crash in between finds the entry moved.
 func (m *Manager) copied(ctx context.Context, j *store.Job, p *store.Publish, i int, src, dst string) (*store.Job, error) {
-	ino, size, err := fsutil.FileID(dst)
-	if err != nil {
+	e := &p.Entries[i]
+	var err error
+	if e.Ino, e.Dev, e.Size, err = fsutil.FileID(dst); err != nil {
 		return j, err
 	}
-	p.Entries[i].Ino, p.Entries[i].Size, p.Temp = ino, size, ""
+	p.Temp, p.TempIno, p.TempDev = "", 0, 0
 	if j, err = m.record(ctx, j, p); err != nil {
 		return j, err
 	}
@@ -223,7 +245,7 @@ func (m *Manager) nextName(ctx context.Context, j *store.Job, p *store.Publish, 
 	for _, e := range p.Entries {
 		held[e.Name] = true
 	}
-	name, err := freeName(filepath.Join(j.Dir, p.Entries[i].Name), held)
+	name, err := finalName(j, p.Entries[i].Rel, held)
 	if err != nil {
 		return j, err
 	}
@@ -268,11 +290,11 @@ func publishEntries(staging string) ([]store.PublishEntry, error) {
 		if strings.HasSuffix(n, ".aria2") || strings.HasSuffix(n, ".torrent") || strings.HasSuffix(n, ".meta4") {
 			continue
 		}
-		ino, size, err := fsutil.FileID(filepath.Join(staging, n))
+		ino, dev, size, err := fsutil.FileID(filepath.Join(staging, n))
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, store.PublishEntry{Rel: n, Size: size, Ino: ino})
+		out = append(out, store.PublishEntry{Rel: n, Size: size, Ino: ino, Dev: dev})
 	}
 	return out, nil
 }
@@ -301,15 +323,11 @@ func tempName(dir, name string) string {
 	return t
 }
 
-// sameFile: path is the entry as recorded, same inode and size.
-func sameFile(path string, e *store.PublishEntry) bool {
-	ino, size, err := fsutil.FileID(path)
-	return err == nil && ino == e.Ino && size == e.Size
-}
-
-func copiedSize(path string, e *store.PublishEntry) bool {
-	_, size, err := fsutil.FileID(path)
-	return err == nil && size == e.Size
+// sameFile: path is the file with this inode and device, and this size
+// unless size is -1.
+func sameFile(path string, ino, dev uint64, size int64) bool {
+	i, d, sz, err := fsutil.FileID(path)
+	return err == nil && i == ino && d == dev && (size < 0 || sz == size)
 }
 
 func clonePublish(p *store.Publish) *store.Publish {

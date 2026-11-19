@@ -67,7 +67,7 @@ func targets(j *store.Job, files []string) []string {
 		var out []string
 		if j.Publish != nil {
 			for _, e := range j.Publish.Entries {
-				if p := filepath.Join(j.Dir, e.Name); sameFile(p, &e) {
+				if p := filepath.Join(j.Dir, e.Name); sameFile(p, e.Ino, e.Dev, e.Size) {
 					out = append(out, p)
 				}
 			}

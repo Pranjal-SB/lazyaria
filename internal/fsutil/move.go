@@ -16,21 +16,42 @@ import (
 // returns an error matching fs.ErrExist if dst exists, and never deletes src.
 // Symlinks are copied as symlinks; other special files are refused.
 func CopyNoReplace(src, tmp, dst string) error {
+	if err := CopyTree(src, tmp); err != nil {
+		return err
+	}
+	if err := Place(tmp, dst); err != nil {
+		os.RemoveAll(tmp)
+		return err
+	}
+	return nil
+}
+
+// CopyTree creates dst fresh (O_EXCL, Mkdir) as a copy of the file or tree
+// src and fsyncs it. If dst already exists it fails with an error matching
+// fs.ErrExist and leaves dst alone; after any later failure it removes what
+// it made. Symlinks are copied as symlinks; other special files are refused.
+func CopyTree(src, dst string) error {
 	made := false
-	err := copyEntry(src, tmp, &made)
-	if err == nil {
-		err = RenameNoReplace(tmp, dst)
-		if fi, lerr := os.Lstat(tmp); IsCrossDevice(err) && lerr == nil && fi.IsDir() {
-			// overlayfs refuses to rename a folder even within one folder.
-			// shortcut: dst is visible while it fills and a crash leaves it
-			// half-built; fine for overlay, the only place this runs.
-			err = moveTree(tmp, dst)
+	if err := copyEntry(src, dst, &made); err != nil {
+		if made {
+			os.RemoveAll(dst)
 		}
+		return err
+	}
+	return nil
+}
+
+// Place renames tmp to dst without replacing, then fsyncs dst's folder. It
+// fails with an error matching fs.ErrExist if dst exists.
+func Place(tmp, dst string) error {
+	err := RenameNoReplace(tmp, dst)
+	if fi, lerr := os.Lstat(tmp); IsCrossDevice(err) && lerr == nil && fi.IsDir() {
+		// overlayfs refuses to rename a folder even within one folder.
+		// shortcut: dst is visible while it fills and a crash leaves it
+		// half-built; fine for overlay, the only place this runs.
+		err = moveTree(tmp, dst)
 	}
 	if err != nil {
-		if made {
-			os.RemoveAll(tmp)
-		}
 		return err
 	}
 	return SyncDir(filepath.Dir(dst))

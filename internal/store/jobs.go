@@ -67,6 +67,9 @@ type Publish struct {
 	Name    string         `json:"name"` // final top-level name chosen in Dir (may differ from Out)
 	Entries []PublishEntry `json:"entries"`
 	Temp    string         `json:"temp,omitempty"` // copy-fallback temp name in Dir, if one is in progress
+	// The finished temp copy's identity; 0 while the copy is being written.
+	TempIno uint64 `json:"temp_ino,omitempty"`
+	TempDev uint64 `json:"temp_dev,omitempty"`
 }
 
 type PublishEntry struct {
@@ -74,6 +77,7 @@ type PublishEntry struct {
 	Name string `json:"name"` // final name chosen for it in Dir
 	Size int64  `json:"size"` // regular files: byte size; directories: 0
 	Ino  uint64 `json:"ino"`
+	Dev  uint64 `json:"dev"`
 }
 
 // Filter narrows ListJobs. Without IncludeHistory, done and removed jobs are hidden.

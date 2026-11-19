@@ -266,22 +266,22 @@ func TestFileID(t *testing.T) {
 	if err := os.Link(a, b); err != nil {
 		t.Fatal(err)
 	}
-	ia, sa, err := FileID(a)
+	ia, da, sa, err := FileID(a)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ib, sb, _ := FileID(b)
-	ic, _, _ := FileID(c)
-	if ia == 0 || ia != ib || sa != 5 || sb != 5 {
+	ib, db, sb, _ := FileID(b)
+	ic, _, _, _ := FileID(c)
+	if ia == 0 || ia != ib || da == 0 || da != db || sa != 5 || sb != 5 {
 		t.Fatalf("a=(%d,%d) b=(%d,%d)", ia, sa, ib, sb)
 	}
 	if ic == ia {
 		t.Fatal("different files share an inode")
 	}
-	if _, sd, err := FileID(d); err != nil || sd != 0 {
+	if _, _, sd, err := FileID(d); err != nil || sd != 0 {
 		t.Fatalf("dir size %d, err %v", sd, err)
 	}
-	if _, _, err := FileID(filepath.Join(d, "missing")); !errors.Is(err, fs.ErrNotExist) {
+	if _, _, _, err := FileID(filepath.Join(d, "missing")); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("missing: err %v", err)
 	}
 }
