@@ -34,7 +34,7 @@ func reportServer(t *testing.T, data []byte) (*httptest.Server, *atomic.Int32) {
 
 // ownershipCase adds link (with out), lets the first attempt fail with 503,
 // puts the user's report.pdf in place, runs recover and checks the user's
-// file is untouched and the job finished as report.pdf in its staging folder.
+// file is untouched and the job was published beside it as report.1.pdf.
 func ownershipCase(t *testing.T, out string, recover func(d *liveDaemon, j *store.Job, srvURL string) error) {
 	testutil.RequireAria2(t)
 	data := testutil.RandBytes(256 << 10)
@@ -68,8 +68,8 @@ func ownershipCase(t *testing.T, out string, recover func(d *liveDaemon, j *stor
 	if b, _ := os.ReadFile(orig); string(b) != string(old) {
 		t.Fatalf("the existing file was changed (now %d bytes)", len(b))
 	}
-	if got.Name != "report.pdf" || got.Out == nil || *got.Out != got.Name {
-		t.Fatalf("name %q out %v; want report.pdf in staging", got.Name, got.Out)
+	if got.Name != "report.1.pdf" || got.Out == nil || *got.Out != got.Name || got.Staged {
+		t.Fatalf("name %q out %v; want report.1.pdf published beside the user's file", got.Name, got.Out)
 	}
 	if testutil.SHA256File(t, filepath.Join(workDir(got), got.Name)) != testutil.SHA256File(t, writeFile(t, data)) {
 		t.Fatal("sha mismatch")

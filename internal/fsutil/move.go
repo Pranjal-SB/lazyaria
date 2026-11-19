@@ -20,6 +20,12 @@ func CopyNoReplace(src, tmp, dst string) error {
 	err := copyEntry(src, tmp, &made)
 	if err == nil {
 		err = RenameNoReplace(tmp, dst)
+		if fi, lerr := os.Lstat(tmp); IsCrossDevice(err) && lerr == nil && fi.IsDir() {
+			// overlayfs refuses to rename a folder even within one folder.
+			// shortcut: dst is visible while it fills and a crash leaves it
+			// half-built; fine for overlay, the only place this runs.
+			err = moveTree(tmp, dst)
+		}
 	}
 	if err != nil {
 		if made {
@@ -28,6 +34,38 @@ func CopyNoReplace(src, tmp, dst string) error {
 		return err
 	}
 	return SyncDir(filepath.Dir(dst))
+}
+
+// moveTree makes the folder dst and moves src's contents into it file by
+// file, never replacing anything; on failure it removes the dst it made.
+func moveTree(src, dst string) error {
+	fi, err := os.Lstat(src)
+	if err != nil {
+		return err
+	}
+	if err := os.Mkdir(dst, fi.Mode().Perm()); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(src)
+	for _, e := range entries {
+		if err != nil {
+			break
+		}
+		s, d := filepath.Join(src, e.Name()), filepath.Join(dst, e.Name())
+		if e.IsDir() {
+			err = moveTree(s, d)
+		} else {
+			err = RenameNoReplace(s, d)
+		}
+	}
+	if err == nil {
+		err = SyncDir(dst)
+	}
+	if err == nil {
+		return os.Remove(src)
+	}
+	os.RemoveAll(dst)
+	return err
 }
 
 // copyEntry creates dst fresh as a copy of src; made reports whether dst was created.

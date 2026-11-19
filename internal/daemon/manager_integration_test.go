@@ -167,7 +167,7 @@ func writeFile(t *testing.T, b []byte) string {
 
 // A file that appears between the on_exists check and aria2's start, under
 // a name taken from the URL (no --out), is never written into: aria2 works
-// in the job's staging folder.
+// in the job's staging folder and publish picks the next free name.
 func TestFreshAddNeverOverwritesLateFile(t *testing.T) {
 	testutil.RequireAria2(t)
 	data := testutil.RandBytes(256 << 10)
@@ -207,8 +207,8 @@ func TestFreshAddNeverOverwritesLateFile(t *testing.T) {
 	if got.State != store.Done {
 		t.Fatalf("state %s kind %v msg %v", got.State, got.ErrorKind, got.ErrorMsg)
 	}
-	if got.Name != "late.bin" || got.Out == nil || *got.Out != got.Name {
-		t.Fatalf("name %q out %v; want late.bin in staging", got.Name, got.Out)
+	if got.Name != "late.1.bin" || got.Out == nil || *got.Out != got.Name || got.Staged {
+		t.Fatalf("name %q out %v; want late.1.bin published beside the user's file", got.Name, got.Out)
 	}
 	if b, _ := os.ReadFile(orig); string(b) != string(old) {
 		t.Fatalf("the existing file was changed (now %d bytes)", len(b))
@@ -275,8 +275,8 @@ func TestRetryNeverResumesIntoUnownedFile(t *testing.T) {
 	if b, _ := os.ReadFile(orig); string(b) != string(old) {
 		t.Fatalf("the existing file was changed (now %d bytes)", len(b))
 	}
-	if got.Name != "report.pdf" || got.Out == nil || *got.Out != got.Name {
-		t.Fatalf("name %q out %v; want report.pdf in staging", got.Name, got.Out)
+	if got.Name != "report.1.pdf" || got.Out == nil || *got.Out != got.Name || got.Staged {
+		t.Fatalf("name %q out %v; want report.1.pdf published beside the user's file", got.Name, got.Out)
 	}
 	if testutil.SHA256File(t, filepath.Join(workDir(got), got.Name)) != testutil.SHA256File(t, writeFile(t, data)) {
 		t.Fatal("sha mismatch")

@@ -36,6 +36,10 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 			m.stopLegacy(ctx, j)
 			continue
 		}
+		if j.Publish != nil { // a publish a crash interrupted
+			m.publish(ctx, j)
+			continue
+		}
 		if j.State == store.RetryWait {
 			m.armRetry(j)
 			continue
@@ -70,10 +74,42 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 			down, left = err, left+1
 		}
 	}
+	m.trashOrphans(ctx, js)
 	if down != nil {
 		return fmt.Errorf("reconcile: engine unavailable, %d jobs left for the next pass: %w", left, down)
 	}
 	return nil
+}
+
+// trashOrphans moves to the trash every staging folder whose job is gone
+// (a crash between creating it and storing the row, or a lost row). It
+// looks in the folders of live jobs and in downloads.dir.
+func (m *Manager) trashOrphans(ctx context.Context, live []*store.Job) {
+	dirs := map[string]bool{m.s.Load().Downloads.Dir: true}
+	for _, j := range live {
+		dirs[j.Dir] = true
+	}
+	for d := range dirs {
+		if !filepath.IsAbs(d) {
+			continue
+		}
+		root := filepath.Join(d, ".laria")
+		es, _ := os.ReadDir(root)
+		for _, e := range es {
+			if !e.IsDir() {
+				continue
+			}
+			if _, err := m.st.GetJob(ctx, e.Name()); !errors.Is(err, store.ErrNotFound) {
+				continue
+			}
+			p := filepath.Join(root, e.Name())
+			if te, err := m.trash(p); err != nil {
+				m.log.Warn("trash a staging folder no job owns", "path", p, "err", err)
+			} else {
+				m.log.Info("trashed a staging folder no job owns", "path", p, "trashed", te.TrashedPath)
+			}
+		}
+	}
 }
 
 // lostStatus means the engine no longer has the download, or holds only its
@@ -154,6 +190,9 @@ func (m *Manager) readd(ctx context.Context, j *store.Job, paused bool, why stri
 	ctx = context.WithoutCancel(ctx) // see Add
 	if legacy(j) {
 		return j, &BadRequestError{errors.New(legacyMsg(j))}
+	}
+	if j.Publish != nil { // finished; only the move into Dir is left
+		return m.publish(ctx, j)
 	}
 	// Every re-add path checks the drive: a retry into an unmounted mount
 	// point would fill the root filesystem.

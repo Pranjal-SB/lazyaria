@@ -154,6 +154,7 @@ func TestAutoRenameTracked(t *testing.T) {
 	r := newRig(t)
 	j := r.add(t, AddParams{URIs: []string{"http://example.com/file.zip"}, Out: "file.zip"})
 	ref := r.ref(t, j.ID)
+	wfile(t, filepath.Join(stagingDir(j), "file.1.zip"), "zip")
 	r.e.set(ref, func(s *engine.EngineStatus) { s.State, s.Path = "complete", stagingDir(j)+"/file.1.zip" })
 	r.event(ref, engine.KindComplete)
 	got := r.get(t, j.ID)

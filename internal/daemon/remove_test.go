@@ -274,9 +274,12 @@ func TestDoneStampsXattr(t *testing.T) {
 func TestDoneStampFailureIsNotFatal(t *testing.T) {
 	r := newRig(t)
 	r.m.s.Load().Privacy.StampOriginXattr = true
-	// payload missing: stamping fails, the job still ends Done.
-	j := finish(t, r, AddParams{URIs: []string{"http://example.com/gone.iso"}, Out: "gone.iso"}, "")
-	if j.State != store.Done {
+	// A read-only payload refuses the xattr (unless run as root); the job
+	// still ends Done.
+	j := r.add(t, AddParams{URIs: []string{"http://example.com/ro.iso"}, Out: "ro.iso"})
+	wfile(t, filepath.Join(stagingDir(j), "ro.iso"), "data")
+	os.Chmod(filepath.Join(stagingDir(j), "ro.iso"), 0o400)
+	if j = r.complete(t, j, "ro.iso"); j.State != store.Done {
 		t.Fatalf("state %s", j.State)
 	}
 }

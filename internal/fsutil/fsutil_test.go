@@ -200,6 +200,44 @@ func TestCopyNoReplace(t *testing.T) {
 	gone(t, filepath.Join(dl, "other"))
 }
 
+// overlayfs refuses to rename a folder (EXDEV) even within one folder; the
+// copy then builds dst and moves the files into it one by one.
+func TestCopyNoReplaceFolderRenameRefused(t *testing.T) {
+	orig := renameAtomic
+	renameAtomic = func(old, new string) error {
+		if fi, err := os.Lstat(old); err == nil && fi.IsDir() {
+			return syscall.EXDEV
+		}
+		return orig(old, new)
+	}
+	t.Cleanup(func() { renameAtomic = orig })
+	d := t.TempDir()
+	src := filepath.Join(d, "album")
+	write(t, filepath.Join(src, "a"), "alpha")
+	write(t, filepath.Join(src, "sub", "b"), "beta")
+	if err := os.Symlink("a", filepath.Join(src, "link")); err != nil {
+		t.Fatal(err)
+	}
+	want := tree(t, src)
+	tmp, dst := filepath.Join(d, ".album.tmp"), filepath.Join(d, "up")
+	if err := CopyNoReplace(src, tmp, dst); err != nil {
+		t.Fatal(err)
+	}
+	gone(t, tmp)
+	if got := tree(t, dst); !equalTrees(got, want) {
+		t.Fatalf("copy differs:\n got %v\nwant %v", got, want)
+	}
+	// dst taken: refused, nothing half-built left behind.
+	tmp2 := filepath.Join(d, ".album.tmp2")
+	if err := CopyNoReplace(src, tmp2, dst); !errors.Is(err, fs.ErrExist) {
+		t.Fatalf("err = %v, want fs.ErrExist", err)
+	}
+	gone(t, tmp2)
+	if got := tree(t, dst); !equalTrees(got, want) {
+		t.Fatal("a refused copy changed dst")
+	}
+}
+
 func TestLinkUnsupported(t *testing.T) {
 	for _, e := range []syscall.Errno{syscall.EPERM, syscall.ENOTSUP, syscall.EOPNOTSUPP, syscall.EXDEV, syscall.EMLINK} {
 		if !LinkUnsupported(&os.LinkError{Op: "link", Old: "a", New: "b", Err: e}) {

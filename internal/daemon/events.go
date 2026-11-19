@@ -58,6 +58,10 @@ func (m *Manager) apply(ctx context.Context, j *store.Job, st engine.EngineStatu
 	switch {
 	case st.State == "complete" && st.FollowedBy != "":
 		return m.adopt(ctx, j, st)
+	case st.State == "complete" && j.Staged && !st.IsBT && !isBT(j.Kind):
+		j = m.set(ctx, j, "", "", func(x *store.Job) { setBytes(x, st) })
+		j, _ = m.publish(ctx, j) // a failure is recorded on the job
+		return j
 	case st.State == "complete":
 		now := m.now()
 		return m.to(ctx, j, store.Done, "", func(x *store.Job) {

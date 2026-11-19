@@ -71,6 +71,7 @@ type Publish struct {
 
 type PublishEntry struct {
 	Rel  string `json:"rel"`  // path relative to the staging folder, top-level entry
+	Name string `json:"name"` // final name chosen for it in Dir
 	Size int64  `json:"size"` // regular files: byte size; directories: 0
 	Ino  uint64 `json:"ino"`
 }
