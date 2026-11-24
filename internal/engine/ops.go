@@ -44,6 +44,12 @@ func (e *aria2Engine) Add(ctx context.Context, req AddRequest) (EngineRef, error
 	if req.GID != "" {
 		opts["gid"] = req.GID
 	}
+	switch req.SeedFrom {
+	case "unverified":
+		opts["bt-seed-unverified"] = "true"
+	case "check":
+		opts["check-integrity"] = "true"
+	}
 	uris := SplitAuth(req.URIs, req.User, req.Pass, opts)
 	add := func() (gid string, err error) {
 		if len(req.Torrent) > 0 {

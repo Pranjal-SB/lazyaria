@@ -43,6 +43,10 @@ type AddRequest struct {
 	// GID asks aria2 to use this gid, so the caller can store the ref before
 	// the add. If aria2 refuses it, the download gets a new gid.
 	GID string
+	// SeedFrom re-adds a finished torrent whose files are already in Dir:
+	// "unverified" seeds them as they are (bt-seed-unverified), "check"
+	// hashes them first (check-integrity). Internal: never a user option.
+	SeedFrom string
 }
 
 type EngineStatus struct {
