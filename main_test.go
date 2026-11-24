@@ -90,3 +90,13 @@ func TestHelpUsesInvokedName(t *testing.T) {
 	}
 	cli.Prog = "lazyaria"
 }
+
+// With no command and no terminal, scripts see usage and exit 2 as before;
+// only a terminal opens the interface.
+func TestNoArgsWithoutTerminalPrintsUsage(t *testing.T) {
+	var out, errb bytes.Buffer
+	code := run(context.Background(), []string{"lazyaria"}, &out, &errb)
+	if code != 2 || !strings.HasPrefix(errb.String(), "usage: lazyaria") || out.Len() != 0 {
+		t.Fatalf("exit %d, stdout %q, stderr %q; want 2 and usage on stderr", code, out.String(), errb.String())
+	}
+}

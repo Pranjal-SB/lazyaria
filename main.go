@@ -16,6 +16,8 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/charmbracelet/x/term"
+
 	"github.com/Pranjal-SB/lazyaria/internal/buildinfo"
 	"github.com/Pranjal-SB/lazyaria/internal/cli"
 )
@@ -43,6 +45,7 @@ var commands = map[string]func(ctx context.Context, args []string, out, errOut i
 }
 
 const usage = `usage: lazyaria <command> [args]
+       lazyaria    open the terminal interface (in a terminal)
 
 commands:
   add [--dir D] [--out F] [--paused] [--wait] [--force] <link|file.torrent|->...
@@ -94,6 +97,10 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		cli.Prog = "laria"
 	}
 	if len(args) < 2 {
+		// Scripts keep getting usage; only a terminal opens the interface.
+		if f, ok := stdout.(*os.File); ok && term.IsTerminal(f.Fd()) && term.IsTerminal(os.Stdin.Fd()) {
+			return cli.TUI(ctx, nil, stdout, stderr)
+		}
 		fmt.Fprint(stderr, usageText())
 		return 2
 	}
@@ -107,7 +114,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 // usageText is usage under the name the binary was invoked as.
 func usageText() string {
-	return strings.Replace(usage, "usage: lazyaria", "usage: "+cli.Prog, 1)
+	return strings.ReplaceAll(usage, "lazyaria", cli.Prog)
 }
 
 func cmdVersion(_ context.Context, args []string, out, errOut io.Writer) int {

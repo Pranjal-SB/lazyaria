@@ -767,7 +767,7 @@
     "live": true,
     "enum": [],
     "help": "History page size.",
-    "not_used_yet": true
+    "not_used_yet": false
   },
   {
     "key": "ui.mouse",

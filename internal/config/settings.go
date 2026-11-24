@@ -126,7 +126,7 @@ type HistorySettings struct {
 	KeepDays              int  `toml:"keep_days" default:"0" live:"true" min:"0" help:"Days of history to keep; 0 keeps everything."`
 	PurgeRemovedAfterDays int  `toml:"purge_removed_after_days" default:"30" live:"true" min:"0" help:"Days before removed jobs are purged."`
 	ShowInList            bool `toml:"show_in_list" default:"true" live:"true" help:"Show finished jobs in the main list." unused:"true"`
-	ListLimit             int  `toml:"list_limit" default:"200" live:"true" min:"1" help:"History page size." unused:"true"`
+	ListLimit             int  `toml:"list_limit" default:"200" live:"true" min:"1" help:"History page size."`
 }
 
 type UISettings struct {

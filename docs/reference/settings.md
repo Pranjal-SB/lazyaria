@@ -164,7 +164,7 @@ warning.
 | `history.keep_days` | `0` | now | Days of history to keep; 0 keeps everything. |
 | `history.purge_removed_after_days` | `30` | now | Days before removed jobs are purged. |
 | `history.show_in_list` | `true` | now | Show finished jobs in the main list. *Not used yet.* |
-| `history.list_limit` | `200` | now | History page size. *Not used yet.* |
+| `history.list_limit` | `200` | now | History page size. |
 
 ## ui
 

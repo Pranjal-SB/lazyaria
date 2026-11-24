@@ -17,6 +17,7 @@ This is what `lazyaria help` prints:
 
 ```text
 usage: lazyaria <command> [args]
+       lazyaria    open the terminal interface (in a terminal)
 
 commands:
   add [--dir D] [--out F] [--paused] [--wait] [--force] <link|file.torrent|->...
