@@ -178,7 +178,7 @@ func (m *Model) patch(f daemon.Frame) {
 
 // note is the line printed after quitting while downloads go on.
 func (m Model) note() string {
-	switch n := m.summary.Active + m.summary.Waiting; n {
+	switch n := m.summary.Continuing; n {
 	case 0:
 		return ""
 	case 1:

@@ -64,7 +64,7 @@ func TestUpdateNeverCallsDaemon(t *testing.T) {
 
 func TestQuitLeavesBackgroundNote(t *testing.T) {
 	d := newFakeDaemon(job(1, "a.iso", store.Active))
-	d.snap.Summary = daemon.Summary{Active: 2, Waiting: 1}
+	d.snap.Summary = daemon.Summary{Active: 2, Waiting: 3, Continuing: 3} // one waiting job is paused
 	tm := teatest.NewTestModel(t, New(options(t, d)), teatest.WithInitialTermSize(100, 30))
 	teatest.WaitFor(t, tm.Output(), contains("a.iso"), teatest.WithDuration(5*time.Second))
 	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
@@ -72,12 +72,12 @@ func TestQuitLeavesBackgroundNote(t *testing.T) {
 	if got, want := m.note(), "3 downloads continue in the background; run lazyaria to come back."; got != want {
 		t.Fatalf("note %q, want %q", got, want)
 	}
-	m.summary = daemon.Summary{Active: 1}
+	m.summary = daemon.Summary{Active: 1, Waiting: 4, Continuing: 1}
 	if got := m.note(); got != "1 download continues in the background; run lazyaria to come back." {
 		t.Fatalf("note %q", got)
 	}
-	m.summary = daemon.Summary{Done: 4}
+	m.summary = daemon.Summary{Waiting: 2, Done: 4}
 	if got := m.note(); got != "" {
-		t.Fatalf("nothing running, note %q", got)
+		t.Fatalf("only paused jobs, note %q", got)
 	}
 }

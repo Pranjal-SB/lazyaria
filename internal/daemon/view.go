@@ -21,8 +21,9 @@ const (
 // Summary is the totals a client shows over the whole list.
 type Summary struct {
 	Active     int    `json:"active"`
-	Waiting    int    `json:"waiting"`   // queued, paused, retry-wait
-	Attention  int    `json:"attention"` // error
+	Waiting    int    `json:"waiting"`    // queued, paused, retry-wait
+	Continuing int    `json:"continuing"` // active, queued, retry-wait: what goes on with no client
+	Attention  int    `json:"attention"`  // error
 	Seeding    int    `json:"seeding"`
 	Done       int    `json:"done"`
 	Down       int64  `json:"speed_down"`
@@ -115,7 +116,8 @@ func (m *Manager) summary(ctx context.Context) Summary {
 		m.log.Warn("summary: count jobs", "err", err)
 	}
 	s := Summary{Active: n[store.Active], Waiting: n[store.Queued] + n[store.Paused] + n[store.RetryWait],
-		Attention: n[store.Error], Seeding: n[store.Seeding], Done: n[store.Done]}
+		Attention: n[store.Error], Seeding: n[store.Seeding], Done: n[store.Done],
+		Continuing: n[store.Active] + n[store.Queued] + n[store.RetryWait]}
 	if s.Active == 0 && s.Seeding == 0 {
 		return s
 	}

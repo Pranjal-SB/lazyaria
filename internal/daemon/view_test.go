@@ -119,6 +119,9 @@ func TestSummaryCountsAndETA(t *testing.T) {
 	if s.Active != 2 || s.Waiting != 1 || s.Attention != 0 || s.Down != 40 || s.ETASeconds == nil || *s.ETASeconds != 10 {
 		t.Fatalf("summary %+v (eta %v), want 2 active, 1 waiting, 40 B/s, ETA 10 s", s, s.ETASeconds)
 	}
+	if s.Continuing != 2 {
+		t.Fatalf("summary says %d downloads go on by themselves, want 2 (the paused one does not)", s.Continuing)
+	}
 
 	c := r.add(t, AddParams{URIs: []string{"http://example.com/d.iso"}})
 	r.activeAt(t, c.ID, 100, 0, 10) // size unknown
