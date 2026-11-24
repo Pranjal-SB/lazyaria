@@ -39,6 +39,8 @@ type Handler interface {
 	StopSeeding(ctx context.Context, ids []string) error
 	Snapshot(ctx context.Context, f store.Filter) daemon.Snapshot
 	Search(ctx context.Context, query string, limit, offset int) ([]*store.Job, error)
+	// Details is one job's files, sources, piece map in cells and recent events.
+	Details(ctx context.Context, id string, cells int) (daemon.Details, error)
 
 	// Subscribe and SetObservers back jobs.subscribe; n counts clients
 	// that asked for progress.
@@ -122,6 +124,11 @@ type LimitParams struct {
 	ID   string `json:"id,omitempty"` // empty = global
 	Down int64  `json:"down"`
 	Up   int64  `json:"up"`
+}
+
+type DetailsParams struct {
+	ID    string `json:"id"`
+	Cells int    `json:"cells"` // piece map width; clamped to 1..512
 }
 
 type SearchParams struct {

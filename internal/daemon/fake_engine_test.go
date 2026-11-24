@@ -17,23 +17,24 @@ import (
 
 // fakeEngine keeps downloads in a map and records every call.
 type fakeEngine struct {
-	mu          sync.Mutex
-	next        int
-	dl          map[engine.EngineRef]engine.EngineStatus
-	details     map[engine.EngineRef]engine.EngineDetails
-	adds        []engine.AddRequest
-	removed     []engine.EngineRef
-	paused      []engine.EngineRef
-	resumed     []engine.EngineRef
-	statusCalls int
-	addEntered  chan struct{} // receives once per Add when set
-	addBlock    chan struct{} // Add waits on it when set
-	onAdd       func(ref engine.EngineRef)
-	changeRef   engine.EngineRef // ChangeURI result when set
-	changeErr   error
-	restarted   string // Resume and ChangeURI report it as the old file
-	pauseErr    error
-	events      chan engine.EngineEvent
+	mu           sync.Mutex
+	next         int
+	dl           map[engine.EngineRef]engine.EngineStatus
+	details      map[engine.EngineRef]engine.EngineDetails
+	adds         []engine.AddRequest
+	removed      []engine.EngineRef
+	paused       []engine.EngineRef
+	resumed      []engine.EngineRef
+	statusCalls  int
+	detailsCalls int
+	addEntered   chan struct{} // receives once per Add when set
+	addBlock     chan struct{} // Add waits on it when set
+	onAdd        func(ref engine.EngineRef)
+	changeRef    engine.EngineRef // ChangeURI result when set
+	changeErr    error
+	restarted    string // Resume and ChangeURI report it as the old file
+	pauseErr     error
+	events       chan engine.EngineEvent
 }
 
 func newFakeEngine() *fakeEngine {
@@ -166,6 +167,7 @@ func (f *fakeEngine) List(context.Context) ([]engine.EngineStatus, error) {
 func (f *fakeEngine) Details(_ context.Context, ref engine.EngineRef) (engine.EngineDetails, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.detailsCalls++
 	return f.details[ref], nil
 }
 

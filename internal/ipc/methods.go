@@ -59,6 +59,11 @@ func (c *conn) methods() handler.Map {
 		"jobs.set_limit": handler.New(func(ctx context.Context, p LimitParams) (empty, error) {
 			return ok(h.SetLimit(ctx, p.ID, p.Down, p.Up))
 		}),
+		"jobs.details": handler.New(func(ctx context.Context, p DetailsParams) (daemon.Details, error) {
+			d, err := h.Details(ctx, p.ID, p.Cells)
+			d.Job = redact(d.Job)
+			return d, toWire(err)
+		}),
 		"jobs.search": handler.New(func(ctx context.Context, p SearchParams) (JobsResult, error) {
 			js, err := h.Search(ctx, p.Query, p.Limit, p.Offset)
 			return JobsResult{Jobs: redactAll(js)}, toWire(err)

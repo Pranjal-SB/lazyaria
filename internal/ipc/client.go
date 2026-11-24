@@ -133,7 +133,7 @@ var ErrNotSent = errors.New("not sent: the connection to the daemon dropped earl
 // up the connection it is sent on.
 var readOnly = map[string]bool{
 	"hello": true, "daemon.status": true, "jobs.snapshot": true, "jobs.search": true,
-	"jobs.subscribe": true, "config.get": true, "config.list": true,
+	"jobs.subscribe": true, "config.get": true, "config.list": true, "jobs.details": true,
 }
 
 func (c *Client) call(ctx context.Context, method string, params, result any) error {

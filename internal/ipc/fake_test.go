@@ -167,6 +167,10 @@ func (f *fakeHandler) Snapshot(_ context.Context, flt store.Filter) daemon.Snaps
 	return daemon.Snapshot{Seq: 7, Jobs: append([]*store.Job(nil), f.jobs...)}
 }
 
+func (f *fakeHandler) Details(_ context.Context, id string, cells int) (daemon.Details, error) {
+	return daemon.Details{Job: &store.Job{ID: id}, Segments: make([]int, cells)}, nil
+}
+
 func (f *fakeHandler) Search(context.Context, string, int, int) ([]*store.Job, error) {
 	return f.jobs, nil
 }

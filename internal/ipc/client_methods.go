@@ -52,6 +52,13 @@ func (c *Client) Match(ctx context.Context, prefixes []string, nums []int64) ([]
 	return jobs, nil
 }
 
+// Details returns one job's files, sources, piece map in cells and recent events.
+func (c *Client) Details(ctx context.Context, id string, cells int) (daemon.Details, error) {
+	var r daemon.Details
+	err := c.call(ctx, "jobs.details", DetailsParams{ID: id, Cells: cells}, &r)
+	return r, err
+}
+
 // Search matches query against the whole history, server side.
 func (c *Client) Search(ctx context.Context, query string, limit, offset int) ([]*store.Job, error) {
 	var r JobsResult

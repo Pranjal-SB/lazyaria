@@ -61,6 +61,8 @@ type Status struct {
 	Following       string   `json:"following"`
 	BelongsTo       string   `json:"belongsTo"`
 	Bittorrent      *BTInfo  `json:"bittorrent"`
+	Bitfield        string   `json:"bitfield"` // hex, high bit first = piece 0
+	NumPieces       Int64    `json:"numPieces"`
 }
 
 // StatusKeys keeps tellStatus light: no bitfield, and files only on demand.

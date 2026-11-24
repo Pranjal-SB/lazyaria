@@ -199,6 +199,14 @@ func TestSnapshotNumsOverWire(t *testing.T) {
 	}
 }
 
+func TestDetailsOverWire(t *testing.T) {
+	c, _ := serve(t, newFake())
+	d, err := c.Details(context.Background(), "a", 3)
+	if err != nil || d.Job == nil || d.Job.ID != "a" || len(d.Segments) != 3 || !readOnly["jobs.details"] {
+		t.Fatalf("Details = %+v, %v (read-only %v)", d, err, readOnly["jobs.details"])
+	}
+}
+
 func TestPushEvents(t *testing.T) {
 	f := newFake()
 	c, _ := serve(t, f)

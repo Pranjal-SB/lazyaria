@@ -102,10 +102,12 @@ type EnginePeer struct {
 // EngineDetails is the heavy per-download view: Servers for HTTP/FTP, Peers
 // for BitTorrent, and only while the download is active.
 type EngineDetails struct {
-	Status  EngineStatus
-	Files   []EngineFile
-	Servers []EngineServer
-	Peers   []EnginePeer
+	Status   EngineStatus
+	Files    []EngineFile
+	Servers  []EngineServer
+	Peers    []EnginePeer
+	Bitfield string // hex, high bit first = piece 0
+	Pieces   int
 }
 
 // ErrInvalidOption is returned for a per-job option outside AllowedOptions.

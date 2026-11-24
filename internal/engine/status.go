@@ -184,7 +184,7 @@ func toStatus(s *aria2.Status) EngineStatus {
 }
 
 func (e *aria2Engine) Details(ctx context.Context, ref EngineRef) (EngineDetails, error) {
-	raw, err := e.tell(ctx, []EngineRef{ref}, append([]string{"files"}, aria2.StatusKeys...))
+	raw, err := e.tell(ctx, []EngineRef{ref}, append([]string{"files", "bitfield", "numPieces"}, aria2.StatusKeys...))
 	if err != nil {
 		return EngineDetails{}, err
 	}
@@ -192,7 +192,7 @@ func (e *aria2Engine) Details(ctx context.Context, ref EngineRef) (EngineDetails
 		return EngineDetails{}, fmt.Errorf("download %s is not known to aria2; it may have been removed", ref)
 	}
 	s := raw[0]
-	d := EngineDetails{Status: toStatus(s)}
+	d := EngineDetails{Status: toStatus(s), Bitfield: s.Bitfield, Pieces: int(s.NumPieces)}
 	for _, f := range s.Files {
 		d.Files = append(d.Files, EngineFile{Path: f.Path, Length: int64(f.Length), Done: int64(f.CompletedLength), Selected: f.Selected == "true"})
 	}

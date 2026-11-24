@@ -1,0 +1,79 @@
+{
+  "job": {
+    "id": "01JC0000000000000000000001",
+    "num": 1,
+    "kind": "http",
+    "engine": "aria2",
+    "engine_ref": "2089b05ecca3d829",
+    "state": "active",
+    "error_kind": null,
+    "error_code": null,
+    "error_msg": null,
+    "name": "debian.iso",
+    "uris": [
+      "https://example.com/debian.iso"
+    ],
+    "dir": "/dl",
+    "out": null,
+    "dir_dev": null,
+    "total_bytes": 4294967296,
+    "done_bytes": 1073741824,
+    "options": {
+      "header": "***"
+    },
+    "limit_down": 0,
+    "limit_up": 0,
+    "category": null,
+    "queue": "default",
+    "priority": 0,
+    "retry_count": 0,
+    "retry_at": null,
+    "referrer": null,
+    "created_at": "2026-11-07T10:00:00Z",
+    "started_at": null,
+    "finished_at": null,
+    "removed_at": null,
+    "staged": false,
+    "speed_down": 1048576,
+    "eta_seconds": 3072,
+    "label": "downloading",
+    "actions": [
+      "pause",
+      "remove",
+      "refresh"
+    ]
+  },
+  "files": [
+    {
+      "path": "/dl/debian.iso",
+      "length": 4294967296,
+      "done": 1073741824,
+      "selected": true
+    }
+  ],
+  "servers": [
+    "https://example.com/debian.iso"
+  ],
+  "peers": 0,
+  "segments": [
+    100,
+    100,
+    40,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "pieces": 2048,
+  "events": [
+    {
+      "at": "2026-11-07T10:00:00Z",
+      "kind": "added"
+    },
+    {
+      "at": "2026-11-07T10:01:00Z",
+      "kind": "active"
+    }
+  ]
+}

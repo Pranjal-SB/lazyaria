@@ -43,12 +43,14 @@ type fake struct {
 	dropAdded    bool  // Add answers but keeps no row, as if removed at once
 	version      string
 	upgrades     int
-	snapLimit    int      // limit of the last Snapshot
-	snapIDs      []string // ids of the last Snapshot
-	snapPrefixes []string // id prefixes of the last Snapshot
-	hangups      int      // Snapshot and Add calls that hang up, as a daemon re-executing itself does
-	helloHangs   int      // Hello calls that hang up, as a daemon exiting on idle does
-	newPID       int      // when set, the daemon after a hang-up is another process; -1: none comes back
+	snapLimit    int            // limit of the last Snapshot
+	snapIDs      []string       // ids of the last Snapshot
+	snapPrefixes []string       // id prefixes of the last Snapshot
+	details      daemon.Details // Details answers this, with the asked job
+	detailsID    string         // id of the last Details
+	hangups      int            // Snapshot and Add calls that hang up, as a daemon re-executing itself does
+	helloHangs   int            // Hello calls that hang up, as a daemon exiting on idle does
+	newPID       int            // when set, the daemon after a hang-up is another process; -1: none comes back
 	stop         func()
 	restart      func(pid int)
 }
@@ -160,6 +162,21 @@ func (f *fake) Snapshot(ctx context.Context, flt store.Filter) daemon.Snapshot {
 		js = append(js, &c)
 	}
 	return daemon.Snapshot{Jobs: js}
+}
+
+func (f *fake) Details(_ context.Context, id string, cells int) (daemon.Details, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.detailsID = id
+	d := f.details
+	for _, j := range f.jobs {
+		if j.ID == id {
+			c := *j
+			d.Job = &c
+			return d, nil
+		}
+	}
+	return daemon.Details{}, store.ErrNotFound
 }
 
 // hangup cuts the current call off, as a daemon re-executing itself does,

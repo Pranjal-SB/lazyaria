@@ -29,6 +29,7 @@ var commands = map[string]func(ctx context.Context, args []string, out, errOut i
 	"daemon":  cli.Daemon,
 	"add":     cli.Add,
 	"list":    cli.List,
+	"show":    cli.Show,
 	"status":  cli.Status,
 	"pause":   cli.Pause,
 	"resume":  cli.Resume,
@@ -51,6 +52,8 @@ commands:
   list [--json] [--all] [--limit N]
             show jobs; --all includes finished ones; --limit shows
             at most N
+  show [--json] <job>
+            one job: files, sources, piece map and history
   status [--json]
             daemon and engine status
   pause|resume <job>...

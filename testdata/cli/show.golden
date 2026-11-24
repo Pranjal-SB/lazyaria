@@ -1,0 +1,14 @@
+#1 debian.iso
+  state     downloading
+  progress  25%, 1.0 GiB of 4.0 GiB
+  speed     1.0 MiB/s down, 0 B/s up
+  left      51m12s
+  folder    /dl
+  link      https://example.com/debian.iso
+  pieces    ██▒░░░░░ 2048 pieces
+  server    https://example.com/debian.iso
+files
+   25%    4.0 GiB  /dl/debian.iso
+history
+  2026-11-07 10:00:00  added
+  2026-11-07 10:01:00  active

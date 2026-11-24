@@ -26,6 +26,8 @@ commands:
   list [--json] [--all] [--limit N]
             show jobs; --all includes finished ones; --limit shows
             at most N
+  show [--json] <job>
+            one job: files, sources, piece map and history
   status [--json]
             daemon and engine status
   pause|resume <job>...
@@ -189,6 +191,20 @@ pause|resume <job>...
 ```text
 service install|uninstall
           run the daemon as a systemd user service
+```
+
+## show
+
+```text
+show [--json] <job>
+          one job: files, sources, piece map and history
+```
+
+Flags:
+
+```text
+  -json
+    	print JSON
 ```
 
 ## status
