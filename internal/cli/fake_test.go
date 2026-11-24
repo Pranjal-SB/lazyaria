@@ -26,6 +26,7 @@ type fake struct {
 
 	mu         sync.Mutex
 	jobs       []*store.Job
+	noNums     bool // a daemon older than job numbers: ignores Nums, every Num is 0
 	adds       []daemon.AddParams
 	addErr     error
 	paused     []string
@@ -155,10 +156,13 @@ func (f *fake) Snapshot(ctx context.Context, flt store.Filter) daemon.Snapshot {
 		if len(flt.IDPrefixes) > 0 && !slices.ContainsFunc(flt.IDPrefixes, func(p string) bool { return strings.HasPrefix(j.ID, p) }) {
 			continue
 		}
-		if len(flt.Nums) > 0 && !slices.Contains(flt.Nums, j.Num) {
+		if len(flt.Nums) > 0 && !f.noNums && !slices.Contains(flt.Nums, j.Num) {
 			continue
 		}
 		c := *j
+		if f.noNums {
+			c.Num = 0
+		}
 		js = append(js, &c)
 	}
 	return daemon.Snapshot{Jobs: js}

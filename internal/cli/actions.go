@@ -154,7 +154,7 @@ func parseJobRef(s string) (num int64, prefix string, err error) {
 	digits := strings.TrimPrefix(s, "#")
 	if digits != s || (s != "" && strings.Trim(s, "0123456789") == "") {
 		n, err := strconv.ParseInt(digits, 10, 64)
-		if err != nil || n < 0 {
+		if err != nil || n < 1 {
 			return 0, "", usagef("%q is not a job number; give one like #14", s)
 		}
 		return n, "", nil
@@ -214,6 +214,9 @@ func resolveIDs(ctx context.Context, c *ipc.Client, refs []string) ([]string, []
 	jobs, err := c.Match(ctx, askPrefixes, askNums)
 	if err != nil {
 		return nil, nil, err
+	}
+	if len(askNums) > 0 && len(jobs) > 0 && !slices.ContainsFunc(jobs, func(j *store.Job) bool { return j.Num > 0 }) {
+		return nil, nil, fmt.Errorf("the running daemon is too old for job numbers; stop it so the next %s command starts the new one, or give the start of the job id from `%s list`", Prog, Prog)
 	}
 	var ids []string
 	for i, p := range prefixes {

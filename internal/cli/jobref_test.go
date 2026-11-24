@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -22,7 +23,7 @@ func TestParseJobRef(t *testing.T) {
 			t.Errorf("parseJobRef(%q) = %d, %q, %v; want %d, %q", tc.in, num, prefix, err, tc.num, tc.prefix)
 		}
 	}
-	for _, in := range []string{"#", "#x", "-3", "01K", "#99999999999999999999"} {
+	for _, in := range []string{"#", "#x", "-3", "0", "#0", "01K", "#99999999999999999999"} {
 		if _, _, err := parseJobRef(in); !errors.As(err, new(usageError)) {
 			t.Errorf("parseJobRef(%q) error %v, want a usage error", in, err)
 		}
@@ -47,5 +48,17 @@ func TestResolveNumberUnknown(t *testing.T) {
 	code, _, errOut := run(t, Pause, "", "99")
 	if want := "lazyaria pause: no job #99; see `lazyaria list --all`\n"; code != 2 || errOut != want {
 		t.Fatalf("exit %d, stderr %q; want 2 and %q", code, errOut, want)
+	}
+}
+
+// A daemon kept running across an upgrade ignores job numbers and sends
+// every job with number 0; no number may then pick one of them.
+func TestResolveNumberOldDaemon(t *testing.T) {
+	f := startFake(t)
+	f.jobs = sampleJobs()
+	f.noNums = true
+	code, _, errOut := run(t, Pause, "", "1")
+	if code != 1 || !strings.Contains(errOut, "too old for job numbers") || len(f.paused) != 0 {
+		t.Fatalf("exit %d, stderr %q, paused %v; want 1, a too-old message and nothing paused", code, errOut, f.paused)
 	}
 }
