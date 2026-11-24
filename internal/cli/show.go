@@ -80,7 +80,11 @@ func printDetails(out io.Writer, d daemon.Details) {
 		row("link", u)
 	}
 	if d.Segments != nil {
-		row("pieces", pieceMap(d.Segments)+fmt.Sprintf(" %d pieces", d.Pieces))
+		count := ""
+		if d.Pieces > 0 { // a finished job's map comes without a count
+			count = fmt.Sprintf(" %d pieces", d.Pieces)
+		}
+		row("pieces", pieceMap(d.Segments)+count)
 	}
 	if d.Peers > 0 {
 		row("peers", fmt.Sprint(d.Peers))

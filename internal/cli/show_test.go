@@ -50,3 +50,14 @@ func TestShowByNumber(t *testing.T) {
 		t.Fatalf("two jobs: exit %d, want 2", code)
 	}
 }
+
+// A finished job has a full map but no piece count from the engine.
+func TestShowFinishedNoPieceCount(t *testing.T) {
+	f := startFake(t)
+	f.jobs = sampleJobs()
+	f.details = daemon.Details{Segments: []int{100, 100, 100, 100}}
+	code, out, errOut := run(t, Show, "", "1")
+	if code != 0 || strings.Contains(out, "0 pieces") || !strings.Contains(out, "████") {
+		t.Fatalf("exit %d, stdout %q: %s; want the map without a piece count", code, out, errOut)
+	}
+}
