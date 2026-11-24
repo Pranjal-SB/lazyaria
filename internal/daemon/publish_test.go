@@ -112,6 +112,56 @@ func TestPublishPicksFreeNameAtTheEnd(t *testing.T) {
 	}
 }
 
+// A server without ranges makes aria2 start over beside its file on every
+// restart (name.1.bin, then name.1.1.bin). The finished file is still
+// published under the job's own name, and a name taken in the download
+// folder still gets the next free one.
+func TestPublishAfterRestartsKeepsChosenName(t *testing.T) {
+	for _, taken := range []bool{false, true} {
+		r := newRig(t)
+		j := r.add(t, AddParams{URIs: []string{"http://example.com/name.bin"}})
+		ref := r.ref(t, j.ID)
+		stage := stagingDir(j)
+		for _, f := range []string{"name.bin", "name.1.bin", "name.1.1.bin"} {
+			wfile(t, filepath.Join(stage, f), "partial "+f)
+			r.e.set(ref, func(s *engine.EngineStatus) { s.State, s.Path, s.Done = "active", filepath.Join(stage, f), 1 })
+			r.m.poll(bg)
+		}
+		if got := linkTo(t, filepath.Join(r.dir, "name.bin.laria")); got != markerOf(j, "name.1.1.bin") {
+			t.Fatalf("marker points to %q", got)
+		}
+		user := filepath.Join(r.dir, "name.bin")
+		if taken {
+			wfile(t, user, "the user's")
+		}
+		wfile(t, filepath.Join(stage, "name.1.1.bin"), "full")
+		got := r.complete(t, j, "name.1.1.bin")
+		want := "name.bin"
+		if taken {
+			want = "name.1.bin"
+			if read(t, user) != "the user's" {
+				t.Fatal("the user's file changed")
+			}
+		}
+		if got.State != store.Done || got.Name != want || got.Out == nil || *got.Out != want {
+			t.Fatalf("taken %v: state %s name %q out %v", taken, got.State, got.Name, got.Out)
+		}
+		if read(t, filepath.Join(r.dir, want)) != "full" {
+			t.Fatalf("taken %v: %s does not hold the finished file", taken, want)
+		}
+		if es := listDir(t, r.dir); len(es) != 1+btoi(taken) {
+			t.Fatalf("taken %v: download folder holds %v", taken, es)
+		}
+	}
+}
+
+func btoi(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
 // A server may name a file .bashrc; it must not land hidden. A name the
 // user gives is cleaned the same way when added, so it never starts with a dot.
 func TestPublishStripsServerDot(t *testing.T) {

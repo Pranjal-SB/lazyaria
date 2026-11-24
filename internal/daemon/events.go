@@ -155,7 +155,6 @@ func (m *Manager) trackName(ctx context.Context, j *store.Job, st engine.EngineS
 	kind := ""
 	if j.Out != nil {
 		kind = "renamed"
-		unmark(j) // named after the old file
 		if j.Staged {
 			// aria2 started over beside its old file (no control file to
 			// resume from); in staging that file is only ever the job's own.
@@ -165,6 +164,9 @@ func (m *Manager) trackName(ctx context.Context, j *store.Job, st engine.EngineS
 		}
 	}
 	name := filepath.Base(rel)
+	if j.Staged && j.Out != nil {
+		name = j.Name // publish puts the file back under the job's own name
+	}
 	done := st.Done // the bytes counted so far were for another file
 	return m.set(ctx, j, kind, rel, func(x *store.Job) { x.Out, x.Name, x.DoneBytes = &rel, name, &done })
 }

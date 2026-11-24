@@ -13,7 +13,7 @@ import (
 )
 
 // The marker (decision 62): a relative symbolic link <name>.laria in the
-// download folder pointing at .laria/<id>/<name>, the file aria2 writes.
+// download folder pointing at .laria/<id>/<out>, the file aria2 writes.
 
 const markerExt = ".laria"
 
@@ -26,7 +26,7 @@ func markerPath(j *store.Job) (path, target string, ok bool) {
 	if !j.Staged || isBT(j.Kind) || j.Out == nil || !filepath.IsLocal(*j.Out) || strings.ContainsRune(*j.Out, filepath.Separator) {
 		return "", "", false
 	}
-	name := textutil.SanitizeName(*j.Out, false)
+	name := textutil.SanitizeName(chosenName(j, *j.Out), false)
 	if name == "" {
 		return "", "", false
 	}

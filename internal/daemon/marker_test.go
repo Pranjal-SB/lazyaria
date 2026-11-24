@@ -55,16 +55,16 @@ func TestMarkerCreatedAndRepointed(t *testing.T) {
 		t.Fatalf("stale marker points to %q", got)
 	}
 	// aria2 starts over beside its file (a server without ranges): the
-	// marker follows the new name.
+	// marker keeps the job's name and points at the new file.
 	os.Remove(filepath.Join(stagingDir(j), "a.iso.aria2"))
 	newer := filepath.Join(stagingDir(j), "a.1.iso")
 	wfile(t, newer, "fresh")
 	r.e.set(r.ref(t, j.ID), func(s *engine.EngineStatus) { s.Path, s.Done = newer, 0 })
 	r.m.poll(bg)
-	if lexists(marker) {
-		t.Fatal("the old marker is left")
+	if lexists(filepath.Join(r.dir, "a.1.iso.laria")) {
+		t.Fatal("a marker named after aria2's file")
 	}
-	if got := linkTo(t, filepath.Join(r.dir, "a.1.iso.laria")); got != markerOf(j, "a.1.iso") {
+	if got := linkTo(t, marker); got != markerOf(j, "a.1.iso") {
 		t.Fatalf("new marker points to %q", got)
 	}
 }

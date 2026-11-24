@@ -71,7 +71,7 @@ func (m *Manager) publish(ctx context.Context, j *store.Job) (*store.Job, error)
 		}
 		held := map[string]bool{}
 		for i := range entries {
-			if entries[i].Name, err = finalName(j, entries[i].Rel, held); err != nil {
+			if entries[i].Name, err = finalName(j, chosenName(j, entries[i].Rel), held); err != nil {
 				return m.publishFailed(ctx, j, err)
 			}
 			held[entries[i].Name] = true
@@ -343,7 +343,7 @@ func (m *Manager) nextName(ctx context.Context, j *store.Job, p *store.Publish, 
 	for _, e := range p.Entries {
 		held[e.Name] = true
 	}
-	name, err := finalName(j, filepath.Base(p.Entries[i].Rel), held)
+	name, err := finalName(j, chosenName(j, p.Entries[i].Rel), held)
 	if err != nil {
 		return j, err
 	}
@@ -413,6 +413,16 @@ func finalName(j *store.Job, entry string, held map[string]bool) (string, error)
 		return name, nil
 	}
 	return freeName(filepath.Join(j.Dir, name), held)
+}
+
+// chosenName is the name staged entry rel is published under, before any
+// clash: the job's own name for the file aria2 wrote, which may be
+// name.1.ext after aria2 started over (a server without ranges), else rel.
+func chosenName(j *store.Job, rel string) string {
+	if !isBT(j.Kind) && j.Out != nil && rel == *j.Out && j.Name != "" {
+		return j.Name
+	}
+	return rel
 }
 
 // tempName is the copy-fallback temp for name: .<name>.laria-copy, or a

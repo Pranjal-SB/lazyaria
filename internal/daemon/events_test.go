@@ -160,7 +160,8 @@ func TestAutoRenameTracked(t *testing.T) {
 	r.e.set(ref, func(s *engine.EngineStatus) { s.State, s.Path = "complete", stagingDir(j)+"/file.1.zip" })
 	r.event(ref, engine.KindComplete)
 	got := r.get(t, j.ID)
-	if got.Out == nil || *got.Out != "file.1.zip" || got.Name != "file.1.zip" {
+	// The job keeps its own name, and the file is published under it.
+	if got.Out == nil || *got.Out != "file.zip" || got.Name != "file.zip" || read(t, filepath.Join(r.dir, "file.zip")) != "zip" {
 		t.Fatalf("out %v name %q", got.Out, got.Name)
 	}
 	if got.State != store.Done {

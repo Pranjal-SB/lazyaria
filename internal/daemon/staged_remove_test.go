@@ -86,7 +86,7 @@ func TestCompletedOfflineStaged(t *testing.T) {
 		r := newRig(t)
 		total := int64(5)
 		out := "full.bin"
-		j := r.insert(t, store.Active, "old1", func(j *store.Job) { j.Out, j.TotalBytes = &out, &total })
+		j := r.insert(t, store.Active, "old1", func(j *store.Job) { j.Out, j.Name, j.TotalBytes = &out, out, &total })
 		stageFiles(t, j, map[string]string{"full.bin": "12345"})
 		if err := r.m.Reconcile(bg); err != nil {
 			t.Fatal(err)
