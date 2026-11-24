@@ -55,7 +55,7 @@ func TestStalledClientDoesNotBlockShutdown(t *testing.T) {
 	}
 	big := make([]daemon.ProgressItem, 2000)
 	for end := time.Now().Add(300 * time.Millisecond); time.Now().Before(end); time.Sleep(time.Millisecond) {
-		f.bus.PublishProgress(big)
+		f.bus.PublishProgress(daemon.Frame{Items: big})
 	}
 	cancel()
 	select {
@@ -220,11 +220,35 @@ func TestPushEvents(t *testing.T) {
 			t.Fatalf("timed out waiting for event %d", i)
 		}
 	}
-	f.bus.PublishProgress([]daemon.ProgressItem{{ID: "a", Done: 5}})
+	f.bus.PublishProgress(daemon.Frame{Items: []daemon.ProgressItem{{ID: "a", Done: 5}}})
 	select {
-	case items := <-prog:
-		if len(items) != 1 || items[0].Done != 5 {
-			t.Fatalf("progress = %+v", items)
+	case fr := <-prog:
+		if len(fr.Items) != 1 || fr.Items[0].Done != 5 {
+			t.Fatalf("progress = %+v", fr)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for progress")
+	}
+}
+
+// A progress frame keeps its items and totals over the wire, ETAs included.
+func TestProgressFrameOverWire(t *testing.T) {
+	f := newFake()
+	c, _ := serve(t, f)
+	_, prog, err := c.Subscribe(context.Background(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	eta, total := 90*time.Second, int64(120)
+	want := daemon.Frame{
+		Items:   []daemon.ProgressItem{{ID: "a", Done: 5, Total: 10, Down: 3, ETA: &eta}},
+		Summary: daemon.Summary{Active: 1, Waiting: 2, Attention: 3, Seeding: 4, Done: 5, Down: 6, Up: 7, ETASeconds: &total},
+	}
+	f.bus.PublishProgress(want)
+	select {
+	case got := <-prog:
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("frame %+v (summary eta %v), want %+v", got, got.Summary.ETASeconds, want)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for progress")

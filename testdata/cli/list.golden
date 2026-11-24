@@ -34,7 +34,15 @@
       "started_at": null,
       "finished_at": null,
       "removed_at": null,
-      "staged": false
+      "staged": false,
+      "speed_down": 1048576,
+      "eta_seconds": 3072,
+      "label": "downloading",
+      "actions": [
+        "pause",
+        "remove",
+        "refresh"
+      ]
     },
     {
       "id": "01JC0000000000000000000002",

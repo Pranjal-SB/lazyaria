@@ -132,6 +132,25 @@ func (s *Store) PurgeDone(ctx context.Context, before time.Time) (int, error) {
 	return int(n), err
 }
 
+// CountByState counts the jobs in each state.
+func (s *Store) CountByState(ctx context.Context) (map[State]int, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT state, COUNT(*) FROM jobs GROUP BY state`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[State]int{}
+	for rows.Next() {
+		var st string
+		var n int
+		if err := rows.Scan(&st, &n); err != nil {
+			return nil, err
+		}
+		out[State(st)] = n
+	}
+	return out, rows.Err()
+}
+
 // CountJobs counts the jobs in any of states. With no states it counts nothing and returns 0.
 func (s *Store) CountJobs(ctx context.Context, states ...State) (int, error) {
 	if len(states) == 0 {

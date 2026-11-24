@@ -24,6 +24,13 @@ type ProgressItem struct {
 	ETA                          *time.Duration
 }
 
+// Frame is one progress push: the polled jobs, and the totals over all
+// jobs. A frame sent after a lifecycle event carries totals only.
+type Frame struct {
+	Items   []ProgressItem `json:"items"`
+	Summary Summary        `json:"summary"`
+}
+
 // Bus fans events out to subscribers without ever blocking the publisher.
 type Bus struct {
 	seq   atomic.Uint64
@@ -44,7 +51,7 @@ type Sub struct {
 	bus      *Bus
 	want     bool
 	events   chan Event
-	progress chan []ProgressItem
+	progress chan Frame
 	closed   bool // guarded by bus.mu
 	resync   bool // resync_required is queued and unread; guarded by bus.mu
 }
@@ -54,7 +61,7 @@ func (b *Bus) Subscribe(wantProgress bool) *Sub {
 		bus:      b,
 		want:     wantProgress,
 		events:   make(chan Event, b.queue),
-		progress: make(chan []ProgressItem, 1),
+		progress: make(chan Frame, 1),
 	}
 	b.mu.Lock()
 	b.subs[s] = struct{}{}
@@ -62,8 +69,8 @@ func (b *Bus) Subscribe(wantProgress bool) *Sub {
 	return s
 }
 
-func (s *Sub) Events() <-chan Event            { return s.events }
-func (s *Sub) Progress() <-chan []ProgressItem { return s.progress }
+func (s *Sub) Events() <-chan Event   { return s.events }
+func (s *Sub) Progress() <-chan Frame { return s.progress }
 
 // Close unsubscribes and closes both channels; safe to call repeatedly.
 func (s *Sub) Close() {
@@ -110,8 +117,8 @@ func (b *Bus) Publish(ev Event) {
 	}
 }
 
-// PublishProgress replaces any pending progress value for subscribers that want it.
-func (b *Bus) PublishProgress(items []ProgressItem) {
+// PublishProgress replaces any pending progress frame for subscribers that want it.
+func (b *Bus) PublishProgress(f Frame) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	for s := range b.subs {
@@ -122,6 +129,6 @@ func (b *Bus) PublishProgress(items []ProgressItem) {
 		case <-s.progress:
 		default:
 		}
-		s.progress <- items // only writers hold b.mu, so the slot is free
+		s.progress <- f // only writers hold b.mu, so the slot is free
 	}
 }

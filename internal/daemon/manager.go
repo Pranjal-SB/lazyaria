@@ -183,7 +183,8 @@ func (m *Manager) changeAs(ctx context.Context, typ, id, kind, detail string, fn
 			m.log.Warn("record job event", "job", id, "kind", kind, "err", err)
 		}
 	}
-	m.bus.Publish(Event{Type: typ, Job: j})
+	m.bus.Publish(Event{Type: typ, Job: m.decorate(j)})
+	m.lifecycleFrame(ctx)
 	m.wake()
 	return j, nil
 }
@@ -242,9 +243,10 @@ func (m *Manager) SetObservers(n int) {
 
 // Snapshot is the job list a client starts from (jobs.snapshot).
 type Snapshot struct {
-	Seq   uint64        `json:"seq"`
-	Jobs  []*store.Job  `json:"jobs"`
-	Speed []SpeedSample `json:"speed"`
+	Seq     uint64        `json:"seq"`
+	Jobs    []*store.Job  `json:"jobs"`
+	Speed   []SpeedSample `json:"speed"`
+	Summary Summary       `json:"summary"`
 }
 
 // Snapshot returns the bus sequence, the jobs f selects with live progress
@@ -257,7 +259,7 @@ func (m *Manager) Snapshot(ctx context.Context, f store.Filter) Snapshot {
 		m.log.Warn("snapshot", "err", err)
 	}
 	for i, j := range js {
-		js[i] = m.prog.overlay(j)
+		js[i] = m.decorate(j)
 	}
-	return Snapshot{Seq: seq, Jobs: js, Speed: m.prog.samples()}
+	return Snapshot{Seq: seq, Jobs: js, Speed: m.prog.samples(), Summary: m.summary(ctx)}
 }

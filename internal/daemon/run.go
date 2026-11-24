@@ -118,7 +118,7 @@ func (m *Manager) poll(ctx context.Context) {
 	}
 	m.prog.sample(now, down, up)
 	if m.prog.due(now, m.s.Load().Advanced.ProgressHz) {
-		m.bus.PublishProgress(items)
+		m.bus.PublishProgress(Frame{Items: items, Summary: m.summary(ctx)})
 	}
 }
 

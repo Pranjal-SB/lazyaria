@@ -60,6 +60,13 @@ type Job struct {
 	RemovedAt  *time.Time        `json:"removed_at"`
 	Staged     bool              `json:"staged"` // files live in the job's staging folder
 	Publish    *Publish          `json:"-"`      // the move into Dir in progress, if any
+
+	// Filled by the daemon for clients from live state; never stored.
+	SpeedDown  int64    `json:"speed_down,omitempty"`
+	SpeedUp    int64    `json:"speed_up,omitempty"`
+	ETASeconds *int64   `json:"eta_seconds,omitempty"`
+	Label      string   `json:"label,omitempty"`   // the state in words: "downloading", "link expired", ...
+	Actions    []string `json:"actions,omitempty"` // what the job allows now: daemon.Act*
 }
 
 // Publish is the recorded plan of a move from staging into Dir. It never

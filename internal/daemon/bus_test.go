@@ -46,11 +46,11 @@ func TestBusProgressLatestWins(t *testing.T) {
 	b := NewBus(4)
 	s := b.Subscribe(true)
 	for i := int64(1); i <= 5; i++ {
-		b.PublishProgress([]ProgressItem{{ID: "a", Done: i}})
+		b.PublishProgress(Frame{Items: []ProgressItem{{ID: "a", Done: i}}})
 	}
 	got := <-s.Progress()
-	if got[0].Done != 5 {
-		t.Fatalf("got Done=%d, want 5", got[0].Done)
+	if got.Items[0].Done != 5 {
+		t.Fatalf("got Done=%d, want 5", got.Items[0].Done)
 	}
 	select {
 	case <-s.Progress():
@@ -62,7 +62,7 @@ func TestBusProgressLatestWins(t *testing.T) {
 func TestBusProgressOnlyWhenWanted(t *testing.T) {
 	b := NewBus(4)
 	s := b.Subscribe(false)
-	b.PublishProgress([]ProgressItem{{ID: "a"}})
+	b.PublishProgress(Frame{Items: []ProgressItem{{ID: "a"}}})
 	select {
 	case <-s.Progress():
 		t.Fatal("unwanted progress delivered")
@@ -76,7 +76,7 @@ func TestBusCloseThenPublish(t *testing.T) {
 	s.Close()
 	s.Close()
 	b.Publish(Event{Type: "banner"})
-	b.PublishProgress(nil)
+	b.PublishProgress(Frame{})
 	if _, ok := <-s.Events(); ok {
 		t.Fatal("events channel should be closed")
 	}

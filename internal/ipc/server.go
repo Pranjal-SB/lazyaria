@@ -137,11 +137,11 @@ func (c *conn) push(sub *daemon.Sub, done chan struct{}) {
 			}
 			ev.Job = redact(ev.Job)
 			err = c.srv.Notify(context.Background(), PushEvent, ev)
-		case items, ok := <-prog:
+		case f, ok := <-prog:
 			if !ok {
 				return
 			}
-			err = c.srv.Notify(context.Background(), PushProgress, items)
+			err = c.srv.Notify(context.Background(), PushProgress, f)
 		}
 		if err != nil {
 			if !errors.Is(err, jrpc2.ErrConnClosed) {

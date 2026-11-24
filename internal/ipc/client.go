@@ -30,7 +30,7 @@ type Client struct {
 	mu       sync.Mutex
 	rpc      *jrpc2.Client
 	events   chan daemon.Event
-	progress chan []daemon.ProgressItem
+	progress chan daemon.Frame
 
 	// Redial, when set, reconnects after the daemon hung up in the middle
 	// of a call. A read-only call is sent once more on the new connection;
@@ -67,7 +67,7 @@ func Dial(ctx context.Context, p config.Paths) (*Client, error) {
 		conn.Close()
 		return nil, &ErrForeignDaemon{Socket: p.Socket, UID: uid}
 	}
-	c := &Client{events: make(chan daemon.Event, 512), progress: make(chan []daemon.ProgressItem, 1)}
+	c := &Client{events: make(chan daemon.Event, 512), progress: make(chan daemon.Frame, 1)}
 	c.rpc = jrpc2.NewClient(&pushChannel{Channel: lineChannel(conn), events: c.events, progress: c.progress}, nil)
 	return c, nil
 }
@@ -96,7 +96,7 @@ func (e *ErrForeignDaemon) Error() string {
 }
 
 // Subscribe asks for job events, and progress frames when progress is set.
-func (c *Client) Subscribe(ctx context.Context, progress bool) (<-chan daemon.Event, <-chan []daemon.ProgressItem, error) {
+func (c *Client) Subscribe(ctx context.Context, progress bool) (<-chan daemon.Event, <-chan daemon.Frame, error) {
 	// Another call can reconnect just after this one subscribed, and the
 	// events go with the old connection; subscribe again on the new one.
 	// A redial still under way counts too: it is about to replace on.
@@ -285,7 +285,7 @@ func hungUp(err error) bool {
 type pushChannel struct {
 	channel.Channel
 	events   chan daemon.Event
-	progress chan []daemon.ProgressItem
+	progress chan daemon.Frame
 	once     sync.Once
 }
 
@@ -331,14 +331,14 @@ func (p *pushChannel) deliver(method string, params json.RawMessage) {
 		}
 		p.events <- daemon.Event{Seq: ev.Seq, Type: "resync_required"}
 	case PushProgress:
-		var items []daemon.ProgressItem
-		if json.Unmarshal(params, &items) != nil {
+		var f daemon.Frame
+		if json.Unmarshal(params, &f) != nil {
 			return
 		}
 		select {
 		case <-p.progress:
 		default:
 		}
-		p.progress <- items
+		p.progress <- f
 	}
 }

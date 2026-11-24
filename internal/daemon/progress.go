@@ -116,7 +116,8 @@ func (p *progress) due(now time.Time, hz int) bool {
 	return true
 }
 
-// overlay returns j with the latest polled byte counts, as a copy.
+// overlay returns j with the latest polled byte counts, speeds and ETA,
+// as a copy.
 func (p *progress) overlay(j *store.Job) *store.Job {
 	it, ok := p.last(j.ID)
 	if !ok {
@@ -126,6 +127,11 @@ func (p *progress) overlay(j *store.Job) *store.Job {
 	c.DoneBytes = &it.Done
 	if it.Total > 0 {
 		c.TotalBytes = &it.Total
+	}
+	c.SpeedDown, c.SpeedUp = it.Down, it.Up
+	if it.ETA != nil {
+		s := int64(it.ETA.Round(time.Second) / time.Second)
+		c.ETASeconds = &s
 	}
 	return &c
 }

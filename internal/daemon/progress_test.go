@@ -82,9 +82,9 @@ func TestPollPublishesProgress(t *testing.T) {
 	r.e.set(ref, func(s *engine.EngineStatus) { s.State, s.Done, s.Total, s.Down = "active", 10, 100, 5 })
 	r.m.poll(bg)
 	select {
-	case items := <-sub.Progress():
-		if len(items) != 1 || items[0].ID != j.ID || items[0].Done != 10 {
-			t.Fatalf("items %+v", items)
+	case f := <-sub.Progress():
+		if len(f.Items) != 1 || f.Items[0].ID != j.ID || f.Items[0].Done != 10 || f.Summary.Active != 1 || f.Summary.Down != 5 {
+			t.Fatalf("frame %+v", f)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("no progress")

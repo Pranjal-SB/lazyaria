@@ -140,7 +140,8 @@ func (m *Manager) Add(ctx context.Context, p AddParams) (*store.Job, error) {
 	if err := m.st.AddEvent(ctx, j.ID, "added", ""); err != nil {
 		m.log.Warn("record job event", "job", j.ID, "err", err)
 	}
-	m.bus.Publish(Event{Type: "job.added", Job: j})
+	m.bus.Publish(Event{Type: "job.added", Job: m.decorate(j)})
+	m.lifecycleFrame(ctx)
 	// The staging folder is new and empty, so continue=true adopts nothing.
 	req := m.request(j, paused)
 	ref, err := m.e.Add(ctx, req)
