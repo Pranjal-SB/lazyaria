@@ -81,3 +81,14 @@ func TestQuitLeavesBackgroundNote(t *testing.T) {
 		t.Fatalf("only paused jobs, note %q", got)
 	}
 }
+
+// Two re-fetches can overlap; an older snapshot never replaces a newer one.
+func TestOlderSnapshotDropped(t *testing.T) {
+	var m tea.Model = New(options(t))
+	m, _ = m.Update(connectedMsg{d: newFakeDaemon(), snap: daemon.Snapshot{Seq: 5}})
+	m, _ = m.Update(snapshotMsg{snap: daemon.Snapshot{Seq: 7, Jobs: []*store.Job{job(2, "new.iso", store.Active)}}})
+	m, _ = m.Update(snapshotMsg{snap: daemon.Snapshot{Seq: 6, Jobs: []*store.Job{job(1, "old.iso", store.Active)}}})
+	if js := m.(Model).jobs; len(js) != 1 || js[0].Name != "new.iso" {
+		t.Fatalf("jobs %v after an older snapshot, want only new.iso", js)
+	}
+}

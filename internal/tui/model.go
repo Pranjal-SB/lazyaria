@@ -32,6 +32,7 @@ type Model struct {
 	pending  bool // a debounced re-fetch is scheduled
 
 	jobs    []*store.Job
+	seq     uint64 // the applied snapshot's bus sequence
 	summary daemon.Summary
 	status  ipc.Status
 	cursor  int
@@ -96,7 +97,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.pending = false
 		return m, m.refetch()
 	case snapshotMsg:
-		if msg.gen == m.gen && msg.err == nil {
+		// re-fetches can overlap: an older snapshot must not replace a newer one
+		if msg.gen == m.gen && msg.err == nil && msg.snap.Seq >= m.seq {
 			m.setSnapshot(msg.snap)
 		}
 		return m, nil
@@ -151,7 +153,7 @@ func (m Model) selected() *store.Job {
 
 // setSnapshot replaces the list; the daemon owns the order.
 func (m *Model) setSnapshot(s ipc.SnapshotResult) {
-	m.jobs, m.summary = s.Jobs, s.Summary
+	m.jobs, m.summary, m.seq = s.Jobs, s.Summary, s.Seq
 	m.cursor = min(m.cursor, max(len(m.jobs)-1, 0))
 }
 
