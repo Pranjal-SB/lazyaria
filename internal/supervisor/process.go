@@ -77,6 +77,7 @@ func (sv *Supervisor) logPath() string { return filepath.Join(sv.p.StateDir, "ar
 // process between our probe and aria2's bind is retried with a new port. On
 // failure the returned proc, if any, has already been reaped.
 func (sv *Supervisor) launch() (*proc, *aria2.Client, error) {
+	sv.stopStale()
 	for try := 0; ; try++ {
 		port, err := sv.pickPort()
 		if err != nil {
