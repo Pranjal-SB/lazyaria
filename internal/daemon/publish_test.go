@@ -343,3 +343,20 @@ func TestReconcileTrashesOrphanStaging(t *testing.T) {
 		t.Fatal("a fresh folder with no job was trashed")
 	}
 }
+
+// An inode number is only unique on its own device: the same inode on
+// another device is another file.
+func TestSameFileComparesDevice(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "f")
+	wfile(t, p, "data")
+	ino, dev, size, err := fsutil.FileID(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !sameFile(p, ino, dev, size) {
+		t.Fatal("the file itself does not match")
+	}
+	if sameFile(p, ino, dev+1, size) {
+		t.Fatal("the same inode on another device matches")
+	}
+}
