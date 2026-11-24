@@ -107,6 +107,7 @@ type fakeHandler struct {
 	upgrades   int
 	observers  []int
 	clients    []int
+	filters    []store.Filter // of each Snapshot
 }
 
 func newFake() *fakeHandler {
@@ -159,10 +160,11 @@ func (f *fakeHandler) RefreshURI(context.Context, string, string) (*store.Job, e
 func (f *fakeHandler) SetLimit(context.Context, string, int64, int64) error { return nil }
 func (f *fakeHandler) StopSeeding(context.Context, []string) error          { return nil }
 
-func (f *fakeHandler) Snapshot(context.Context, bool, int, []string, []string) (uint64, []*store.Job, []daemon.SpeedSample) {
+func (f *fakeHandler) Snapshot(_ context.Context, flt store.Filter) daemon.Snapshot {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return 7, append([]*store.Job(nil), f.jobs...), nil
+	f.filters = append(f.filters, flt)
+	return daemon.Snapshot{Seq: 7, Jobs: append([]*store.Job(nil), f.jobs...)}
 }
 
 func (f *fakeHandler) Search(context.Context, string, int, int) ([]*store.Job, error) {

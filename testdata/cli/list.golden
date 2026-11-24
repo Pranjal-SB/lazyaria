@@ -2,7 +2,7 @@
   "jobs": [
     {
       "id": "01JC0000000000000000000001",
-      "num": 0,
+      "num": 1,
       "kind": "http",
       "engine": "aria2",
       "engine_ref": "2089b05ecca3d829",
@@ -38,7 +38,7 @@
     },
     {
       "id": "01JC0000000000000000000002",
-      "num": 0,
+      "num": 2,
       "kind": "magnet",
       "engine": "aria2",
       "engine_ref": null,

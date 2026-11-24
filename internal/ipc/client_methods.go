@@ -27,11 +27,29 @@ func (c *Client) List(ctx context.Context, includeHistory bool, limit int, ids .
 }
 
 // Match returns the jobs, history included, whose id starts with one of
-// prefixes. An older daemon returns every job; callers match again.
-func (c *Client) Match(ctx context.Context, prefixes ...string) ([]*store.Job, error) {
-	var r SnapshotResult
-	err := c.call(ctx, "jobs.snapshot", SnapshotParams{IncludeHistory: true, Prefixes: prefixes}, &r)
-	return r.Jobs, err
+// prefixes or whose number is one of nums. An older daemon returns every
+// job; callers match again.
+func (c *Client) Match(ctx context.Context, prefixes []string, nums []int64) ([]*store.Job, error) {
+	var jobs []*store.Job
+	seen := map[string]bool{}
+	// One call per selector: the daemon keeps jobs that match all of them.
+	for _, p := range []SnapshotParams{{Prefixes: prefixes}, {Nums: nums}} {
+		if len(p.Prefixes)+len(p.Nums) == 0 {
+			continue
+		}
+		p.IncludeHistory = true
+		var r SnapshotResult
+		if err := c.call(ctx, "jobs.snapshot", p, &r); err != nil {
+			return nil, err
+		}
+		for _, j := range r.Jobs {
+			if !seen[j.ID] {
+				seen[j.ID] = true
+				jobs = append(jobs, j)
+			}
+		}
+	}
+	return jobs, nil
 }
 
 // Search matches query against the whole history, server side.

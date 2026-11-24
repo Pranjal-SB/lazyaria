@@ -37,7 +37,7 @@ type Handler interface {
 	RefreshURI(ctx context.Context, id, uri string) (*store.Job, error)
 	SetLimit(ctx context.Context, id string, down, up int64) error
 	StopSeeding(ctx context.Context, ids []string) error
-	Snapshot(ctx context.Context, includeHistory bool, limit int, ids, prefixes []string) (uint64, []*store.Job, []daemon.SpeedSample)
+	Snapshot(ctx context.Context, f store.Filter) daemon.Snapshot
 	Search(ctx context.Context, query string, limit, offset int) ([]*store.Job, error)
 
 	// Subscribe and SetObservers back jobs.subscribe; n counts clients
@@ -81,13 +81,12 @@ type SnapshotParams struct {
 	// Prefixes, when set, keeps only jobs whose id starts with one of
 	// them (ids are upper case). A daemon that predates it sends every job.
 	Prefixes []string `json:"prefixes,omitempty"`
+	// Nums, when set, keeps only jobs with these numbers. With Prefixes
+	// too, a job must match both.
+	Nums []int64 `json:"nums,omitempty"`
 }
 
-type SnapshotResult struct {
-	Seq   uint64               `json:"seq"`
-	Jobs  []*store.Job         `json:"jobs"`
-	Speed []daemon.SpeedSample `json:"speed"`
-}
+type SnapshotResult = daemon.Snapshot
 
 // SubscribeParams is for jobs.subscribe, which returns {}. To see every
 // change exactly once a client subscribes first, then takes jobs.snapshot,

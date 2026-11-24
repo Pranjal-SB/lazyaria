@@ -19,7 +19,7 @@ func TestRefresh(t *testing.T) {
 	if want := []string{f.jobs[0].ID, "https://example.com/new.iso"}; !slices.Equal(f.refreshed, want) {
 		t.Fatalf("refreshed %v, want %v", f.refreshed, want)
 	}
-	if !strings.Contains(out, "refreshed "+f.jobs[0].ID) {
+	if out != "refreshed #1\n" {
 		t.Errorf("stdout %q", out)
 	}
 	for _, args := range [][]string{{"01JC0000000000000000000001"}, {"01JC0000000000000000000001", "https://a/b", "https://a/c"}, {"01J", "https://a/b"}} {

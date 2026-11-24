@@ -5,6 +5,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/Pranjal-SB/lazyaria/internal/cli"
 )
 
 func TestRunVersion(t *testing.T) {
@@ -68,4 +70,23 @@ func TestRunUnknown(t *testing.T) {
 	if !strings.Contains(msg, "lazyaria help") {
 		t.Errorf("stderr %q missing fix hint", msg)
 	}
+}
+
+// Help, usage and hints name the binary as it was invoked (decision 25).
+func TestHelpUsesInvokedName(t *testing.T) {
+	var out, errb bytes.Buffer
+	if code := run(context.Background(), []string{"/usr/bin/laria", "help"}, &out, &errb); code != 0 || !strings.HasPrefix(out.String(), "usage: laria <command>") {
+		t.Fatalf("help as laria: exit %d, stdout %q", code, out.String())
+	}
+	errb.Reset()
+	run(context.Background(), []string{"laria", "nope"}, &out, &errb)
+	if !strings.Contains(errb.String(), `Run "laria help"`) {
+		t.Fatalf("unknown command as laria: stderr %q", errb.String())
+	}
+	errb.Reset()
+	run(context.Background(), []string{"laria", "pause"}, &out, &errb)
+	if !strings.HasPrefix(errb.String(), "laria pause: ") {
+		t.Fatalf("pause as laria: stderr %q", errb.String())
+	}
+	cli.Prog = "lazyaria"
 }

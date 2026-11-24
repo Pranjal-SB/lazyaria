@@ -22,10 +22,10 @@ type heldSnapshot struct {
 	waiting atomic.Int32
 }
 
-func (h *heldSnapshot) Snapshot(ctx context.Context, all bool, limit int, ids, prefixes []string) (uint64, []*store.Job, []daemon.SpeedSample) {
+func (h *heldSnapshot) Snapshot(ctx context.Context, f store.Filter) daemon.Snapshot {
 	h.waiting.Add(1)
 	<-ctx.Done()
-	return h.fakeHandler.Snapshot(ctx, all, limit, ids, prefixes)
+	return h.fakeHandler.Snapshot(ctx, f)
 }
 
 // Calls running at once on one client all survive the daemon going away:

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"syscall"
@@ -179,6 +180,22 @@ func TestRoundTripAddList(t *testing.T) {
 	}
 	if _, err := c.ConfigGet(ctx, "nope"); err == nil {
 		t.Fatal("ConfigGet of an unknown key succeeded")
+	}
+}
+
+// Match sends job numbers and id prefixes as separate selectors: a job
+// matches either, not both.
+func TestSnapshotNumsOverWire(t *testing.T) {
+	f := newFake()
+	c, _ := serve(t, f)
+	if _, err := c.Match(context.Background(), []string{"01KA"}, []int64{14, 3}); err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	want := []store.Filter{{IncludeHistory: true, IDPrefixes: []string{"01KA"}}, {IncludeHistory: true, Nums: []int64{14, 3}}}
+	if !reflect.DeepEqual(f.filters, want) {
+		t.Fatalf("handler filters %+v, want %+v", f.filters, want)
 	}
 }
 

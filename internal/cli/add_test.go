@@ -22,7 +22,7 @@ func TestAddStdin(t *testing.T) {
 	if len(f.adds) != 2 || f.adds[0].URIs[0] != "https://a/x" || f.adds[1].URIs[0] != "magnet:?xt=urn:btih:abc" {
 		t.Fatalf("adds = %+v", f.adds)
 	}
-	if strings.Count(out, "added ") != 2 {
+	if out != "added #1 file\nadded #2 file\n" {
 		t.Errorf("stdout %q", out)
 	}
 }
@@ -53,24 +53,24 @@ func TestAddNotALink(t *testing.T) {
 
 func TestAddDuplicateExit4(t *testing.T) {
 	f := startFake(t)
-	f.addErr = &daemon.DuplicateError{Existing: &store.Job{ID: "01JEXISTING0000000000000000", Name: "a.iso", State: store.Done}}
+	f.addErr = &daemon.DuplicateError{Existing: &store.Job{ID: "01JEXISTING0000000000000000", Num: 9, Name: "a.iso", State: store.Done}}
 	code, _, errOut := run(t, Add, "", "https://a/a.iso")
 	if code != 4 {
 		t.Fatalf("exit %d, want 4: %s", code, errOut)
 	}
-	if !strings.Contains(errOut, "01JEXISTING") || !strings.Contains(errOut, "a.iso") {
+	if !strings.Contains(errOut, "existing job #9") || !strings.Contains(errOut, "a.iso") {
 		t.Errorf("stderr %q should name the existing job", errOut)
 	}
 }
 
 func TestAddSkippedIsSuccess(t *testing.T) {
 	f := startFake(t)
-	f.addErr = &daemon.SkippedError{Existing: &store.Job{ID: "01JEXISTING0000000000000000", Name: "a.iso", State: store.Done}}
+	f.addErr = &daemon.SkippedError{Existing: &store.Job{ID: "01JEXISTING0000000000000000", Num: 9, Name: "a.iso", State: store.Done}}
 	code, out, errOut := run(t, Add, "", "https://a/a.iso")
 	if code != 0 {
 		t.Fatalf("exit %d, want 0: %s", code, errOut)
 	}
-	if !strings.Contains(out, "skipped") || !strings.Contains(out, "01JEXISTING") {
+	if out != "skipped a.iso: already in the list as #9 (done)\n" {
 		t.Errorf("stdout %q should say skipped and name the job", out)
 	}
 }
@@ -97,9 +97,15 @@ func TestAddWaitFake(t *testing.T) {
 				return
 			}
 		}()
-		code, _, errOut := run(t, Add, "", "--wait", "https://a/b")
+		code, out, errOut := run(t, Add, "", "--wait", "https://a/b")
 		if code != tc.code {
 			t.Errorf("%s: exit %d, want %d: %s", tc.state, code, tc.code, errOut)
+		}
+		if tc.state == store.Done && out != "added #1 file\ndone #1 file\n" {
+			t.Errorf("stdout %q", out)
+		}
+		if tc.state == store.Error && !strings.Contains(errOut, "lazyaria add: #1 file failed") {
+			t.Errorf("stderr %q", errOut)
 		}
 	}
 }
@@ -136,7 +142,7 @@ func TestAddWaitEndsOnSystemPause(t *testing.T) {
 			}
 		}()
 		code, _, errOut := run(t, Add, "", "--wait", "https://a/b")
-		if code != exitRuntime || !strings.Contains(errOut, "paused") || !strings.Contains(errOut, "space") {
+		if code != exitRuntime || !strings.Contains(errOut, "#1 file was paused") || !strings.Contains(errOut, "space") || !strings.Contains(errOut, "`lazyaria resume 1`") {
 			t.Errorf("%+v: exit %d, stderr %q; want 1 with the reason", tc, code, errOut)
 		}
 	}

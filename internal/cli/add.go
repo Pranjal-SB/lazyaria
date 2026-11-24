@@ -11,6 +11,7 @@ import (
 
 	"github.com/Pranjal-SB/lazyaria/internal/daemon"
 	"github.com/Pranjal-SB/lazyaria/internal/ipc"
+	"github.com/Pranjal-SB/lazyaria/internal/store"
 	"github.com/Pranjal-SB/lazyaria/internal/textutil"
 )
 
@@ -55,7 +56,7 @@ func Add(ctx context.Context, args []string, out, errOut io.Writer) int {
 		}
 	}
 
-	code, ids := exitOK, map[string]bool{}
+	code, ids := exitOK, map[string]*store.Job{}
 	for i, r := range reqs {
 		r.Dir, r.Out, r.StartPaused, r.Force = *dir, *outName, *paused, *force
 		j, err := c.Add(ctx, r)
@@ -74,15 +75,15 @@ func Add(ctx context.Context, args []string, out, errOut io.Writer) int {
 			fmt.Fprintf(errOut, "lazyaria add: not sent, add them again: %s\n", strings.Join(links[i:], " "))
 			return max(code, exitRuntime)
 		case skipped && j != nil:
-			fmt.Fprintf(out, "skipped %s: already in the list as %s (%s)\n", j.Name, j.ID, j.State)
-			ids[j.ID] = true
+			fmt.Fprintf(out, "skipped %s: already in the list as %s (%s)\n", j.Name, numRef(j), j.State)
+			ids[j.ID] = j
 		case skipped:
 			fmt.Fprintf(out, "skipped: %s already exists\n", sk.Path)
 		case err != nil:
 			code = max(code, fail(errOut, "add", addError(err)))
 		default:
-			fmt.Fprintf(out, "added %s %s\n", j.ID, j.Name)
-			ids[j.ID] = true
+			fmt.Fprintf(out, "added %s %s\n", numRef(j), j.Name)
+			ids[j.ID] = j
 		}
 	}
 	if *wait && len(ids) > 0 {
@@ -94,7 +95,7 @@ func Add(ctx context.Context, args []string, out, errOut io.Writer) int {
 // addError names the existing job behind a duplicate.
 func addError(err error) error {
 	if d, ok := errors.AsType[*daemon.DuplicateError](err); ok && d.Existing != nil {
-		return fmt.Errorf("%w [existing job %s]", err, d.Existing.ID)
+		return fmt.Errorf("%w [existing job %s]", err, numRef(d.Existing))
 	}
 	return err
 }

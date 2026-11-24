@@ -240,18 +240,24 @@ func (m *Manager) SetObservers(n int) {
 	m.wake()
 }
 
-// Snapshot returns the bus sequence, the job list with live progress and
-// the recent speed history. The sequence is read first, so a client that
-// applies events after it never misses a change. Non-empty ids keeps only
-// those jobs.
-func (m *Manager) Snapshot(ctx context.Context, includeHistory bool, limit int, ids, prefixes []string) (uint64, []*store.Job, []SpeedSample) {
+// Snapshot is the job list a client starts from (jobs.snapshot).
+type Snapshot struct {
+	Seq   uint64        `json:"seq"`
+	Jobs  []*store.Job  `json:"jobs"`
+	Speed []SpeedSample `json:"speed"`
+}
+
+// Snapshot returns the bus sequence, the jobs f selects with live progress
+// and the recent speed history. The sequence is read first, so a client
+// that applies events after it never misses a change.
+func (m *Manager) Snapshot(ctx context.Context, f store.Filter) Snapshot {
 	seq := m.bus.seq.Load()
-	js, err := m.st.ListJobs(ctx, store.Filter{IncludeHistory: includeHistory, Limit: limit, IDs: ids, IDPrefixes: prefixes})
+	js, err := m.st.ListJobs(ctx, f)
 	if err != nil {
 		m.log.Warn("snapshot", "err", err)
 	}
 	for i, j := range js {
 		js[i] = m.prog.overlay(j)
 	}
-	return seq, js, m.prog.samples()
+	return Snapshot{Seq: seq, Jobs: js, Speed: m.prog.samples()}
 }

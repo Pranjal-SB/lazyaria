@@ -33,6 +33,10 @@ type usageError struct{ msg string }
 
 func (e usageError) Error() string { return e.msg }
 
+// Prog is the name the binary was invoked as (lazyaria, or the laria
+// alias); help and hints use it. main sets it.
+var Prog = "lazyaria"
+
 func usagef(format string, a ...any) error { return usageError{fmt.Sprintf(format, a...)} }
 
 // resolveLocal reads the config file, the environment and flags (not the
@@ -174,7 +178,7 @@ func exitCode(err error) int {
 // fail prints err for the named command and returns its exit code.
 func fail(errOut io.Writer, cmd string, err error) int {
 	if err != nil {
-		fmt.Fprintf(errOut, "lazyaria %s: %v\n", cmd, err)
+		fmt.Fprintf(errOut, "%s %s: %v\n", Prog, cmd, err)
 	}
 	return exitCode(err)
 }
@@ -208,7 +212,7 @@ func parseNoArgs(fs *flag.FlagSet, args []string) error {
 
 // newFlags returns a flag set that reports to errOut.
 func newFlags(name string, errOut io.Writer) *flag.FlagSet {
-	fs := flag.NewFlagSet("lazyaria "+name, flag.ContinueOnError)
+	fs := flag.NewFlagSet(Prog+" "+name, flag.ContinueOnError)
 	fs.SetOutput(errOut)
 	return fs
 }

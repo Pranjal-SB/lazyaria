@@ -7,6 +7,7 @@ import (
 	"github.com/creachadair/jrpc2/handler"
 
 	"github.com/Pranjal-SB/lazyaria/internal/daemon"
+	"github.com/Pranjal-SB/lazyaria/internal/store"
 )
 
 type empty struct{}
@@ -29,8 +30,9 @@ func (c *conn) methods() handler.Map {
 		"engine.restart": handler.New(func(ctx context.Context) (empty, error) { return ok(h.RestartEngine(ctx)) }),
 
 		"jobs.snapshot": handler.New(func(ctx context.Context, p SnapshotParams) (SnapshotResult, error) {
-			seq, jobs, speed := h.Snapshot(ctx, p.IncludeHistory, p.Limit, p.IDs, p.Prefixes)
-			return SnapshotResult{Seq: seq, Jobs: redactAll(jobs), Speed: speed}, nil
+			r := h.Snapshot(ctx, store.Filter{IncludeHistory: p.IncludeHistory, Limit: p.Limit, IDs: p.IDs, IDPrefixes: p.Prefixes, Nums: p.Nums})
+			r.Jobs = redactAll(r.Jobs)
+			return r, nil
 		}),
 		"jobs.subscribe": handler.New(func(_ context.Context, p SubscribeParams) (empty, error) {
 			c.subscribe(p.Progress)

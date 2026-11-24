@@ -37,10 +37,10 @@ func ptr[T any](v T) *T { return &v }
 func sampleJobs() []*store.Job {
 	at := time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC)
 	return []*store.Job{
-		{ID: "01JC0000000000000000000001", Kind: "http", Engine: "aria2", EngineRef: ptr("2089b05ecca3d829"), State: store.Active,
+		{ID: "01JC0000000000000000000001", Num: 1, Kind: "http", Engine: "aria2", EngineRef: ptr("2089b05ecca3d829"), State: store.Active,
 			Name: "debian.iso", URIs: []string{"https://example.com/debian.iso"}, Dir: "/dl", TotalBytes: ptr(int64(4 << 30)),
 			DoneBytes: ptr(int64(1 << 30)), Options: map[string]string{"header": "***"}, Queue: "default", CreatedAt: at},
-		{ID: "01JC0000000000000000000002", Kind: "magnet", Engine: "aria2", State: store.Error, ErrorKind: ptr("not-found"),
+		{ID: "01JC0000000000000000000002", Num: 2, Kind: "magnet", Engine: "aria2", State: store.Error, ErrorKind: ptr("not-found"),
 			ErrorCode: ptr(3), ErrorMsg: ptr("404"), Name: "x", URIs: []string{"magnet:?xt=urn:btih:abc"}, Dir: "/dl",
 			Options: map[string]string{}, Queue: "default", CreatedAt: at},
 	}
@@ -66,7 +66,7 @@ func TestListHuman(t *testing.T) {
 	if code != 0 {
 		t.Fatal(code)
 	}
-	for _, want := range []string{"debian.iso", "25%", "4.0 GiB", "error", "404"} {
+	for _, want := range []string{"#1 ", "#2 ", "debian.iso", "25%", "4.0 GiB", "error", "404"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("list output missing %q:\n%s", want, out)
 		}
@@ -125,19 +125,19 @@ func TestPauseResumeSayWhatHappened(t *testing.T) {
 	f := startFake(t)
 	f.jobs = sampleJobs() // 1 active, 2 failed
 	done := *f.jobs[0]
-	done.ID, done.State = "01JC0000000000000000000003", store.Done
+	done.ID, done.Num, done.State = "01JC0000000000000000000003", 3, store.Done
 	f.jobs = append(f.jobs, &done)
 	for _, tc := range []struct {
 		cmd  func(context.Context, []string, io.Writer, io.Writer) int
 		id   string
 		want string
 	}{
-		{Pause, "01JC0000000000000000000001", "paused 01JC0000000000000000000001\n"},
-		{Pause, "01JC0000000000000000000002", "01JC0000000000000000000002 has failed; nothing to pause\n"},
-		{Pause, "01JC0000000000000000000003", "01JC0000000000000000000003 is already finished; nothing to pause\n"},
-		{Resume, "01JC0000000000000000000001", "01JC0000000000000000000001 is already running; nothing to resume\n"},
-		{Resume, "01JC0000000000000000000002", "resumed 01JC0000000000000000000002\n"},
-		{Resume, "01JC0000000000000000000003", "01JC0000000000000000000003 is already finished; nothing to resume\n"},
+		{Pause, "01JC0000000000000000000001", "paused #1\n"},
+		{Pause, "01JC0000000000000000000002", "#2 has failed; nothing to pause\n"},
+		{Pause, "01JC0000000000000000000003", "#3 is already finished; nothing to pause\n"},
+		{Resume, "01JC0000000000000000000001", "#1 is already running; nothing to resume\n"},
+		{Resume, "01JC0000000000000000000002", "resumed #2\n"},
+		{Resume, "01JC0000000000000000000003", "#3 is already finished; nothing to resume\n"},
 	} {
 		if code, out, errOut := run(t, tc.cmd, "", tc.id); code != 0 || out != tc.want {
 			t.Errorf("%s: exit %d, stdout %q, stderr %q; want 0 and %q", tc.id, code, out, errOut, tc.want)

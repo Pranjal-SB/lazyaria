@@ -100,7 +100,7 @@ func (f *fake) Add(ctx context.Context, p daemon.AddParams) (*store.Job, error) 
 		}
 		return nil, f.addErr
 	}
-	j := &store.Job{ID: store.NewID(), Kind: "http", State: store.Queued, URIs: p.URIs, Name: "file", Dir: p.Dir}
+	j := &store.Job{ID: store.NewID(), Num: int64(len(f.adds)), Kind: "http", State: store.Queued, URIs: p.URIs, Name: "file", Dir: p.Dir}
 	if !f.dropAdded {
 		f.jobs = append(f.jobs, j)
 	}
@@ -141,22 +141,25 @@ func (f *fake) RefreshURI(_ context.Context, id, uri string) (*store.Job, error)
 func (f *fake) SetLimit(context.Context, string, int64, int64) error { return nil }
 func (f *fake) StopSeeding(context.Context, []string) error          { return nil }
 
-func (f *fake) Snapshot(ctx context.Context, _ bool, limit int, ids, prefixes []string) (uint64, []*store.Job, []daemon.SpeedSample) {
+func (f *fake) Snapshot(ctx context.Context, flt store.Filter) daemon.Snapshot {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.snapLimit, f.snapIDs, f.snapPrefixes = limit, ids, prefixes
+	f.snapLimit, f.snapIDs, f.snapPrefixes = flt.Limit, flt.IDs, flt.IDPrefixes
 	if f.hangup(ctx, &f.hangups) {
-		return 0, nil, nil
+		return daemon.Snapshot{}
 	}
 	var js []*store.Job
 	for _, j := range f.jobs {
-		if len(prefixes) > 0 && !slices.ContainsFunc(prefixes, func(p string) bool { return strings.HasPrefix(j.ID, p) }) {
+		if len(flt.IDPrefixes) > 0 && !slices.ContainsFunc(flt.IDPrefixes, func(p string) bool { return strings.HasPrefix(j.ID, p) }) {
+			continue
+		}
+		if len(flt.Nums) > 0 && !slices.Contains(flt.Nums, j.Num) {
 			continue
 		}
 		c := *j
 		js = append(js, &c)
 	}
-	return 0, js, nil
+	return daemon.Snapshot{Jobs: js}
 }
 
 // hangup cuts the current call off, as a daemon re-executing itself does,

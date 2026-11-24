@@ -48,8 +48,9 @@ func commandsDoc() string {
 	b.WriteString("# Commands\n\n" + generatedNote + `
 Every command is ` + "`lazyaria <command> [args]`" + `. Flags may come before
 or after the other arguments, and take one or two dashes (` + "`-wait`" + ` and
-` + "`--wait`" + ` are the same). A job is named by its ID, or by the first
-characters of it, as long as they match only one job.
+` + "`--wait`" + ` are the same). A job is named by its number, ` + "`14`" + ` or
+` + "`#14`" + ` as ` + "`lazyaria list`" + ` shows it, or by the first characters of its
+ID, as long as they match only one job. Numbers are never reused.
 
 Commands that talk to the daemon start it when it is not running. See
 [The daemon](../concepts/the-daemon.md).

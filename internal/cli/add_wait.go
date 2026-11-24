@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strings"
 
 	"github.com/Pranjal-SB/lazyaria/internal/daemon"
 	"github.com/Pranjal-SB/lazyaria/internal/ipc"
@@ -15,7 +16,8 @@ import (
 // (or seeding, whose payload is complete), 1 when any failed. events must
 // have been subscribed before the jobs were added; per the §20 rule the
 // snapshot is taken after, and events at or below its seq are dropped.
-func waitJobs(ctx context.Context, c *ipc.Client, events <-chan daemon.Event, ids map[string]bool, out, errOut io.Writer) int {
+// ids maps each job id to the job as added, which names it.
+func waitJobs(ctx context.Context, c *ipc.Client, events <-chan daemon.Event, ids map[string]*store.Job, out, errOut io.Writer) int {
 	pending := map[string]bool{}
 	for id := range ids {
 		pending[id] = true
@@ -27,21 +29,22 @@ func waitJobs(ctx context.Context, c *ipc.Client, events <-chan daemon.Event, id
 		if !pending[j.ID] {
 			return
 		}
+		ref := numRef(ids[j.ID])
 		delete(paused, j.ID)
 		if j.State == store.Paused {
 			paused[j.ID] = j
 		}
 		switch {
 		case removed || j.State == store.Removed:
-			fmt.Fprintf(errOut, "lazyaria add: %s was removed before it finished\n", j.ID)
+			fmt.Fprintf(errOut, "%s add: %s was removed before it finished\n", Prog, ref)
 		case j.State == store.Error:
 			msg := ""
 			if j.ErrorMsg != nil {
 				msg = ": " + *j.ErrorMsg
 			}
-			fmt.Fprintf(errOut, "lazyaria add: %s %s failed%s\n", j.ID, j.Name, msg)
+			fmt.Fprintf(errOut, "%s add: %s %s failed%s\n", Prog, ref, j.Name, msg)
 		case j.State == store.Done || j.State == store.Seeding:
-			fmt.Fprintf(out, "done %s %s\n", j.ID, j.Name)
+			fmt.Fprintf(out, "done %s %s\n", ref, j.Name)
 			delete(pending, j.ID)
 			return
 		default:
@@ -66,7 +69,9 @@ func waitJobs(ctx context.Context, c *ipc.Client, events <-chan daemon.Event, id
 			default:
 				continue
 			}
-			fmt.Fprintf(errOut, "lazyaria add: %s %s was paused: %s; free some space, then run `lazyaria resume %s`\n", id, j.Name, why, id)
+			ref := numRef(ids[id])
+			fmt.Fprintf(errOut, "%s add: %s %s was paused: %s; free some space, then run `%s resume %s`\n",
+				Prog, ref, j.Name, why, Prog, strings.TrimPrefix(ref, "#"))
 			code = exitRuntime
 			delete(paused, id)
 			delete(pending, id)

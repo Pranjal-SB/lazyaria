@@ -4,8 +4,9 @@
 
 Every command is `lazyaria <command> [args]`. Flags may come before
 or after the other arguments, and take one or two dashes (`-wait` and
-`--wait` are the same). A job is named by its ID, or by the first
-characters of it, as long as they match only one job.
+`--wait` are the same). A job is named by its number, `14` or
+`#14` as `lazyaria list` shows it, or by the first characters of its
+ID, as long as they match only one job. Numbers are never reused.
 
 Commands that talk to the daemon start it when it is not running. See
 [The daemon](../concepts/the-daemon.md).
@@ -27,12 +28,13 @@ commands:
             at most N
   status [--json]
             daemon and engine status
-  pause|resume <id-prefix>...
-  remove [--delete-files] <id-prefix>...
+  pause|resume <job>...
+            a job is its number (14 or #14) or the start of its id
+  remove [--delete-files] <job>...
             prints an undo command that works for remove.undo_seconds
   undo <token>
             bring back what a remove took, files included
-  refresh <id-prefix> <link>
+  refresh <job> <link>
             give a download a fresh link and keep its progress
   config list [--json] | get KEY | set KEY VALUE | reset KEY | edit | path | keys
   doctor [--json] [--restart-engine]
@@ -150,20 +152,21 @@ Flags:
 ## pause
 
 ```text
-pause|resume <id-prefix>...
+pause|resume <job>...
+          a job is its number (14 or #14) or the start of its id
 ```
 
 ## refresh
 
 ```text
-refresh <id-prefix> <link>
+refresh <job> <link>
           give a download a fresh link and keep its progress
 ```
 
 ## remove
 
 ```text
-remove [--delete-files] <id-prefix>...
+remove [--delete-files] <job>...
           prints an undo command that works for remove.undo_seconds
 ```
 
@@ -177,7 +180,8 @@ Flags:
 ## resume
 
 ```text
-pause|resume <id-prefix>...
+pause|resume <job>...
+          a job is its number (14 or #14) or the start of its id
 ```
 
 ## service

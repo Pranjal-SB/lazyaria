@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -187,10 +188,24 @@ func (e *env) status() ipc.Status {
 // add queues links and returns the new job ids, in order.
 func (e *env) add(args ...string) []string {
 	e.t.Helper()
-	var ids []string
+	var nums []string
 	for _, line := range strings.Split(e.ok(append([]string{"add"}, args...)...), "\n") {
 		if f := strings.Fields(line); len(f) >= 2 && f[0] == "added" {
-			ids = append(ids, f[1])
+			nums = append(nums, f[1])
+		}
+	}
+	if len(nums) == 0 {
+		return nil
+	}
+	// add prints job numbers (#14); the tests work with ids.
+	byNum := map[string]string{}
+	for _, j := range e.jobs() {
+		byNum["#"+strconv.FormatInt(j.Num, 10)] = j.ID
+	}
+	ids := make([]string, len(nums))
+	for i, n := range nums {
+		if ids[i] = byNum[n]; ids[i] == "" {
+			e.t.Fatalf("add printed %s, which is not in the list", n)
 		}
 	}
 	return ids

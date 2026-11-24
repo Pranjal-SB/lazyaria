@@ -12,6 +12,8 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/Pranjal-SB/lazyaria/internal/buildinfo"
@@ -51,12 +53,13 @@ commands:
             at most N
   status [--json]
             daemon and engine status
-  pause|resume <id-prefix>...
-  remove [--delete-files] <id-prefix>...
+  pause|resume <job>...
+            a job is its number (14 or #14) or the start of its id
+  remove [--delete-files] <job>...
             prints an undo command that works for remove.undo_seconds
   undo <token>
             bring back what a remove took, files included
-  refresh <id-prefix> <link>
+  refresh <job> <link>
             give a download a fresh link and keep its progress
   config list [--json] | get KEY | set KEY VALUE | reset KEY | edit | path | keys
   doctor [--json] [--restart-engine]
@@ -83,20 +86,29 @@ func main() {
 }
 
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	cli.Prog = "lazyaria"
+	if len(args) > 0 && filepath.Base(args[0]) == "laria" { // the short alias, decision 25
+		cli.Prog = "laria"
+	}
 	if len(args) < 2 {
-		fmt.Fprint(stderr, usage)
+		fmt.Fprint(stderr, usageText())
 		return 2
 	}
 	cmd, ok := commands[args[1]]
 	if !ok {
-		fmt.Fprintf(stderr, "lazyaria: unknown command %q. Run \"lazyaria help\" to see the commands.\n", args[1])
+		fmt.Fprintf(stderr, "%s: unknown command %q. Run \"%[1]s help\" to see the commands.\n", cli.Prog, args[1])
 		return 2
 	}
 	return cmd(ctx, args[2:], stdout, stderr)
 }
 
+// usageText is usage under the name the binary was invoked as.
+func usageText() string {
+	return strings.Replace(usage, "usage: lazyaria", "usage: "+cli.Prog, 1)
+}
+
 func cmdVersion(_ context.Context, args []string, out, errOut io.Writer) int {
-	fs := flag.NewFlagSet("lazyaria version", flag.ContinueOnError)
+	fs := flag.NewFlagSet(cli.Prog+" version", flag.ContinueOnError)
 	fs.SetOutput(errOut)
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -105,7 +117,7 @@ func cmdVersion(_ context.Context, args []string, out, errOut io.Writer) int {
 		return 2
 	}
 	if fs.NArg() > 0 {
-		fmt.Fprintf(errOut, "lazyaria version: unexpected argument %q. Run \"lazyaria help\" to see the commands.\n", fs.Arg(0))
+		fmt.Fprintf(errOut, "%s version: unexpected argument %q. Run \"%[1]s help\" to see the commands.\n", cli.Prog, fs.Arg(0))
 		return 2
 	}
 	fmt.Fprintf(out, "lazyaria %s (protocol %d)\n", buildinfo.Version, buildinfo.Protocol)
@@ -113,6 +125,6 @@ func cmdVersion(_ context.Context, args []string, out, errOut io.Writer) int {
 }
 
 func cmdHelp(_ context.Context, _ []string, out, _ io.Writer) int {
-	fmt.Fprint(out, usage)
+	fmt.Fprint(out, usageText())
 	return 0
 }
