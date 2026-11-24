@@ -35,7 +35,8 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	bin = filepath.Join(dir, "lazyaria")
-	build := exec.Command("go", "build", "-o", bin, ".")
+	// e2ecrash adds a crash hook that only an environment variable turns on.
+	build := exec.Command("go", "build", "-tags", "e2ecrash", "-o", bin, ".")
 	build.Dir = ".."
 	if out, err := build.CombinedOutput(); err != nil {
 		fmt.Fprintf(os.Stderr, "build lazyaria: %v\n%s", err, out)
