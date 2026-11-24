@@ -141,6 +141,10 @@ in brackets. `lazyaria list --json` adds a short `error_kind`.
 | `Invalid range header` | The server ignored the request to continue from the middle, so the download cannot resume. | Remove the job with `--delete-files` and add the link again, or use another server. |
 | kind `disk-full` | The disk filled up. lazyaria paused the other downloads to the same folder. | Free some space, then `lazyaria resume` them. |
 | `... is missing or on a different drive; mount it and retry`, kind `dir-missing` | The drive the download was writing to is not mounted. | Mount it, then `lazyaria resume` the job. |
+| `the download finished in ... but moving it into ... failed`, kind `publish-failed` | The download is complete in its `.laria` folder, but moving it into the download folder failed. The message gives the reason, for example missing permissions. | Fix the folder, then `lazyaria resume` the job. It does not download again. |
+| `... has too little space to copy it there`, kind `no_space` | The download is complete, but it has to be copied into the download folder (another file system) and there is not enough room. | Free some space, then `lazyaria resume` the job. |
+| `the download finished but produced no files`, kind `empty` | aria2 reported the download complete without writing a file. A metalink with invalid file names does this. | Check the link. |
+| `started by an older lazyaria; its file is untouched in ...`, kind `legacy` | The download was started by a lazyaria version from before `.laria` folders and is not continued. | Add the link again. The old unfinished file is still in the download folder; delete it if you do not need it. |
 
 `lazyaria resume` on a failed job tries it again from where it stopped.
 
@@ -201,6 +205,29 @@ If you edited `config.toml` with your own editor, see
 [The daemon](../concepts/the-daemon.md#settings-and-the-daemon).
 
 ## Other
+
+**A file named `<name>.laria` is in the download folder**
+
+It is the marker of a download that is still running: a symbolic link to
+the unfinished file in the hidden `.laria` folder. It goes away when the
+download finishes. Deleting it does not affect the download, and it comes
+back while the download runs. A marker
+that is left after a crash, pointing at nothing, is removed the next time
+the daemon starts. `downloads.marker` turns markers off. See
+[Where files go](../concepts/files.md#unfinished-downloads).
+
+**Syncthing copies unfinished downloads to my other devices**
+
+Syncthing syncs hidden folders such as `.laria`. Add a line `.laria` to
+the `.stignore` file of the synced folder.
+
+**A seeding torrent's file changed, or its space did not come back**
+
+While a torrent seeds, its files in the download folder are the same
+files on disk as the ones aria2 uploads from. Editing one in place
+changes what is uploaded. Deleting the files from the download folder
+stops the seeding and frees the space; deleting only some files in a
+torrent's folder does not. See [Where files go](../concepts/files.md#torrents).
 
 **`list` shows old progress**
 

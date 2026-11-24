@@ -18,8 +18,10 @@ lazyaria daemon, so you can close the terminal. The long code is the job
 ID. Each download in the list is called a job.
 
 The file goes to your download directory: `~/Downloads`, or the folder
-your desktop set as its download folder. Use `--dir` to pick another
-folder, and `--out` to pick the file name:
+your desktop set as its download folder. While it downloads, it is kept in
+a hidden `.laria` folder there, and `ubuntu.iso.laria` shows that it is
+on its way; the file itself appears when it is finished. Use `--dir` to
+pick another folder, and `--out` to pick the file name:
 
 ```sh
 lazyaria add --dir ~/isos --out ubuntu-24.04.iso https://example.com/files/ubuntu.iso
@@ -121,8 +123,8 @@ undo: lazyaria undo KJY3SB2H4I2VYVUFLL4DC3QIXK
 This takes the job off the list and leaves its file where it is.
 
 To remove the file too, add `--delete-files`. lazyaria does not delete
-it. It moves it to the trash, together with aria2's `.aria2` control
-file if there is one:
+it. It moves it to the trash; for an unfinished download, that is its
+folder in `.laria`, with aria2's `.aria2` control file:
 
 ```sh
 lazyaria remove --delete-files 01M7MCYN
@@ -159,7 +161,8 @@ already exists in the folder:
 lazyaria add: "ubuntu.iso" is already in the list (done); add it with --force to download it again [existing job 01M7MCXK5GYY1BXGRJA7MD9R97]
 ```
 
-`--force` downloads it anyway, under a new name such as `ubuntu.1.iso`.
+`--force` downloads it anyway, and saves it under a new name such as
+`ubuntu.1.iso`.
 See [Where files go](../concepts/files.md).
 
 ## Next

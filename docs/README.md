@@ -30,8 +30,8 @@ How lazyaria works, and why.
 
 - [The daemon](concepts/the-daemon.md): the background process that starts
   when you need it and stops when you do not.
-- [Where files go](concepts/files.md): the download folder, names that
-  are taken, removing files and undo.
+- [Where files go](concepts/files.md): the download folder, unfinished
+  downloads, names that are taken, removing files and undo.
 - [The engine](concepts/the-engine.md): how lazyaria uses aria2.
 - [How lazyaria compares](comparison.md): other download managers, and
   what lazyaria does not do yet.

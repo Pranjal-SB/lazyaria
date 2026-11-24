@@ -13,43 +13,120 @@ comes from the link, the server or the torrent. The full order is in
 
 ## Unfinished downloads
 
-While a download runs, it is written under its final name, next to a
-small control file with `.aria2` added to the name:
+A download runs in a hidden folder inside the download folder,
+`.laria/<job id>/`. When it finishes, lazyaria moves it into the download
+folder under its name. While downloads run, the download folder looks like
+this:
 
 ```text
-movie.mkv
-movie.mkv.aria2
+.laria/
+movie.mkv.laria
 ```
 
-The control file records which parts are done, so the download can
-resume after a pause or a restart. aria2 deletes it when the download
-finishes. A file next to its `.aria2` file is not finished yet, even if it
-looks complete.
+`movie.mkv.laria` is a marker: a symbolic link to the unfinished file in
+`.laria`. It shows that the download is running, and you can open it to
+look at what has arrived so far, for example to start watching a video.
+Deleting the marker does not affect the download, and lazyaria puts it
+back while the download runs. It removes the marker when the download
+finishes or is removed.
 
-If the `.aria2` file is gone, the download starts over under a new name,
-and the old file is unfinished and can be deleted.
+There is a marker only for a download of a single file, not for torrents
+or magnet links, and not on drives that cannot hold symbolic links (FAT,
+exFAT). Set `downloads.marker` to `false` to turn markers off.
+
+Next to the unfinished file, in `.laria/<job id>/`, aria2 keeps a small
+control file with `.aria2` added to the name. It records which parts are
+done, so the download can resume after a pause or a restart. Without it,
+or when the server cannot continue a download from the middle, the
+download starts over in the same folder. The finished file still gets the
+job's name.
+
+### Moving the finished download
+
+When a download finishes, lazyaria first writes down in its database what
+it is going to move and under which names. Then it renames each file or
+folder into the download folder, which copies no data. If the daemon or
+the computer stops halfway, the next start finishes the move from that
+record. The `.laria/<job id>/` folder is then removed, and `.laria` too
+once it is empty.
+
+If the name is taken by then, the download gets the next free name, as
+described [below](#when-a-name-is-taken).
+
+When the download folder and `.laria` are on different file systems,
+which can happen in some container setups, a rename is not possible and
+lazyaria copies the download instead. This needs room for a second copy:
+lazyaria checks for twice the download's size first, and if there is not
+enough, the job fails with kind `no_space` and keeps its files in
+`.laria`.
+
+A `.laria/<job id>/` folder that belongs to no job, for example after a
+crash right after `add`, is moved to the trash once it is an hour old.
+
+### Hidden folders and other programs
+
+`.laria` starts with a dot, so most file managers and `ls` do not show it.
+Jellyfin and Plex skip folders that start with a dot, so unfinished
+downloads do not appear in their libraries.
+
+Syncthing does sync hidden folders. If the download folder is synced, add
+this line to the `.stignore` file at the top of the synced folder, so
+Syncthing does not copy unfinished downloads:
+
+```text
+.laria
+```
+
+### Torrents
+
+Torrents are downloaded into `.laria/<job id>/` too. Seeding is off by
+default (`bt.seed_minutes` is `0`), so a finished torrent is moved into
+the download folder like any other download.
+
+When seeding is on (`bt.seed_minutes` above `0`), the files appear in the download folder as soon as
+the download finishes, and aria2 goes on seeding. The files in the
+download folder and the ones aria2 seeds from in `.laria` are the same
+files on disk (hard links), so they take up space only once. This means:
+
+- Editing a file in place while it seeds changes what aria2 uploads.
+  Make a copy first if you want to change it.
+- Deleting the files from the download folder stops the seeding and
+  frees the space:
+  the file of a single-file torrent, or the whole folder of a larger one.
+  Moving or renaming them counts as deleting them. Deleting only some
+  files inside a torrent's folder does not stop it.
+- When seeding ends, the copy in `.laria` is removed. The files in the
+  download folder stay.
+
+On drives without hard links (FAT, exFAT), the files are moved into the
+download folder and aria2 seeds them from there. A torrent saved under a
+new name because its name was taken, or a magnet link, is not seeded on
+such a drive.
 
 ## When a name is taken
 
-lazyaria does not write over existing files. By default, `add` refuses a
-link that is already in the list, or a download whose file name already
-exists in the folder, and exits with 4:
+By default, lazyaria leaves files that are already in the folder as they
+are, and `add` refuses a link that is already in the list, or a download
+whose file name already exists in the folder, and exits with 4:
 
 ```text
 lazyaria add: "ubuntu.iso" is already in the list (done); add it with --force to download it again [existing job 01M7MCXK5GYY1BXGRJA7MD9R97]
 ```
 
-With `--force`, lazyaria downloads it under the next free name, the way
-aria2 does: `notes.pdf` becomes `notes.1.pdf`, then `notes.2.pdf`. A name
-that another job in the list is still downloading counts as taken too.
+With `--force`, lazyaria downloads it, and when it finishes, saves it
+under the next free name, the way aria2 does: `notes.pdf` becomes
+`notes.1.pdf`, then `notes.2.pdf`. The same happens when a file with the
+download's name appears in the folder while it runs.
 
 ```sh
 lazyaria add --force https://example.com/files/notes.pdf
 ```
 
 ```text
-added 01M7MD22FTPMDGRGZA5W2731BP notes.1.pdf
+added 01M7MD22FTPMDGRGZA5W2731BP notes.pdf
 ```
+
+`lazyaria list --all` shows the name it was saved under once it is done.
 
 Two links count as the same when they differ only in ways that do not
 change the download: the case of the host name, a default port such as
@@ -65,7 +142,8 @@ Two settings change this:
 ## Removing a job and its files
 
 `lazyaria remove <id>` takes the job off the list. Its file stays where
-it is.
+it is: a finished one in the download folder, an unfinished one in its
+`.laria/<job id>/` folder.
 
 `lazyaria remove --delete-files <id>` also moves the job's files to the
 trash: the one in your home folder (`~/.local/share/Trash`) when the file
@@ -75,15 +153,18 @@ trash can be used on that disk, nothing is moved and the job is kept.
 
 It takes only files the job downloaded:
 
-- A running download is paused first; its unfinished file and `.aria2`
-  control file are moved.
-- A download saved under a new name, such as `notes.1.pdf`, takes that
-  file and leaves `notes.pdf` alone.
-- A job that never received a byte takes no file, only its `.aria2`
-  control file.
-- A torrent takes the files it lists that were picked for download. Its
-  folder is not moved as a whole, because it may hold other files.
-  Subfolders that end up empty are removed; the top folder stays.
+- An unfinished download is stopped first, and its `.laria/<job id>/`
+  folder goes to the trash, with the unfinished file and its control
+  file.
+- A finished download takes the file or folder it put in the download
+  folder, as long as it is still there under that name. A download saved
+  under a new name, such as `notes.1.pdf`, takes that file and leaves
+  `notes.pdf` alone.
+- A finished torrent's folder is not moved as a whole, because it may
+  hold other files by now. It takes the files the torrent lists that were
+  picked for download. Subfolders that end up empty are removed; the top
+  folder stays.
+- A torrent that is seeding stops, and its copy in `.laria` is removed.
 
 When lazyaria cannot tell which files in a torrent's folder are the
 torrent's, for example for a finished magnet link that aria2 no longer

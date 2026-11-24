@@ -63,6 +63,16 @@ Downloads go to the first of these that is set:
    your desktop uses;
 4. `~/Downloads`.
 
+Inside the download folder:
+
+| Path | What it is |
+|---|---|
+| `.laria/<job id>/` | A download that is not finished yet, with aria2's `.aria2` control file. Removed when the download is moved into the download folder. |
+| `<name>.laria` | A marker for an unfinished download: a symbolic link to its file in `.laria`. Removed when the download finishes. `downloads.marker` turns markers off. |
+| `.<name>.laria-copy` | A copy in progress, when a finished download has to be copied into the download folder instead of moved. |
+
+See [Where files go](../concepts/files.md#unfinished-downloads).
+
 ## Trash
 
 `lazyaria remove --delete-files` moves files to the trash:

@@ -12,6 +12,9 @@ A download manager for the terminal, built on aria2.
 - **Nothing runs when nothing downloads.** The background daemon starts
   with the first command that needs it and exits about 30 seconds after
   the last download ends. There is no service to set up.
+- **Unfinished downloads stay out of the way.** A download runs in a
+  hidden `.laria` folder and appears in the download folder when it is
+  finished. Meanwhile a `name.laria` link points at the unfinished file.
 - **Refresh an expired link.** When a download link stops working halfway,
   `lazyaria refresh` gives the download a new link and keeps the part it
   already has.

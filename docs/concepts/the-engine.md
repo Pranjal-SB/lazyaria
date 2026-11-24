@@ -49,7 +49,10 @@ stops it when it exits. You do not run or configure aria2 yourself.
 
 - **File names.** aria2 runs with overwriting turned off and automatic
   renaming turned on, and lazyaria checks names itself before it adds a
-  download. See [Where files go](files.md).
+  download.
+- **Where aria2 writes.** aria2 writes each download into its own hidden
+  folder, `.laria/<job id>/` in the download folder, and lazyaria moves
+  the finished download out of it. See [Where files go](files.md).
 - **Errors.** lazyaria turns aria2's error numbers into short kinds such as
   `link-expired`, `not-found`, `rate-limited` or `disk-full`.
   `lazyaria list --json` shows them in `error_kind`.
