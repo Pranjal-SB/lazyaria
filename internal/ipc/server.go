@@ -14,6 +14,11 @@ import (
 	"github.com/Pranjal-SB/lazyaria/internal/daemon"
 )
 
+// maxCallsPerConn bounds the handlers one client may run at once. jrpc2's
+// default (NumCPU) lets a few slow calls, like a cross-filesystem trash, hold
+// up the client's next read; the peer is our own user, so a high cap is safe.
+const maxCallsPerConn = 64
+
 type server struct {
 	h Handler
 
@@ -69,7 +74,7 @@ func (s *server) serveConn(ctx context.Context, c net.Conn) {
 	s.connected(1)
 	defer s.connected(-1)
 	cc := &conn{s: s, sock: c}
-	srv := jrpc2.NewServer(cc.methods(), &jrpc2.ServerOptions{AllowPush: true})
+	srv := jrpc2.NewServer(cc.methods(), &jrpc2.ServerOptions{AllowPush: true, Concurrency: maxCallsPerConn})
 	cc.srv = srv
 	srv.Start(lineChannel(deadlineConn{c}))
 	// Closing the socket ends the server from its own reader, which also

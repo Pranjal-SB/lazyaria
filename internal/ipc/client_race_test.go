@@ -6,7 +6,6 @@ import (
 	"io"
 	"net"
 	"path/filepath"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -66,11 +65,9 @@ func TestConcurrentCallsAcrossReconnect(t *testing.T) {
 			errs <- err
 		})
 	}
-	// The daemon runs at most runtime.NumCPU() handlers per connection
-	// (jrpc2's default); the other calls wait in its queue, just as much in
-	// flight. So wait until every call is on the wire to the daemon and as
-	// many as can run are held there.
-	held := int32(min(n, runtime.NumCPU()))
+	// The daemon runs up to maxCallsPerConn handlers per connection, so
+	// wait until every call is on the wire and held there.
+	held := int32(min(n, maxCallsPerConn))
 	for deadline := time.Now().Add(30 * time.Second); sent.Load() < n || h.waiting.Load() < held; time.Sleep(time.Millisecond) {
 		if time.Now().After(deadline) {
 			t.Fatalf("%d of %d calls sent, %d of %d held by the daemon", sent.Load(), n, h.waiting.Load(), held)

@@ -365,3 +365,50 @@ func TestFrameTooLarge(t *testing.T) {
 		t.Fatalf("small frames: %v", err)
 	}
 }
+
+// blockedPause holds every jobs.pause until release is closed.
+type blockedPause struct {
+	*fakeHandler
+	release chan struct{}
+}
+
+func (b *blockedPause) Pause(context.Context, []string) error {
+	<-b.release
+	return nil
+}
+
+// Slow calls on one connection, like a cross-filesystem trash, must not hold
+// up a read sent after them on the same connection.
+func TestSlowCallsDoNotStallOthers(t *testing.T) {
+	const n = 32 // more than NumCPU, the jrpc2 default cap, on any CI or dev box
+	h := &blockedPause{fakeHandler: newFake(), release: make(chan struct{})}
+	c, _ := serve(t, h)
+	ctx := context.Background()
+
+	errs := make(chan error, n)
+	for range n {
+		go func() { errs <- c.Pause(ctx, "a") }()
+	}
+	time.Sleep(100 * time.Millisecond) // let the pauses reach the server first
+
+	listed := make(chan error, 1)
+	go func() {
+		_, err := c.List(ctx, false, 0)
+		listed <- err
+	}()
+	select {
+	case err := <-listed:
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		close(h.release)
+		t.Fatal("List stalled behind slow pauses")
+	}
+	close(h.release)
+	for range n {
+		if err := <-errs; err != nil {
+			t.Errorf("Pause: %v", err)
+		}
+	}
+}
