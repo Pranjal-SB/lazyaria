@@ -59,6 +59,14 @@ func (s *Store) ListJobs(ctx context.Context, f Filter) ([]*Job, error) {
 		conds = append(conds, `EXISTS (SELECT 1 FROM json_each(?) WHERE substr(jobs.id, 1, length(value)) = value)`)
 		a = append(a, string(ps))
 	}
+	if len(f.Nums) > 0 {
+		ns, err := json.Marshal(f.Nums)
+		if err != nil {
+			return nil, err
+		}
+		conds = append(conds, `num IN (SELECT value FROM json_each(?))`)
+		a = append(a, string(ns))
+	}
 	return s.list(ctx, `WHERE `+strings.Join(conds, " AND "), a, f.Limit, f.Offset)
 }
 

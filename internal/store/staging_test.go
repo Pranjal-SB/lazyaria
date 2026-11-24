@@ -119,8 +119,9 @@ func TestMigration0002KeepsRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if v, _ := s.version(); v != 2 {
-		t.Fatalf("version %d, want 2", v)
+	// Open runs every later migration too; GetJob needs their columns.
+	if v, _ := s.version(); v < 2 {
+		t.Fatalf("version %d, want at least 2", v)
 	}
 	got, err := s.GetJob(ctx, j.ID)
 	if err != nil {

@@ -29,6 +29,7 @@ const (
 // The json tags are the IPC wire format; the torrent blob never leaves the daemon.
 type Job struct {
 	ID         string            `json:"id"`
+	Num        int64             `json:"num"` // short handle (#14): assigned on insert, never reused
 	Kind       string            `json:"kind"`
 	Engine     string            `json:"engine"`
 	EngineRef  *string           `json:"engine_ref"`
@@ -92,6 +93,7 @@ type Filter struct {
 	IncludeHistory bool
 	IDs            []string // when set, only these jobs
 	IDPrefixes     []string // when set, only jobs whose id starts with one of these
+	Nums           []int64  // when set, only jobs with these numbers
 	Limit, Offset  int
 }
 
@@ -100,7 +102,7 @@ type Filter struct {
 const cols = `id, kind, engine, engine_ref, state, error_kind, error_code, error_msg, name, uris,
 	dir, out, dir_dev, total_bytes, done_bytes, options, limit_down, limit_up, category,
 	queue, priority, retry_count, retry_at, referrer, created_at, started_at, finished_at, removed_at,
-	staged, publish`
+	staged, publish, num`
 
 // smartOrder: needs-attention, active, waiting, then finished newest first.
 const smartOrder = `ORDER BY CASE state WHEN 'error' THEN 0 WHEN 'active' THEN 1
@@ -133,7 +135,7 @@ func scanJob(r scanner) (*Job, error) {
 	err := r.Scan(&j.ID, &j.Kind, &j.Engine, &j.EngineRef, &state, &j.ErrorKind, &errCode, &j.ErrorMsg,
 		&j.Name, &uris, &j.Dir, &j.Out, &dev, &total, &done, &opts, &j.LimitDown, &j.LimitUp,
 		&j.Category, &j.Queue, &j.Priority, &j.RetryCount, &retryAt, &j.Referrer, &created, &started,
-		&finished, &removed, &j.Staged, &publish, &j.Torrent)
+		&finished, &removed, &j.Staged, &publish, &j.Num, &j.Torrent)
 	if err != nil {
 		return nil, err
 	}
@@ -210,7 +212,7 @@ func args(j *Job, keys ...string) ([]any, error) {
 	return []any{j.ID, j.Kind, j.Engine, j.EngineRef, string(j.State), j.ErrorKind, code, j.ErrorMsg,
 		j.Name, uris, j.Dir, j.Out, dev, j.TotalBytes, j.DoneBytes, opts,
 		j.LimitDown, j.LimitUp, j.Category, j.Queue, j.Priority, j.RetryCount, ms(j.RetryAt), j.Referrer,
-		j.CreatedAt.UnixMilli(), ms(j.StartedAt), ms(j.FinishedAt), ms(j.RemovedAt), j.Staged, publish, normJSON}, nil
+		j.CreatedAt.UnixMilli(), ms(j.StartedAt), ms(j.FinishedAt), ms(j.RemovedAt), j.Staged, publish, j.Num, normJSON}, nil
 }
 
 // marshal skips HTML escaping so & < > stay literal in stored JSON.
@@ -231,18 +233,32 @@ func nonNil(s []string) []string {
 	return s
 }
 
-const placeholders = `?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?`
+const placeholders = `?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?`
 
-// InsertJob stores a new job. keys are extra strings FindByNormalizedURL
-// matches it by, such as a .torrent's info-hash; they last until its URIs
-// change.
+// InsertJob stores a new job and sets j.Num to its new number. keys are
+// extra strings FindByNormalizedURL matches it by, such as a .torrent's
+// info-hash; they last until its URIs change.
 func (s *Store) InsertJob(ctx context.Context, j *Job, keys ...string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	// A counter, not max(num)+1: purging the newest job must not free its number.
+	var num int64
+	if err := tx.QueryRowContext(ctx, `UPDATE meta SET value = CAST(value AS INTEGER) + 1
+		WHERE key = 'last_job_num' RETURNING CAST(value AS INTEGER)`).Scan(&num); err != nil {
+		return err
+	}
+	j.Num = num
 	a, err := args(j, keys...)
 	if err != nil {
 		return err
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO jobs(`+cols+`, norm_uris, torrent) VALUES(`+placeholders+`)`, append(a, j.Torrent)...)
-	return err
+	if _, err := tx.ExecContext(ctx, `INSERT INTO jobs(`+cols+`, norm_uris, torrent) VALUES(`+placeholders+`)`, append(a, j.Torrent)...); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 type queryer interface {
