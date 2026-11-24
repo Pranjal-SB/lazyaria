@@ -63,6 +63,7 @@ func TestRemoveAndUndo(t *testing.T) {
 func TestStopSeeding(t *testing.T) {
 	r := newRig(t)
 	j := r.add(t, AddParams{Torrent: []byte("d4:infod4:name1:xee")})
+	stageFiles(t, j, map[string]string{"x": "x"}) // torrents finish in staging
 	ref := r.ref(t, j.ID)
 	r.e.set(ref, func(s *engine.EngineStatus) { s.State, s.Seeder = "active", true })
 	r.event(ref, engine.KindBTComplete)

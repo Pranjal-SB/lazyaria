@@ -153,8 +153,7 @@ func (m *Manager) gone(ctx context.Context, j *store.Job, st engine.EngineStatus
 func (m *Manager) recover(ctx context.Context, j *store.Job) error {
 	if j.State == store.Seeding {
 		// The payload is complete; seeding does not outlive the engine.
-		now := m.now()
-		m.to(ctx, j, store.Done, "seeding ended with the engine", func(x *store.Job) { x.FinishedAt = &now })
+		m.endSeeding(ctx, j, "seeding ended with the engine")
 		return nil
 	}
 	_, err := m.readd(ctx, j, j.State == store.Paused, "readded")

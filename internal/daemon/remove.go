@@ -99,10 +99,17 @@ func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (t
 				return err
 			}
 		}
+		seeded := seedsFromStaging(j)
+		if seeded {
+			m.dropStaging(j) // seeding is over; the published copy is in Dir or the trash
+		}
 		now := m.now()
 		_, err := m.changeAs(ctx, "job.removed", j.ID, "removed", "", func(x *store.Job) {
 			x.State, x.RemovedAt, x.RetryAt = store.Removed, &now, nil
 			x.DoneBytes = j.DoneBytes // the live count, for a row brought back by Undo
+			if seeded {
+				x.Staged = false
+			}
 		})
 		if err != nil {
 			if rerr := m.Files.RestoreFiles(ctx, es); rerr != nil {

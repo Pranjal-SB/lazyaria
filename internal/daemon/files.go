@@ -72,7 +72,9 @@ func targets(j *store.Job, files []string) []string {
 				}
 			}
 		}
-		if lexists(stagingDir(j)) {
+		// A seeding torrent's staging copy is removed, not trashed: it is
+		// the published copy's second name.
+		if lexists(stagingDir(j)) && !seedsFromStaging(j) {
 			out = append(out, stagingDir(j))
 		}
 		return out

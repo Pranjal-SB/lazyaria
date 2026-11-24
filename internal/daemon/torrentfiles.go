@@ -25,7 +25,7 @@ func (m *Manager) downloadFiles(ctx context.Context, j *store.Job) []string {
 			for _, f := range d.Files {
 				// aria2 lists files select-file left out too; they are not ours.
 				if f.Path != "" && f.Selected {
-					out = append(out, f.Path)
+					out = append(out, publishedPath(j, f.Path))
 				}
 			}
 			if len(out) > 0 {
@@ -37,6 +37,21 @@ func (m *Manager) downloadFiles(ctx context.Context, j *store.Job) []string {
 		return nil // the .torrent cannot say which files were picked
 	}
 	return torrentPaths(m.torrent(ctx, j), workDir(j))
+}
+
+// publishedPath is where p, a file aria2 wrote in j's staging folder, is
+// now that publish moved it into Dir under its recorded name.
+func publishedPath(j *store.Job, p string) string {
+	if j.Staged || j.Publish == nil {
+		return p
+	}
+	for _, e := range j.Publish.Entries {
+		src := filepath.Join(stagingDir(j), filepath.Base(e.Rel)) // a link publish's Rel is under .up/
+		if rel, err := filepath.Rel(src, p); err == nil && filepath.IsLocal(rel) {
+			return filepath.Join(j.Dir, e.Name, rel)
+		}
+	}
+	return p
 }
 
 // torrent returns j's .torrent bytes, reading them from the store when j

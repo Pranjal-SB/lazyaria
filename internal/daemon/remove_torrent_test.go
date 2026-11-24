@@ -237,6 +237,8 @@ func TestDoneStampsOnlyTheTorrentsFiles(t *testing.T) {
 	if got := r.get(t, j.ID); got.State != store.Done {
 		t.Fatalf("state %s", got.State)
 	}
+	// Published into the download folder; aria2 still lists the staging path.
+	mine, ours = filepath.Join(r.dir, "Music", "mine.flac"), filepath.Join(r.dir, "Music", "a.flac")
 	if origin(ours) == "" {
 		t.Fatal("the torrent's file was not stamped")
 	}

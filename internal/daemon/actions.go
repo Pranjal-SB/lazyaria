@@ -257,8 +257,7 @@ func (m *Manager) StopSeeding(ctx context.Context, ids []string) error {
 		if err := m.e.Remove(ctx, refOf(j)); err != nil {
 			return err
 		}
-		now := m.now()
-		m.to(ctx, j, store.Done, "seeding stopped", func(x *store.Job) { x.FinishedAt = &now })
+		m.endSeeding(ctx, j, "seeding stopped")
 		return nil
 	})
 }

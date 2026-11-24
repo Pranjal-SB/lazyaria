@@ -73,6 +73,9 @@ type Publish struct {
 	// Building is the entry name of a folder being built in Dir file by
 	// file, where the filesystem refuses to rename folders (overlayfs).
 	Building string `json:"building,omitempty"`
+	// Seed: a torrent published by hard links whose staging copy stays for
+	// aria2 to seed from until seeding ends.
+	Seed bool `json:"seed,omitempty"`
 }
 
 type PublishEntry struct {

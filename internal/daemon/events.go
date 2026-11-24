@@ -59,7 +59,14 @@ func (m *Manager) apply(ctx context.Context, j *store.Job, st engine.EngineStatu
 	switch {
 	case st.State == "complete" && st.FollowedBy != "":
 		return m.adopt(ctx, j, st)
-	case st.State == "complete" && j.Staged && !st.IsBT && !isBT(j.Kind):
+	case (st.State == "complete" || st.State == "error") && seedsFromStaging(j):
+		return m.endSeeding(ctx, j, "seeding ended")
+	case st.Seeder && st.State == "active" && j.Staged && j.State != store.Paused && !seedsFromStaging(j) &&
+		!strings.HasPrefix(st.Name, "[METADATA]"): // a magnet's metadata is not the payload
+		j = m.set(ctx, j, "", "", func(x *store.Job) { setBytes(x, st) })
+		j, _ = m.publishLinks(ctx, j) // a failure is recorded on the job
+		return j
+	case st.State == "complete" && j.Staged:
 		j = m.set(ctx, j, "", "", func(x *store.Job) { setBytes(x, st) })
 		j, _ = m.publish(ctx, j) // a failure is recorded on the job
 		return j

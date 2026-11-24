@@ -25,7 +25,12 @@ var (
 	publishRenameTemp = fsutil.RenameNoReplace
 	publishMoveInto   = fsutil.MoveInto
 	publishStop       = func(step string) bool { return false } // true: stop after step, as a crash would
+	publishLink       = os.Link
 )
+
+// upDir is where a seeding torrent's hard-linked copy is built in its
+// staging folder, so one rename puts the whole of it in the download folder.
+const upDir = ".up"
 
 var (
 	errPublishStopped = errors.New("publish stopped")
@@ -98,8 +103,12 @@ func (m *Manager) publish(ctx context.Context, j *store.Job) (*store.Job, error)
 	name, now := p.Name, m.now()
 	p.Temp, p.TempIno, p.TempDev, p.Building = "", 0, 0, ""
 	j2, err := m.change(ctx, j.ID, "published", name, func(x *store.Job) {
-		x.State, x.Staged, x.Publish = store.Done, false, p
-		x.Out, x.Name = &name, name
+		x.State, x.Staged, x.Publish, x.Name = store.Done, false, p, name
+		if p.Seed {
+			x.State, x.Staged = store.Seeding, true // aria2 seeds on from staging
+		} else {
+			x.Out = &name
+		}
 		x.FinishedAt, x.RetryCount, x.RetryAt = &now, 0, nil
 		x.ErrorKind, x.ErrorCode, x.ErrorMsg = nil, nil, nil
 	})
@@ -107,12 +116,12 @@ func (m *Manager) publish(ctx context.Context, j *store.Job) (*store.Job, error)
 		return m.publishFailed(ctx, j, err)
 	}
 	j = j2
-	m.prog.forget(j.ID)
-	// Everything left in staging is the job's own, by construction.
-	if err := os.RemoveAll(staging); err != nil {
-		m.log.Warn("remove the staging folder", "job", j.ID, "path", staging, "err", err)
+	if p.Seed {
+		os.Remove(filepath.Join(staging, upDir)) // empty once renamed
+		return j, nil
 	}
-	os.Remove(filepath.Dir(staging)) // .laria, once no job uses it
+	m.prog.forget(j.ID)
+	m.dropStaging(j)
 	m.stampOrigin(ctx, j)
 	return j, nil
 }
@@ -333,7 +342,7 @@ func (m *Manager) nextName(ctx context.Context, j *store.Job, p *store.Publish, 
 	for _, e := range p.Entries {
 		held[e.Name] = true
 	}
-	name, err := finalName(j, p.Entries[i].Rel, held)
+	name, err := finalName(j, filepath.Base(p.Entries[i].Rel), held)
 	if err != nil {
 		return j, err
 	}
@@ -369,7 +378,8 @@ func (m *Manager) publishFailed(ctx context.Context, j *store.Job, err error) (*
 }
 
 // publishEntries lists the top-level entries of the staging folder that
-// belong to the payload: everything except *.aria2, *.torrent, *.meta4.
+// belong to the payload: everything except *.aria2, *.torrent, *.meta4 and
+// the link tree of a torrent's publish.
 func publishEntries(staging string) ([]store.PublishEntry, error) {
 	es, err := os.ReadDir(staging)
 	if err != nil {
@@ -378,7 +388,7 @@ func publishEntries(staging string) ([]store.PublishEntry, error) {
 	var out []store.PublishEntry
 	for _, e := range es {
 		n := e.Name()
-		if strings.HasSuffix(n, ".aria2") || strings.HasSuffix(n, ".torrent") || strings.HasSuffix(n, ".meta4") {
+		if n == upDir || strings.HasSuffix(n, ".aria2") || strings.HasSuffix(n, ".torrent") || strings.HasSuffix(n, ".meta4") {
 			continue
 		}
 		ino, dev, size, err := fsutil.FileID(filepath.Join(staging, n))
@@ -415,8 +425,9 @@ func tempName(dir, name string) string {
 }
 
 // publishing: j is finished and its move into Dir is recorded but not
-// done. A finished row keeps Publish too, with Staged false.
-func publishing(j *store.Job) bool { return j.Staged && j.Publish != nil }
+// done. A finished row keeps Publish too, with Staged false, and so does a
+// torrent seeding from staging once published by links.
+func publishing(j *store.Job) bool { return j.Staged && j.Publish != nil && j.State != store.Seeding }
 
 // published lists the entries of a finished job's record that are still
 // in Dir as it put them there (same inode, device and size).

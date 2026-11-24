@@ -124,6 +124,7 @@ func TestSeedingState(t *testing.T) {
 	if r.e.adds[0].Options["seed-time"] != "0" {
 		t.Fatalf("seed-time %q, want 0", r.e.adds[0].Options["seed-time"])
 	}
+	stageFiles(t, j, map[string]string{"x": "x"}) // torrents finish in staging
 	ref := r.ref(t, j.ID)
 	r.e.set(ref, func(s *engine.EngineStatus) { s.State, s.IsBT = "active", true })
 	r.event(ref, engine.KindStart)
@@ -142,6 +143,7 @@ func TestSeedingState(t *testing.T) {
 func TestSeederStatusMeansSeeding(t *testing.T) {
 	r := newRig(t)
 	j := r.add(t, AddParams{Torrent: []byte("d4:infod4:name1:xee")})
+	stageFiles(t, j, map[string]string{"x": "x"}) // torrents finish in staging
 	ref := r.ref(t, j.ID)
 	r.e.set(ref, func(s *engine.EngineStatus) { s.State, s.Seeder = "active", true })
 	r.event(ref, engine.KindStart) // the bt-complete notification was missed
