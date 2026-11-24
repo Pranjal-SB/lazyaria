@@ -236,3 +236,49 @@ func TestRemoveSeedingTorrentKeepsPublishedCopy(t *testing.T) {
 		t.Fatal("still staged")
 	}
 }
+
+// Decision 69: the user deleting what was published ends the seeding and
+// frees the staging copy; deleting part of a folder does not.
+func TestSeedingStopsWhenPublishedFileDeleted(t *testing.T) {
+	r := newRig(t)
+	j := r.seedTorrent(t, isoTorrent, "x.iso", map[string]string{"x.iso": "data"})
+	ref := r.ref(t, j.ID)
+	os.Remove(filepath.Join(r.dir, "x.iso"))
+	r.m.poll(bg)
+	got := r.get(t, j.ID)
+	if got.State != store.Done || got.Staged || !slices.Contains(r.e.removed, ref) {
+		t.Fatalf("state %s staged %v removed %v", got.State, got.Staged, r.e.removed)
+	}
+	if exists1(filepath.Join(r.dir, ".laria")) {
+		t.Fatal("staging copy kept")
+	}
+}
+
+func TestSeedingStopsWhenPublishedFolderDeleted(t *testing.T) {
+	r := newRig(t)
+	j := r.seedTorrent(t, musicTorrent, "Music", musicFiles)
+	ref := r.ref(t, j.ID)
+	os.RemoveAll(filepath.Join(r.dir, "Music"))
+	r.m.poll(bg)
+	got := r.get(t, j.ID)
+	if got.State != store.Done || got.Staged || !slices.Contains(r.e.removed, ref) {
+		t.Fatalf("state %s staged %v removed %v", got.State, got.Staged, r.e.removed)
+	}
+	if exists1(filepath.Join(r.dir, ".laria")) {
+		t.Fatal("staging copy kept")
+	}
+}
+
+func TestSeedingKeepsOnPartialDelete(t *testing.T) {
+	r := newRig(t)
+	j := r.seedTorrent(t, musicTorrent, "Music", musicFiles)
+	os.Remove(filepath.Join(r.dir, "Music", "a.flac"))
+	r.m.poll(bg)
+	got := r.get(t, j.ID)
+	if got.State != store.Seeding || !got.Staged || len(r.e.removed) != 0 {
+		t.Fatalf("state %s staged %v removed %v", got.State, got.Staged, r.e.removed)
+	}
+	if !exists1(filepath.Join(stagingDir(j), "Music", "a.flac")) {
+		t.Fatal("staging copy touched")
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/Pranjal-SB/lazyaria/internal/fsutil"
 	"github.com/Pranjal-SB/lazyaria/internal/store"
@@ -149,6 +150,13 @@ func payloadIDs(staging string) (map[string]store.PublishEntry, error) {
 // staging copy.
 func seedsFromStaging(j *store.Job) bool {
 	return j.Staged && j.State == store.Seeding && j.Publish != nil && j.Publish.Seed
+}
+
+// anyPublished: something j published is still in Dir as it put it there.
+func anyPublished(j *store.Job) bool {
+	return slices.ContainsFunc(j.Publish.Entries, func(e store.PublishEntry) bool {
+		return sameFile(filepath.Join(j.Dir, e.Name), e.Ino, e.Dev, -1)
+	})
 }
 
 // endSeeding marks a torrent done once aria2 no longer seeds it, and drops

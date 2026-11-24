@@ -56,6 +56,15 @@ func (m *Manager) apply(ctx context.Context, j *store.Job, st engine.EngineStatu
 	if paused {
 		return j
 	}
+	if j.State == store.Seeding && j.Publish != nil && st.State == "active" && !anyPublished(j) {
+		// Decision 69: the user deleted what was published, so the copy
+		// seeded from staging is not wanted either.
+		if err := m.e.Remove(ctx, refOf(j)); err != nil {
+			m.log.Warn("stop seeding a deleted download", "job", j.ID, "err", err)
+			return j
+		}
+		return m.endSeeding(ctx, j, "published files deleted")
+	}
 	switch {
 	case st.State == "complete" && st.FollowedBy != "":
 		return m.adopt(ctx, j, st)
