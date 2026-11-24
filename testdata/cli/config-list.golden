@@ -164,6 +164,17 @@
     "not_used_yet": false
   },
   {
+    "key": "downloads.marker",
+    "type": "bool",
+    "value": true,
+    "default": true,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Show an unfinished download in the download folder as name.laria, a link into the staging folder.",
+    "not_used_yet": false
+  },
+  {
     "key": "limits.global_down",
     "type": "string",
     "value": "0",

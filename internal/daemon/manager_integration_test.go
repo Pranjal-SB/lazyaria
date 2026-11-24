@@ -117,7 +117,8 @@ func TestUnknownSize_NoPrecheck_RestartInStaging(t *testing.T) {
 		t.Fatalf("state %s before restart", got.State)
 	}
 	dl := filepath.Join(root, "dl")
-	if names := dirNames(t, dl); len(names) != 1 || names[0] != ".laria" {
+	// Only the staging folder and the marker pointing into it.
+	if names := dirNames(t, dl); len(names) != 2 || names[0] != ".laria" || names[1] != "norange.bin.laria" {
 		t.Fatalf("download folder holds %v while downloading", names)
 	}
 	d.stop(t)

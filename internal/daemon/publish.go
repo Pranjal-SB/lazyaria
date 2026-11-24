@@ -81,6 +81,7 @@ func (m *Manager) publish(ctx context.Context, j *store.Job) (*store.Job, error)
 			return m.publishFailed(ctx, j, err)
 		}
 	}
+	unmark(j)
 	if publishStop("intent") {
 		return j, errPublishStopped
 	}

@@ -44,6 +44,7 @@ type DownloadsSettings struct {
 	LowestSpeedLimit     string `toml:"lowest_speed_limit" default:"0" live:"true" kind:"size" help:"Abort connections slower than this (bytes/s); 0 disables."`
 	ConnectTimeout       string `toml:"connect_timeout" default:"60s" live:"false" kind:"duration" help:"Connection timeout."`
 	Timeout              string `toml:"timeout" default:"60s" live:"false" kind:"duration" help:"Transfer timeout."`
+	Marker               bool   `toml:"marker" default:"true" live:"true" help:"Show an unfinished download in the download folder as name.laria, a link into the staging folder."`
 }
 
 type LimitsSettings struct {

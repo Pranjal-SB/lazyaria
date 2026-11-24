@@ -87,8 +87,8 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 
 // trashOrphans moves to the trash every staging folder whose job is gone
 // (a crash between creating it and storing the row, or a lost row) or is
-// no longer staged (left by a crash after publishing). It looks in the
-// folders of live jobs and in downloads.dir.
+// no longer staged (left by a crash after publishing), then the markers
+// left dangling. It looks in the folders of live jobs and in downloads.dir.
 func (m *Manager) trashOrphans(ctx context.Context, live []*store.Job) {
 	dirs := map[string]bool{m.s.Load().Downloads.Dir: true}
 	for _, j := range live {
@@ -120,6 +120,7 @@ func (m *Manager) trashOrphans(ctx context.Context, live []*store.Job) {
 				m.log.Info("trashed a staging folder no job owns", "path", p, "trashed", te.TrashedPath)
 			}
 		}
+		m.dropDanglingMarkers(d)
 	}
 }
 

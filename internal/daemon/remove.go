@@ -85,6 +85,7 @@ func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (t
 			}
 		}
 		m.cancelRetry(j.ID)
+		unmark(j)
 		var es []trash.Entry
 		if deleteFiles {
 			var err error

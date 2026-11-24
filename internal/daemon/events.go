@@ -52,6 +52,9 @@ func (m *Manager) apply(ctx context.Context, j *store.Job, st engine.EngineStatu
 		return j
 	}
 	j = m.trackName(ctx, j, st)
+	if st.State != "complete" {
+		m.mark(j)
+	}
 	j, paused := m.learnTotal(ctx, j, st)
 	if paused {
 		return j
@@ -152,6 +155,7 @@ func (m *Manager) trackName(ctx context.Context, j *store.Job, st engine.EngineS
 	kind := ""
 	if j.Out != nil {
 		kind = "renamed"
+		unmark(j) // named after the old file
 		if j.Staged {
 			// aria2 started over beside its old file (no control file to
 			// resume from); in staging that file is only ever the job's own.

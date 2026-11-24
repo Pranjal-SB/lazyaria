@@ -62,6 +62,7 @@ warning.
 | `downloads.lowest_speed_limit` | `0` | now | Abort connections slower than this (bytes/s); 0 disables. |
 | `downloads.connect_timeout` | `60s` | restart | Connection timeout. |
 | `downloads.timeout` | `60s` | restart | Transfer timeout. |
+| `downloads.marker` | `true` | now | Show an unfinished download in the download folder as name.laria, a link into the staging folder. |
 
 ## limits
 
