@@ -49,6 +49,8 @@ const redialTimeout = 10 * time.Second
 
 var clientPeerUID = peerUID // swapped in tests
 
+var afterSubscribeCall = func() {} // swapped in tests: runs between the subscribe reply and the lock
+
 // Dial connects to a running daemon.
 func Dial(ctx context.Context, p config.Paths) (*Client, error) {
 	conn, err := (&net.Dialer{}).DialContext(ctx, "unix", p.Socket)
@@ -97,14 +99,16 @@ func (e *ErrForeignDaemon) Error() string {
 func (c *Client) Subscribe(ctx context.Context, progress bool) (<-chan daemon.Event, <-chan []daemon.ProgressItem, error) {
 	// Another call can reconnect just after this one subscribed, and the
 	// events go with the old connection; subscribe again on the new one.
+	// A redial still under way counts too: it is about to replace on.
 	// Redial is used once, so a second try cannot lose the same way.
 	for range 2 {
 		on, err := c.callOn(ctx, "jobs.subscribe", SubscribeParams{Progress: progress}, nil)
 		if err != nil {
 			return nil, nil, err
 		}
+		afterSubscribeCall()
 		c.mu.Lock()
-		if c.rpc == on {
+		if c.rpc == on && c.redialing == nil {
 			c.subscribed = true
 			ev, pr := c.events, c.progress
 			c.mu.Unlock()
