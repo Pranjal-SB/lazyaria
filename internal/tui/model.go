@@ -48,6 +48,7 @@ type Model struct {
 	remove      removeModal // the remove dialog, when open
 	add         addForm     // the add form, when open
 	selWant     string      // a job to select once the list has it
+	selMoved    time.Time   // when the daemon last moved the selection to another job
 	help        bool        // the key help is open
 	detTop      int         // the first details line shown
 	dumb        bool        // TERM=dumb: ASCII glyphs, no links
@@ -75,8 +76,16 @@ func (m Model) now() time.Time {
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	defer logPanic(m.o.CrashDir)
+	before := m.selectedID()
 	m, cmd := m.update(msg)
 	m.syncSel()
+	switch msg.(type) {
+	case tea.KeyPressMsg, tea.MouseMsg:
+	default:
+		if after := m.selectedID(); before != "" && after != before {
+			m.selMoved = m.now()
+		}
+	}
 	return m, tea.Batch(cmd, m.watchDetails(msg))
 }
 
@@ -188,6 +197,13 @@ func (m Model) cursor() int {
 		return i
 	}
 	return min(m.selIx[m.tab], len(rows)-1)
+}
+
+func (m Model) selectedID() string {
+	if j := m.selected(); j != nil {
+		return j.ID
+	}
+	return ""
 }
 
 func (m Model) selected() *store.Job {

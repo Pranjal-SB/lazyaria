@@ -18,6 +18,7 @@ type Glyphs struct {
 	dotOK, dotWait, dotFail string
 	tabOn, tabOff           string // the rule under the active tab, and elsewhere
 	down, up                string // speed arrows in the top bar
+	arrow                   string // "to", in a button label; may be wider than one cell
 	border                  lipgloss.Border
 }
 
@@ -30,7 +31,7 @@ var (
 		spark:  []string{"▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"},
 		sel:    "▌", ellipsis: "…",
 		dotOK: "●", dotWait: "◐", dotFail: "✗",
-		tabOn: "━", tabOff: "─", down: "↓", up: "↑",
+		tabOn: "━", tabOff: "─", down: "↓", up: "↑", arrow: "→",
 		border: lipgloss.RoundedBorder(),
 	}
 	asciiGlyphs = Glyphs{
@@ -41,7 +42,7 @@ var (
 		spark:  []string{"_", ".", ":", "-", "=", "+", "*", "#"},
 		sel:    ">", ellipsis: "~",
 		dotOK: "*", dotWait: "~", dotFail: "x",
-		tabOn: "=", tabOff: "-", down: "v", up: "^",
+		tabOn: "=", tabOff: "-", down: "v", up: "^", arrow: "->",
 		border: lipgloss.Border{Top: "-", Bottom: "-", Left: "|", Right: "|", TopLeft: "+", TopRight: "+", BottomLeft: "+", BottomRight: "+"},
 	}
 	// nerdGlyphs needs a Nerd Font (Font Awesome range); the rest is unicode.

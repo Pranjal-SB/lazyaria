@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -28,6 +29,7 @@ func (m Model) mouse(msg tea.MouseMsg) (Model, tea.Cmd) {
 	kind, id := hit(m.compose(), ms.X, ms.Y)
 	switch msg.(type) {
 	case tea.MouseMotionMsg:
+		m.arm(ms.X, ms.Y)
 		m.hover = ""
 		if id != "" && kind != "pane" {
 			m.hover = kind + ":" + id
@@ -51,7 +53,13 @@ func (m Model) mouse(msg tea.MouseMsg) (Model, tea.Cmd) {
 		if ms.Button != tea.MouseLeft {
 			return m, nil
 		}
-		return m.click(kind, id)
+		wasOpen := m.remove.open()
+		m.arm(ms.X, ms.Y)
+		m, cmd := m.click(kind, id)
+		if m.remove.open() && !wasOpen {
+			m.remove.armed, m.remove.openAt = false, [2]int{ms.X, ms.Y}
+		}
+		return m, cmd
 	}
 	return m, nil
 }
@@ -71,16 +79,16 @@ func (m Model) click(kind, id string) (Model, tea.Cmd) {
 		switch {
 		case kind != "modal":
 			m.remove = removeModal{}
-		case id != "":
+		case id != "" && m.remove.armed:
 			return m.press(id)
 		}
 	case kind == "row":
 		if i := slices.IndexFunc(m.rows(), func(j *store.Job) bool { return j.ID == id }); i >= 0 {
-			m.sel[m.tab], m.selIx[m.tab] = id, i
+			m.sel[m.tab], m.selIx[m.tab], m.selMoved = id, i, time.Time{}
 		}
 	case kind == "tab":
 		if i, err := strconv.Atoi(id); err == nil && i < m.tabsShown() {
-			m.tab = i
+			m.tab, m.selMoved = i, time.Time{}
 		}
 	case kind == "btn":
 		return m.run(id)
@@ -95,4 +103,12 @@ func (m Model) detailsMaxTop() int {
 		return 0
 	}
 	return max(strings.Count(m.detailsText(l), "\n")+1-(l.details.h-2), 0)
+}
+
+// arm lets the remove dialog's buttons take clicks once the pointer is
+// on another cell than the click that opened it.
+func (m *Model) arm(x, y int) {
+	if m.remove.open() && [2]int{x, y} != m.remove.openAt {
+		m.remove.armed = true
+	}
 }

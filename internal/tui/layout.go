@@ -27,6 +27,7 @@ type layout struct {
 	wide    bool // job numbers shown, details beside the list
 	list    rect
 	details rect // w == 0: hidden
+	footY   int  // the footer's row; at or past h when the terminal is too short to show it
 }
 
 func (m Model) size() (int, int) {
@@ -41,6 +42,7 @@ func (m Model) layout() layout {
 	l := layout{w: w, h: h, wide: w >= m.o.Settings.UI.WideBreakpoint}
 	body := rect{0, topRows, w, max(h-topRows-footerRows, 3)}
 	l.list = body
+	l.footY = body.y + body.h
 	bottom := func() {
 		dh := min(bottomRows, body.h-3)
 		l.list.h = body.h - dh
@@ -99,7 +101,7 @@ func pane(t Theme, title, body string, w, h int, focused bool) string {
 		line, head = t.accent, t.accent.Bold(true).Render(title)
 	}
 	fill := max(w-5-lipgloss.Width(title), 0)
-	rows := make([]string, 0, h)
+	rows := make([]string, 0, max(h, 2))
 	rows = append(rows, line.Render(b.TopLeft+b.Top)+" "+head+" "+line.Render(strings.Repeat(b.Top, fill)+b.TopRight))
 	lines := strings.Split(body, "\n")
 	for i := range max(h-2, 0) {

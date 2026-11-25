@@ -124,7 +124,7 @@ type detailOpts struct {
 // happened.
 func renderDetails(t Theme, d daemon.Details, o detailOpts) string {
 	j := d.Job
-	if j == nil {
+	if j == nil || o.width < 1 {
 		return ""
 	}
 	w := o.width

@@ -145,3 +145,37 @@ func TestActionGolden(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) { runGolden(t, tc) })
 	}
 }
+
+// When the selected job leaves its tab, the next one slides under the
+// selection; space and x do nothing to it for a moment, unless the
+// person moves the selection themselves.
+func TestSelectionMovedGuard(t *testing.T) {
+	now := goldenNow
+	o := options(t)
+	o.Now = func() time.Time { return now }
+	a := job(1, "a.iso", store.Active, daemon.ActPause, daemon.ActRemove)
+	b := job(2, "b.iso", store.Active, daemon.ActPause, daemon.ActRemove)
+	var tm tea.Model = New(o)
+	tm, _ = tm.Update(tea.WindowSizeMsg{Width: 90, Height: 30}) // no details pane, so no other commands
+	tm, _ = tm.Update(connectedMsg{d: newFakeDaemon(), snap: daemon.Snapshot{Seq: 1, Jobs: []*store.Job{a, b}}})
+	pausedA := *a
+	pausedA.State = store.Paused
+	tm, _ = tm.Update(snapshotMsg{snap: daemon.Snapshot{Seq: 2, Jobs: []*store.Job{&pausedA, b}}})
+	m := tm.(Model)
+	if m.selected().ID != "b.iso" {
+		t.Fatalf("selected %s", m.selected().ID)
+	}
+	if r, cmd := m.Update(key("space")); cmd != nil || r.(Model).remove.open() {
+		t.Fatal("space acted on the job that slid under the selection")
+	}
+	if r, _ := m.Update(key("x")); r.(Model).remove.open() {
+		t.Fatal("x opened the dialog for the job that slid under the selection")
+	}
+	if r, _ := update(m, key("k")).Update(key("x")); !r.(Model).remove.open() {
+		t.Fatal("x after moving by hand did nothing")
+	}
+	now = now.Add(selectionGuard)
+	if _, cmd := m.Update(key("space")); cmd == nil {
+		t.Fatal("space still did nothing after the guard")
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -33,6 +34,9 @@ func (m Model) key(k tea.KeyPressMsg) (Model, tea.Cmd) {
 // come here.
 func (m Model) run(a string) (Model, tea.Cmd) {
 	l := m.layout()
+	if slices.Contains(selectionKeys, a) {
+		m.selMoved = time.Time{} // the person moved; what they see is what they get
+	}
 	switch a {
 	case actQuit:
 		return m, tea.Quit
@@ -61,10 +65,13 @@ func (m Model) run(a string) (Model, tea.Cmd) {
 			m.showDetails = !m.showDetails
 		}
 	case actToggle:
+		if m.selJustMoved() {
+			return m, nil
+		}
 		return m, m.toggle()
 	case actRemove:
-		if j := m.selected(); j != nil && slices.Contains(j.Actions, daemon.ActRemove) {
-			m.remove = removeModal{ids: []string{j.ID}, name: j.Name}
+		if j := m.selected(); j != nil && slices.Contains(j.Actions, daemon.ActRemove) && !m.selJustMoved() {
+			m.remove = newRemoveModal(m.theme, j.ID, j.Name)
 		}
 	case actUndo:
 		return m.undo()
@@ -159,4 +166,17 @@ func (m Model) done(msg doneMsg) (Model, tea.Cmd) {
 		return m, m.showToast(toast{text: fmt.Sprintf(fmtRestored, msg.name)})
 	}
 	return m, nil
+}
+
+// Actions that pick what is selected.
+var selectionKeys = []string{actDown, actUp, actTop, actBottom, actPageUp, actPageDown,
+	actTab1, actTab2, actTab3, actTab4, actNextTab, actPrevTab}
+
+// selectionGuard is how long space and remove do nothing after the
+// daemon moved the selection to another job, so a key meant for the job
+// that just left does not hit its neighbour.
+const selectionGuard = 300 * time.Millisecond
+
+func (m Model) selJustMoved() bool {
+	return !m.selMoved.IsZero() && m.now().Sub(m.selMoved) < selectionGuard
 }

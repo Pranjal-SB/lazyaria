@@ -89,7 +89,7 @@ const (
 	titleRemove     = "Remove"
 	fmtRemoveQ      = "Remove %s?"
 	btnKeep         = "Remove from list"
-	btnTrash        = "Delete files → Trash"
+	fmtBtnTrash     = "Delete files %s Trash"
 	btnCancel       = "Cancel"
 	textRemoveKeys  = "← → choose   enter confirm   esc cancel"
 	fmtRemoved      = "Removed %s"

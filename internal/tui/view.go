@@ -78,7 +78,9 @@ func (m Model) compose() *lipgloss.Compositor {
 
 	foot, areas := m.footer(l)
 	for _, a := range areas {
-		hitBox(a.id, a.x, l.h-1, a.w, 1, zRow)
+		if l.footY < l.h { // a footer cut off below the screen cannot be clicked
+			hitBox(a.id, a.x, l.footY, a.w, 1, zRow)
+		}
 	}
 
 	screen := strings.Join([]string{m.topBar(l.w), "", tabsLine, rule, panes, foot}, "\n")
