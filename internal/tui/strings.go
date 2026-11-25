@@ -122,4 +122,6 @@ const (
 	textNotConnected = "Not connected to the daemon yet; try again in a moment"
 	fmtSkippedMany   = "%d already in the list"
 	fmtFailedMany    = "%d links were not added. The first: %s"
+	fmtUnsureOne     = "%s may have been added; the daemon was slow to answer. Check the list before adding it again"
+	fmtUnsureMany    = "%d links may have been added; the daemon was slow to answer. Check the list before adding them again"
 )

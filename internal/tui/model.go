@@ -48,6 +48,7 @@ type Model struct {
 	remove      removeModal // the remove dialog, when open
 	add         addForm     // the add form, when open
 	selWant     string      // a job to select once the list has it
+	addSeq      int         // numbers add batches, so a stale one is known
 	selMoved    time.Time   // when the daemon last moved the selection to another job
 	help        bool        // the key help is open
 	detTop      int         // the first details line shown

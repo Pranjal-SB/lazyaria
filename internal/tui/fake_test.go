@@ -27,7 +27,7 @@ type fakeDaemon struct {
 	ev      chan daemon.Event
 	fr      chan daemon.Frame
 	pause   func(ids []string) // nil: record only
-	add     func(p daemon.AddParams) (*store.Job, error)
+	add     func(ctx context.Context, p daemon.AddParams) (*store.Job, error)
 	details map[string]daemon.Details // by job id; others get no extras
 
 	detailsCalls atomic.Int32
@@ -70,14 +70,14 @@ func (f *fakeDaemon) Status(context.Context) (ipc.Status, error) {
 	return ipc.Status{EngineState: "ready", DownloadDir: "/dl"}, nil
 }
 
-func (f *fakeDaemon) Add(_ context.Context, p daemon.AddParams) (*store.Job, error) {
+func (f *fakeDaemon) Add(ctx context.Context, p daemon.AddParams) (*store.Job, error) {
 	what := strings.Join(p.URIs, " ")
 	if p.Torrent != nil {
 		what = fmt.Sprintf("torrent(%d bytes)", len(p.Torrent))
 	}
 	f.record(fmt.Sprintf("add %s dir=%s out=%s paused=%v force=%v", what, p.Dir, p.Out, p.StartPaused, p.Force))
 	if f.add != nil {
-		return f.add(p)
+		return f.add(ctx, p)
 	}
 	name := "new"
 	if len(p.URIs) > 0 {

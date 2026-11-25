@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path"
@@ -65,16 +66,20 @@ func TestAddParams(t *testing.T) {
 	f.fields[stopName].SetValue("mine.iso")
 	f.paused.Toggle()
 	want := daemon.AddParams{URIs: []string{"https://a.example/one.iso"}, Dir: "/data", Out: "mine.iso", StartPaused: true}
-	if got := f.items(); len(got) != 1 || !eqParams(got[0].p, want) || got[0].err != nil {
-		t.Fatalf("items %+v, want %+v", got, want)
+	got := f.items()
+	if len(got) != 1 {
+		t.Fatalf("items %+v", got)
+	}
+	if p, err := resolve(got[0]); err != nil || !eqParams(p, want) {
+		t.Fatalf("add %+v (%v), want %+v", p, err, want)
 	}
 	f.fields[stopLink].SetValue("https://a.example/one.iso  https://b.example/two.iso nonsense")
-	got := f.items()
-	if len(got) != 3 || got[0].p.Out != "" || got[1].p.URIs[0] != "https://b.example/two.iso" || got[1].p.Dir != "/data" || !got[1].p.StartPaused {
+	got = f.items()
+	if len(got) != 3 || got[0].p.Out != "" || got[1].link != "https://b.example/two.iso" || got[1].p.Dir != "/data" || !got[1].p.StartPaused {
 		t.Fatalf("three links give %+v; want three adds without the file name", got)
 	}
-	if got[2].err == nil || got[2].link != "nonsense" {
-		t.Fatalf("a word that is no link gave %+v", got[2])
+	if _, err := resolve(got[2]); err == nil || got[2].link != "nonsense" {
+		t.Fatalf("a word that is no link gave %+v, %v", got[2], err)
 	}
 	f.setFocus(stopDir)
 	f.move(1)
@@ -89,7 +94,7 @@ func eqParams(a, b daemon.AddParams) bool {
 
 func dupDaemon() *fakeDaemon {
 	d := sampleDaemon()
-	d.add = func(p daemon.AddParams) (*store.Job, error) {
+	d.add = func(_ context.Context, p daemon.AddParams) (*store.Job, error) {
 		if p.Force {
 			return &store.Job{ID: "new", Num: 18, Name: "paper.pdf", State: store.Queued}, nil
 		}
@@ -100,7 +105,7 @@ func dupDaemon() *fakeDaemon {
 
 func TestAddSuccessSelectsAndToasts(t *testing.T) {
 	d := sampleDaemon()
-	d.add = func(daemon.AddParams) (*store.Job, error) {
+	d.add = func(context.Context, daemon.AddParams) (*store.Job, error) {
 		return &store.Job{ID: "fedora-43-workstation.iso", Num: 11, Name: "fedora-43-workstation.iso", State: store.Queued}, nil
 	}
 	u := startTUI(t, options(t, d), 120, 32)
@@ -169,9 +174,12 @@ func TestFormGolden(t *testing.T) {
 // batchDaemon adds ok-*, refuses bad-* and no-space-*, and knows dup-* already.
 func batchDaemon() *fakeDaemon {
 	d := sampleDaemon()
-	d.add = func(p daemon.AddParams) (*store.Job, error) {
+	d.add = func(ctx context.Context, p daemon.AddParams) (*store.Job, error) {
 		name := path.Base(p.URIs[0])
 		switch {
+		case strings.HasPrefix(name, "slow"):
+			<-ctx.Done() // the daemon is stuck; it may add it later
+			return nil, ctx.Err()
 		case strings.HasPrefix(name, "bad"):
 			return nil, &daemon.BadRequestError{Err: errors.New("the server says no")}
 		case strings.HasPrefix(name, "no-space"):

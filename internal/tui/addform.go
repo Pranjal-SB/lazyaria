@@ -2,12 +2,13 @@ package tui
 
 import (
 	"os"
+	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/Pranjal-SB/lazyaria/internal/addlink"
+	"github.com/Pranjal-SB/lazyaria/internal/daemon"
 	"github.com/Pranjal-SB/lazyaria/internal/store"
 	"github.com/Pranjal-SB/lazyaria/internal/tui/form"
 )
@@ -52,9 +53,11 @@ type addForm struct {
 
 	// A batch adds each link in turn. These collect its results until it
 	// ends; a duplicate pauses it to ask what to do.
+	batch   int // the batch running or last run from this form
 	added   []*store.Job
 	skipped []*store.Job
 	failed  []addFailure
+	unsure  []string     // links whose add timed out: they may be in the list
 	chosen  bool         // "Show it" picked the job to select
 	dup     *store.Job   // the job already in the list, while asking
 	dupItem addItem      // the link that hit it
@@ -74,17 +77,16 @@ func newAddForm(t Theme, dir string, links []string) addForm {
 func (f addForm) links() []string { return strings.Fields(f.fields[stopLink].Value()) }
 
 // items is one add per link. A file name only applies to a single link.
-// A .torrent file on this machine is read here and sent as it is.
+// The links are turned into adds, .torrent files read, when the batch runs.
 func (f addForm) items() []addItem {
 	var out []addItem
 	links := f.links()
 	for _, l := range links {
-		p, err := addlink.Params(l)
-		p.Dir, p.StartPaused = strings.TrimSpace(f.fields[stopDir].Value()), f.paused.Checked
+		p := daemon.AddParams{Dir: strings.TrimSpace(f.fields[stopDir].Value()), StartPaused: f.paused.Checked}
 		if len(links) == 1 {
 			p.Out = strings.TrimSpace(f.fields[stopName].Value())
 		}
-		out = append(out, addItem{link: l, p: p, err: err})
+		out = append(out, addItem{link: l, p: p})
 	}
 	return out
 }
@@ -117,6 +119,12 @@ func (f *addForm) setWidth(w int) {
 // formKey handles a key while the form is open.
 func (m Model) formKey(k tea.KeyPressMsg) (Model, tea.Cmd) {
 	f := &m.add
+	if f.busy { // what is typed now would be lost when the batch ends
+		if k.String() == "esc" {
+			m.add = addForm{}
+		}
+		return m, nil
+	}
 	if f.dup != nil {
 		switch k.String() {
 		case "left", "shift+tab":
@@ -165,6 +173,9 @@ func (m Model) formKey(k tea.KeyPressMsg) (Model, tea.Cmd) {
 // with no text field focused goes to the link.
 func (m Model) formInput(msg tea.Msg) (Model, tea.Cmd) {
 	f := &m.add
+	if f.busy || f.dup != nil {
+		return m, nil
+	}
 	if _, ok := msg.(tea.PasteMsg); ok && f.focus >= len(f.fields) {
 		f.setFocus(stopLink)
 	}
@@ -179,10 +190,17 @@ func (m Model) formInput(msg tea.Msg) (Model, tea.Cmd) {
 // formClick focuses or presses the part of the form under the pointer.
 func (m Model) formClick(id string) (Model, tea.Cmd) {
 	f := &m.add
-	for i, d := range dupIDs {
-		if id == d && f.dup != nil {
+	if f.dup != nil {
+		if i := slices.Index(dupIDs, id); i >= 0 {
 			return m.dupPress(i)
 		}
+		return m, nil
+	}
+	if f.busy {
+		if id == stopIDs[stopCancel] {
+			m.add = addForm{}
+		}
+		return m, nil
 	}
 	for i, s := range stopIDs {
 		if id != s {
