@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -34,6 +35,7 @@ type Options struct {
 	Settings *config.Settings    // effective values, daemon overrides applied
 	CrashDir string              // crash-<time>.log goes here
 	Prog     string              // the name the binary was invoked as, for hints
+	Now      func() time.Time    // nil: time.Now; tests fix it for relative times
 	Program  []tea.ProgramOption // tests: input, output, size, colour profile
 }
 

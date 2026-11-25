@@ -20,19 +20,6 @@ func writeJSON(out io.Writer, v any) error {
 	return enc.Encode(v)
 }
 
-// humanBytes formats n with IEC units.
-func humanBytes(n int64) string {
-	if n < 1024 {
-		return fmt.Sprintf("%d B", n)
-	}
-	f, i := float64(n), -1
-	for f >= 1024 && i < 5 {
-		f /= 1024
-		i++
-	}
-	return fmt.Sprintf("%.1f %siB", f, "KMGTPE"[i:i+1])
-}
-
 // fmtValue shows a config value the way it is typed on the command line.
 func fmtValue(v any) string {
 	switch x := v.(type) {
@@ -62,7 +49,7 @@ func printJobs(out io.Writer, jobs []*store.Job) {
 	for _, j := range jobs {
 		done, size := "-", "-"
 		if j.TotalBytes != nil && *j.TotalBytes > 0 {
-			size = humanBytes(*j.TotalBytes)
+			size = textutil.Bytes(*j.TotalBytes, false)
 			if j.DoneBytes != nil {
 				done = fmt.Sprintf("%d%%", *j.DoneBytes*100 / *j.TotalBytes)
 			}

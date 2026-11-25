@@ -2,9 +2,14 @@ package tui
 
 import (
 	"context"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/exp/teatest/v2"
 
 	"github.com/Pranjal-SB/lazyaria/internal/config"
 	"github.com/Pranjal-SB/lazyaria/internal/daemon"
@@ -120,11 +125,57 @@ func options(t *testing.T, ds ...Daemon) Options {
 	}
 }
 
-func waitTrue(t *testing.T, what string, cond func() bool) {
+// probe wraps the model to keep the last screen it drew. The program's
+// output stream only carries changed cells, so tests read the screen here.
+type probe struct {
+	Model
+	last *atomic.Pointer[string]
+}
+
+func (p probe) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	m, cmd := p.Model.Update(msg)
+	return probe{m.(Model), p.last}, cmd
+}
+
+func (p probe) View() tea.View {
+	v := p.Model.View()
+	p.last.Store(&v.Content)
+	return v
+}
+
+// tui runs the model under teatest at w by h.
+type tui struct {
+	*teatest.TestModel
+	last *atomic.Pointer[string]
+}
+
+func startTUI(t *testing.T, o Options, w, h int, opts ...tea.ProgramOption) tui {
 	t.Helper()
-	for end := time.Now().Add(5 * time.Second); !cond(); time.Sleep(10 * time.Millisecond) {
+	p := probe{New(o), &atomic.Pointer[string]{}}
+	tm := teatest.NewTestModel(t, p, teatest.WithInitialTermSize(w, h), teatest.WithProgramOptions(opts...))
+	return tui{tm, p.last}
+}
+
+func (u tui) screen() string {
+	if s := u.last.Load(); s != nil {
+		return *s
+	}
+	return ""
+}
+
+// waitFor waits until the screen shows want.
+func (u tui) waitFor(t *testing.T, want string) {
+	t.Helper()
+	for end := time.Now().Add(5 * time.Second); !strings.Contains(u.screen(), want); time.Sleep(10 * time.Millisecond) {
 		if time.Now().After(end) {
-			t.Fatalf("timed out waiting for %s", what)
+			t.Fatalf("timed out waiting for %q; the screen is:\n%s", want, u.screen())
 		}
 	}
+}
+
+// quit presses q and returns the final model.
+func (u tui) quit(t *testing.T) Model {
+	t.Helper()
+	u.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	return u.FinalModel(t, teatest.WithFinalTimeout(5*time.Second)).(probe).Model
 }

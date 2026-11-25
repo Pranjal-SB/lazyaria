@@ -14,6 +14,7 @@ import (
 	"github.com/Pranjal-SB/lazyaria/internal/config"
 	"github.com/Pranjal-SB/lazyaria/internal/fsinfo"
 	"github.com/Pranjal-SB/lazyaria/internal/store"
+	"github.com/Pranjal-SB/lazyaria/internal/textutil"
 	"github.com/Pranjal-SB/lazyaria/internal/xattr"
 )
 
@@ -94,7 +95,7 @@ func checkDownloadDir(dir string) checkDoc {
 	os.Remove(f.Name())
 	free, _ := fsinfo.FreeBytes(dir)
 	return checkDoc{Check: "download dir", OK: true,
-		Detail: fmt.Sprintf("%s, writable, %s free, %s", dir, humanBytes(int64(free)), fsinfo.TypeName(dir))}
+		Detail: fmt.Sprintf("%s, writable, %s free, %s", dir, textutil.Bytes(int64(free), false), fsinfo.TypeName(dir))}
 }
 
 func checkXattr(dir string, s *config.Settings) checkDoc {

@@ -18,7 +18,7 @@ type Settings struct {
 	Remove      RemoveSettings      `toml:"remove"`
 	Privacy     PrivacySettings     `toml:"privacy"`
 	History     HistorySettings     `toml:"history"`
-	UI          UISettings          `toml:"ui" unused:"true"`
+	UI          UISettings          `toml:"ui"`
 
 	// Keys maps an action to its key list. The "preset" entry is a single
 	// element list holding the validated preset name (default|vim).
@@ -130,27 +130,27 @@ type HistorySettings struct {
 }
 
 type UISettings struct {
-	Mouse               string `toml:"mouse" default:"all" live:"true" enum:"all|cell|off" help:"Mouse reporting mode."`
-	DoubleClickMS       int    `toml:"double_click_ms" default:"400" live:"true" min:"50" help:"Double click interval in milliseconds."`
-	Glyphs              string `toml:"glyphs" default:"unicode" live:"true" enum:"unicode|ascii" help:"Glyph set."`
+	Mouse               string `toml:"mouse" default:"all" live:"true" enum:"all|cell|off" help:"Mouse reporting mode." unused:"true"`
+	DoubleClickMS       int    `toml:"double_click_ms" default:"400" live:"true" min:"50" help:"Double click interval in milliseconds." unused:"true"`
+	Glyphs              string `toml:"glyphs" default:"unicode" live:"true" enum:"unicode|ascii|nerd" help:"Glyph set; nerd needs a Nerd Font."`
 	Units               string `toml:"units" default:"iec" live:"true" enum:"iec|si" help:"Size units (1024 or 1000 based)."`
-	SpeedUnit           string `toml:"speed_unit" default:"bytes" live:"true" enum:"bytes|bits" help:"Show speeds in bytes or bits."`
-	TimeFormat          string `toml:"time_format" default:"relative" live:"true" enum:"relative|24h|12h|iso" help:"Timestamp format."`
+	SpeedUnit           string `toml:"speed_unit" default:"bytes" live:"true" enum:"bytes|bits" help:"Show speeds in bytes or bits." unused:"true"`
+	TimeFormat          string `toml:"time_format" default:"relative" live:"true" enum:"relative|24h|12h|iso" help:"Timestamp format." unused:"true"`
 	DetailsPosition     string `toml:"details_position" default:"auto" live:"true" enum:"auto|right|bottom|hidden" help:"Where the details pane goes."`
 	DetailsWidthPercent int    `toml:"details_width_percent" default:"34" live:"true" min:"10" max:"90" help:"Details pane width in percent."`
 	WideBreakpoint      int    `toml:"wide_breakpoint" default:"100" live:"true" min:"1" help:"Columns at which the wide layout starts."`
-	Sort                string `toml:"sort" default:"smart" live:"true" enum:"smart|added|name|progress|speed|size" help:"Default list sort."`
-	PasteDetection      bool   `toml:"paste_detection" default:"true" live:"true" help:"Offer to add URLs found in pasted text."`
-	ToastSeconds        int    `toml:"toast_seconds" default:"4" live:"true" min:"1" help:"Seconds a toast stays visible."`
+	Sort                string `toml:"sort" default:"smart" live:"true" enum:"smart|added|name|progress|speed|size" help:"Default list sort." unused:"true"`
+	PasteDetection      bool   `toml:"paste_detection" default:"true" live:"true" help:"Offer to add URLs found in pasted text." unused:"true"`
+	ToastSeconds        int    `toml:"toast_seconds" default:"4" live:"true" min:"1" help:"Seconds a toast stays visible." unused:"true"`
 	SparklineSeconds    int    `toml:"sparkline_seconds" default:"60" live:"true" min:"1" help:"Seconds of speed history in sparklines."`
-	WindowTitle         bool   `toml:"window_title" default:"true" live:"true" help:"Set the terminal window title."`
-	TitleFormat         string `toml:"title_format" default:"lazyaria ↓ {down} · {active} active" live:"true" help:"Window title template."`
-	OSCLinks            bool   `toml:"osc_links" default:"true" live:"true" help:"Use OSC 8 hyperlinks."`
-	Clipboard           string `toml:"clipboard" default:"auto" live:"true" enum:"auto|osc52|wl-copy|xclip|off" help:"Clipboard backend."`
-	OpenCommand         string `toml:"open_command" default:"xdg-open" live:"true" help:"Command used to open files."`
-	OpenFolderCommand   string `toml:"open_folder_command" default:"" live:"true" help:"Command used to open folders; empty uses open_command."`
-	ReducedMotion       bool   `toml:"reduced_motion" default:"false" live:"true" help:"Turn off animation."`
-	FirstRun            bool   `toml:"first_run" default:"true" live:"false" help:"Show the first-run screen; cleared after it is shown."`
+	WindowTitle         bool   `toml:"window_title" default:"true" live:"true" help:"Set the terminal window title." unused:"true"`
+	TitleFormat         string `toml:"title_format" default:"lazyaria ↓ {down} · {active} active" live:"true" help:"Window title template." unused:"true"`
+	OSCLinks            bool   `toml:"osc_links" default:"true" live:"true" help:"Use OSC 8 hyperlinks." unused:"true"`
+	Clipboard           string `toml:"clipboard" default:"auto" live:"true" enum:"auto|osc52|wl-copy|xclip|off" help:"Clipboard backend." unused:"true"`
+	OpenCommand         string `toml:"open_command" default:"xdg-open" live:"true" help:"Command used to open files." unused:"true"`
+	OpenFolderCommand   string `toml:"open_folder_command" default:"" live:"true" help:"Command used to open folders; empty uses open_command." unused:"true"`
+	ReducedMotion       bool   `toml:"reduced_motion" default:"false" live:"true" help:"Turn off animation." unused:"true"`
+	FirstRun            bool   `toml:"first_run" default:"true" live:"false" help:"Show the first-run screen; cleared after it is shown." unused:"true"`
 }
 
 type LogSettings struct {

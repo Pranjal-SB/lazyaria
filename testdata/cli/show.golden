@@ -2,7 +2,7 @@
   state     downloading
   progress  25%, 1.0 GiB of 4.0 GiB
   speed     1.0 MiB/s down, 0 B/s up
-  left      51m12s
+  left      51 min
   folder    /dl
   link      https://example.com/debian.iso
   pieces    ██▒░░░░░ 2048 pieces

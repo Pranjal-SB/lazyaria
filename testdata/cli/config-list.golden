@@ -804,10 +804,11 @@
     "live": true,
     "enum": [
       "unicode",
-      "ascii"
+      "ascii",
+      "nerd"
     ],
-    "help": "Glyph set.",
-    "not_used_yet": true
+    "help": "Glyph set; nerd needs a Nerd Font.",
+    "not_used_yet": false
   },
   {
     "key": "ui.units",
@@ -821,7 +822,7 @@
       "si"
     ],
     "help": "Size units (1024 or 1000 based).",
-    "not_used_yet": true
+    "not_used_yet": false
   },
   {
     "key": "ui.speed_unit",
@@ -867,7 +868,7 @@
       "hidden"
     ],
     "help": "Where the details pane goes.",
-    "not_used_yet": true
+    "not_used_yet": false
   },
   {
     "key": "ui.details_width_percent",
@@ -878,7 +879,7 @@
     "live": true,
     "enum": [],
     "help": "Details pane width in percent.",
-    "not_used_yet": true
+    "not_used_yet": false
   },
   {
     "key": "ui.wide_breakpoint",
@@ -889,7 +890,7 @@
     "live": true,
     "enum": [],
     "help": "Columns at which the wide layout starts.",
-    "not_used_yet": true
+    "not_used_yet": false
   },
   {
     "key": "ui.sort",
@@ -940,7 +941,7 @@
     "live": true,
     "enum": [],
     "help": "Seconds of speed history in sparklines.",
-    "not_used_yet": true
+    "not_used_yet": false
   },
   {
     "key": "ui.window_title",

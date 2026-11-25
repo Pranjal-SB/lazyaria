@@ -172,17 +172,17 @@ warning.
 |---|---|---|---|
 | `ui.mouse` | `all` | now | Mouse reporting mode. One of: `all`, `cell`, `off`. *Not used yet.* |
 | `ui.double_click_ms` | `400` | now | Double click interval in milliseconds. *Not used yet.* |
-| `ui.glyphs` | `unicode` | now | Glyph set. One of: `unicode`, `ascii`. *Not used yet.* |
-| `ui.units` | `iec` | now | Size units (1024 or 1000 based). One of: `iec`, `si`. *Not used yet.* |
+| `ui.glyphs` | `unicode` | now | Glyph set; nerd needs a Nerd Font. One of: `unicode`, `ascii`, `nerd`. |
+| `ui.units` | `iec` | now | Size units (1024 or 1000 based). One of: `iec`, `si`. |
 | `ui.speed_unit` | `bytes` | now | Show speeds in bytes or bits. One of: `bytes`, `bits`. *Not used yet.* |
 | `ui.time_format` | `relative` | now | Timestamp format. One of: `relative`, `24h`, `12h`, `iso`. *Not used yet.* |
-| `ui.details_position` | `auto` | now | Where the details pane goes. One of: `auto`, `right`, `bottom`, `hidden`. *Not used yet.* |
-| `ui.details_width_percent` | `34` | now | Details pane width in percent. *Not used yet.* |
-| `ui.wide_breakpoint` | `100` | now | Columns at which the wide layout starts. *Not used yet.* |
+| `ui.details_position` | `auto` | now | Where the details pane goes. One of: `auto`, `right`, `bottom`, `hidden`. |
+| `ui.details_width_percent` | `34` | now | Details pane width in percent. |
+| `ui.wide_breakpoint` | `100` | now | Columns at which the wide layout starts. |
 | `ui.sort` | `smart` | now | Default list sort. One of: `smart`, `added`, `name`, `progress`, `speed`, `size`. *Not used yet.* |
 | `ui.paste_detection` | `true` | now | Offer to add URLs found in pasted text. *Not used yet.* |
 | `ui.toast_seconds` | `4` | now | Seconds a toast stays visible. *Not used yet.* |
-| `ui.sparkline_seconds` | `60` | now | Seconds of speed history in sparklines. *Not used yet.* |
+| `ui.sparkline_seconds` | `60` | now | Seconds of speed history in sparklines. |
 | `ui.window_title` | `true` | now | Set the terminal window title. *Not used yet.* |
 | `ui.title_format` | `lazyaria ↓ {down} · {active} active` | now | Window title template. *Not used yet.* |
 | `ui.osc_links` | `true` | now | Use OSC 8 hyperlinks. *Not used yet.* |

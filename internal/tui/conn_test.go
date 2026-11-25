@@ -1,40 +1,31 @@
 package tui
 
 import (
-	"bytes"
 	"io"
 	"strings"
 	"testing"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/x/exp/teatest/v2"
 
 	"github.com/Pranjal-SB/lazyaria/internal/daemon"
 	"github.com/Pranjal-SB/lazyaria/internal/store"
 )
 
-func contains(s string) func([]byte) bool {
-	return func(b []byte) bool { return bytes.Contains(b, []byte(s)) }
-}
-
 // After the daemon goes away the list is never half merged: the TUI says
 // it is reconnecting, then shows only the new daemon's jobs.
 func TestReconnectResyncs(t *testing.T) {
-	d1 := newFakeDaemon(job(1, "alpha.iso", store.Active), job(2, "beta.iso", store.Paused))
-	d2 := newFakeDaemon(job(3, "gamma.iso", store.Queued))
-	tm := teatest.NewTestModel(t, New(options(t, d1, d2)), teatest.WithInitialTermSize(100, 30))
-	teatest.WaitFor(t, tm.Output(), contains("beta.iso"), teatest.WithDuration(5*time.Second))
+	d1 := newFakeDaemon(job(1, "alpha.iso", store.Active), job(2, "beta.iso", store.Active))
+	d2 := newFakeDaemon(job(3, "gamma.iso", store.Active))
+	u := startTUI(t, options(t, d1, d2), 100, 30)
+	u.waitFor(t, "beta.iso")
 	close(d1.ev)
-	teatest.WaitFor(t, tm.Output(), contains("reconnecting"), teatest.WithDuration(5*time.Second))
-	teatest.WaitFor(t, tm.Output(), contains("gamma.iso"), teatest.WithDuration(5*time.Second))
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
-	m := tm.FinalModel(t, teatest.WithFinalTimeout(5*time.Second)).(Model)
-	v := m.View().Content
+	u.waitFor(t, "reconnecting")
+	u.waitFor(t, "gamma.iso")
+	v := u.quit(t).View().Content
 	if !strings.Contains(v, "gamma.iso") || strings.Contains(v, "alpha.iso") || strings.Contains(v, "beta.iso") {
 		t.Fatalf("after reconnecting the view is:\n%s", v)
 	}
-	if !strings.Contains(v, iconConnected) || strings.Contains(v, textReconnecting) {
+	if !strings.Contains(v, unicodeGlyphs.dotOK) || strings.Contains(v, textReconnecting) {
 		t.Fatalf("the dot is not back to connected:\n%s", v)
 	}
 	d1.mu.Lock()
@@ -65,10 +56,9 @@ func TestUpdateNeverCallsDaemon(t *testing.T) {
 func TestQuitLeavesBackgroundNote(t *testing.T) {
 	d := newFakeDaemon(job(1, "a.iso", store.Active))
 	d.snap.Summary = daemon.Summary{Active: 2, Waiting: 3, Continuing: 3} // one waiting job is paused
-	tm := teatest.NewTestModel(t, New(options(t, d)), teatest.WithInitialTermSize(100, 30))
-	teatest.WaitFor(t, tm.Output(), contains("a.iso"), teatest.WithDuration(5*time.Second))
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
-	m := tm.FinalModel(t, teatest.WithFinalTimeout(5*time.Second)).(Model)
+	u := startTUI(t, options(t, d), 100, 30)
+	u.waitFor(t, "a.iso")
+	m := u.quit(t)
 	if got, want := m.note(), "3 downloads continue in the background; run lazyaria to come back."; got != want {
 		t.Fatalf("note %q, want %q", got, want)
 	}

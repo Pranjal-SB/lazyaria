@@ -44,15 +44,15 @@ func TestConfigSetInvalid(t *testing.T) {
 func TestConfigNotUsedYet(t *testing.T) {
 	startFake(t)
 	_, out, _ := run(t, Config, "", "list")
-	want := map[string]bool{"ui.units": true, "remove.confirm": true, "keys.preset": true, "downloads.dir": false, "remove.undo_seconds": false}
+	want := map[string]bool{"ui.sort": true, "ui.units": false, "remove.confirm": true, "keys.preset": true, "downloads.dir": false, "remove.undo_seconds": false}
 	for _, line := range strings.Split(out, "\n") {
 		k, _, _ := strings.Cut(line, " ")
 		if w, ok := want[k]; ok && strings.HasSuffix(line, "(not used yet)") != w {
 			t.Errorf("line %q: want marked %v", line, w)
 		}
 	}
-	code, _, errOut := run(t, Config, "", "set", "ui.units", "si")
-	if code != 0 || !strings.Contains(errOut, "ui.units is not used yet") {
+	code, _, errOut := run(t, Config, "", "set", "ui.sort", "name")
+	if code != 0 || !strings.Contains(errOut, "ui.sort is not used yet") {
 		t.Fatalf("set unused: exit %d, stderr %q; want 0 and a warning", code, errOut)
 	}
 	if _, _, errOut := run(t, Config, "", "set", "downloads.max_concurrent", "2"); errOut != "" {

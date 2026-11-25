@@ -9,6 +9,7 @@ import (
 
 	"github.com/Pranjal-SB/lazyaria/internal/daemon"
 	"github.com/Pranjal-SB/lazyaria/internal/store"
+	"github.com/Pranjal-SB/lazyaria/internal/textutil"
 )
 
 // showCells is the width of the piece map `show` prints.
@@ -67,13 +68,13 @@ func printDetails(out io.Writer, d daemon.Details) {
 		if j.DoneBytes != nil {
 			done = *j.DoneBytes
 		}
-		row("progress", fmt.Sprintf("%d%%, %s of %s", done*100 / *j.TotalBytes, humanBytes(done), humanBytes(*j.TotalBytes)))
+		row("progress", fmt.Sprintf("%d%%, %s of %s", done*100 / *j.TotalBytes, textutil.Bytes(done, false), textutil.Bytes(*j.TotalBytes, false)))
 	}
 	if j.SpeedDown > 0 || j.SpeedUp > 0 {
-		row("speed", fmt.Sprintf("%s/s down, %s/s up", humanBytes(j.SpeedDown), humanBytes(j.SpeedUp)))
+		row("speed", fmt.Sprintf("%s/s down, %s/s up", textutil.Bytes(j.SpeedDown, false), textutil.Bytes(j.SpeedUp, false)))
 	}
 	if j.ETASeconds != nil {
-		row("left", (time.Duration(*j.ETASeconds) * time.Second).String())
+		row("left", textutil.Duration(time.Duration(*j.ETASeconds)*time.Second))
 	}
 	row("folder", j.Dir)
 	for _, u := range j.URIs {
@@ -103,7 +104,7 @@ func printDetails(out io.Writer, d daemon.Details) {
 			if !f.Selected {
 				skip = "  (skipped)"
 			}
-			fmt.Fprintf(out, "  %3d%%  %9s  %s%s\n", pct, humanBytes(f.Length), f.Path, skip)
+			fmt.Fprintf(out, "  %3d%%  %9s  %s%s\n", pct, textutil.Bytes(f.Length, false), f.Path, skip)
 		}
 	}
 	if len(d.Events) > 0 {
