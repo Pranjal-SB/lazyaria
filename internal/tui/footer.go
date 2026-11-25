@@ -23,7 +23,7 @@ type area struct {
 // hints are the keys for the selected job, built from what the daemon
 // says it allows, plus the ones that always work.
 func (m Model) hints() []hint {
-	var hs []hint
+	hs := []hint{{keyFor(actAdd), hintAdd, actAdd}}
 	if j := m.selected(); j != nil {
 		switch {
 		case slices.Contains(j.Actions, daemon.ActPause):

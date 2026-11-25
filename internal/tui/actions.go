@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/Pranjal-SB/lazyaria/internal/daemon"
+	"github.com/Pranjal-SB/lazyaria/internal/textutil"
 )
 
 func (m Model) key(k tea.KeyPressMsg) (Model, tea.Cmd) {
@@ -17,6 +18,8 @@ func (m Model) key(k tea.KeyPressMsg) (Model, tea.Cmd) {
 		return m, tea.Quit
 	case m.remove.open():
 		return m.removeKey(k)
+	case m.add.open:
+		return m.formKey(k)
 	case m.help:
 		if a == actHelp || a == actQuit || k.String() == "esc" {
 			m.help = false
@@ -67,7 +70,37 @@ func (m Model) run(a string) (Model, tea.Cmd) {
 		return m.undo()
 	case actHelp:
 		m.help = true
+	case actAdd:
+		m.openAdd(nil)
 	}
+	return m, nil
+}
+
+// openAdd opens the add form with links filled in, saving to the daemon's folder.
+func (m *Model) openAdd(links []string) {
+	if m.d == nil {
+		return
+	}
+	m.add = newAddForm(m.theme, m.status.DownloadDir, links)
+	m.add.setWidth(m.formFieldWidth())
+}
+
+func (m Model) formFieldWidth() int { return min(formMaxW, m.layout().w-2) - 7 }
+
+// paste goes to the focused text field. Elsewhere the links in it open
+// the add form, unless ui.paste_detection is off.
+func (m Model) paste(msg tea.PasteMsg) (Model, tea.Cmd) {
+	switch {
+	case m.add.open:
+		return m.formInput(msg)
+	case m.remove.open() || m.help || !m.o.Settings.UI.PasteDetection:
+		return m, nil
+	}
+	links := textutil.ExtractLinks(msg.Content)
+	if len(links) == 0 {
+		return m, m.showToast(toast{text: textNoLinks})
+	}
+	m.openAdd(links)
 	return m, nil
 }
 

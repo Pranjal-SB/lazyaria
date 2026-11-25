@@ -35,6 +35,16 @@ var tabs = [4]tabDef{
 	{tabProblems, []store.State{store.Error}, emptyProblems},
 }
 
+// tabOf is the tab that lists jobs in state s.
+func tabOf(s store.State) int {
+	for i, t := range tabs {
+		if slices.Contains(t.states, s) {
+			return i
+		}
+	}
+	return 0
+}
+
 func (m Model) tabCount(i int) int {
 	s := m.summary
 	return [4]int{s.Active, s.Waiting, s.Done + s.Seeding, s.Attention}[i]

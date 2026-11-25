@@ -96,3 +96,25 @@ const (
 	fmtRestored     = "Put back %s"
 	hintUndo        = "undo"
 )
+
+// The add form.
+const (
+	helpAdd          = "add a download"
+	titleAdd         = "Add a download"
+	labelLink        = "Link"
+	placeLink        = "paste one or more links, separated by spaces"
+	labelSaveTo      = "Save to"
+	labelFileName    = "File name"
+	placeFileName    = "optional; the server's name when empty"
+	textNameOneLink  = "only for a single link"
+	labelStartPaused = "Start paused"
+	btnAdd           = "Add"
+	btnAgain         = "Download again"
+	btnShow          = "Show it"
+	fmtDuplicate     = "Already in the list as #%d (%s)."
+	fmtFileThere     = "%s is already there."
+	fmtNoSpace       = "Not enough space in %s: needs %s, %s free."
+	fmtAdded         = "Added #%d %s"
+	fmtAddedMany     = "Added %d downloads"
+	textNoLinks      = "No links in the pasted text"
+)

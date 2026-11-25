@@ -41,7 +41,7 @@ func (m Model) mouse(msg tea.MouseMsg) (Model, tea.Cmd) {
 			delta = -1
 		}
 		switch {
-		case m.remove.open() || m.help:
+		case m.remove.open() || m.help || m.add.open:
 		case kind == "pane" && id == "details":
 			m.detTop = min(max(m.detTop+delta, 0), m.detailsMaxTop())
 		case kind == "row" || kind == "pane" && id == "list":
@@ -60,6 +60,13 @@ func (m Model) click(kind, id string) (Model, tea.Cmd) {
 	switch {
 	case m.help:
 		m.help = false
+	case m.add.open:
+		switch {
+		case kind != "modal":
+			m.add = addForm{}
+		case id != "":
+			return m.formClick(id)
+		}
 	case m.remove.open():
 		switch {
 		case kind != "modal":

@@ -2,6 +2,8 @@ package tui
 
 import (
 	"context"
+	"fmt"
+	"path"
 	"slices"
 	"strings"
 	"sync"
@@ -24,7 +26,8 @@ type fakeDaemon struct {
 	snap    ipc.SnapshotResult
 	ev      chan daemon.Event
 	fr      chan daemon.Frame
-	pause   func(ids []string)        // nil: record only
+	pause   func(ids []string) // nil: record only
+	add     func(p daemon.AddParams) (*store.Job, error)
 	details map[string]daemon.Details // by job id; others get no extras
 
 	detailsCalls atomic.Int32
@@ -67,7 +70,13 @@ func (f *fakeDaemon) Status(context.Context) (ipc.Status, error) {
 	return ipc.Status{EngineState: "ready", DownloadDir: "/dl"}, nil
 }
 
-func (f *fakeDaemon) Add(context.Context, daemon.AddParams) (*store.Job, error) { return nil, nil }
+func (f *fakeDaemon) Add(_ context.Context, p daemon.AddParams) (*store.Job, error) {
+	f.record(fmt.Sprintf("add %s dir=%s out=%s paused=%v force=%v", strings.Join(p.URIs, " "), p.Dir, p.Out, p.StartPaused, p.Force))
+	if f.add != nil {
+		return f.add(p)
+	}
+	return &store.Job{ID: "new", Num: 18, Name: path.Base(p.URIs[0]), State: store.Queued}, nil
+}
 
 func (f *fakeDaemon) Pause(_ context.Context, ids ...string) error {
 	if f.pause != nil {

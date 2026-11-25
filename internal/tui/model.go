@@ -46,6 +46,8 @@ type Model struct {
 	toast       toast             // the note in the footer
 	toastSeq    int
 	remove      removeModal // the remove dialog, when open
+	add         addForm     // the add form, when open
+	selWant     string      // a job to select once the list has it
 	help        bool        // the key help is open
 	detTop      int         // the first details line shown
 	dumb        bool        // TERM=dumb: ASCII glyphs, no links
@@ -82,6 +84,11 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
+		m.add.setWidth(m.formFieldWidth())
+	case tea.PasteMsg:
+		return m.paste(msg)
+	case addMsg:
+		return m.added(msg)
 	case tea.EnvMsg:
 		if msg.Getenv("TERM") == "dumb" {
 			m.theme, m.dumb = NewTheme("ascii"), true
@@ -201,6 +208,12 @@ func (m *Model) move(delta int) {
 
 // syncSel keeps the tab, the selection and the scroll valid after any change.
 func (m *Model) syncSel() {
+	if i := slices.IndexFunc(m.jobs, func(j *store.Job) bool { return j.ID == m.selWant }); i >= 0 {
+		if t := tabOf(m.jobs[i].State); t < m.tabsShown() {
+			m.tab, m.sel[t] = t, m.selWant
+		}
+		m.selWant = ""
+	}
 	if m.tab >= m.tabsShown() {
 		m.tab = 0
 	}

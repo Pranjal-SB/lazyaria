@@ -140,7 +140,7 @@ type UISettings struct {
 	DetailsWidthPercent int    `toml:"details_width_percent" default:"34" live:"true" min:"10" max:"90" help:"Details pane width in percent."`
 	WideBreakpoint      int    `toml:"wide_breakpoint" default:"100" live:"true" min:"1" help:"Columns at which the wide layout starts."`
 	Sort                string `toml:"sort" default:"smart" live:"true" enum:"smart|added|name|progress|speed|size" help:"Default list sort." unused:"true"`
-	PasteDetection      bool   `toml:"paste_detection" default:"true" live:"true" help:"Offer to add URLs found in pasted text." unused:"true"`
+	PasteDetection      bool   `toml:"paste_detection" default:"true" live:"true" help:"Offer to add URLs found in pasted text."`
 	ToastSeconds        int    `toml:"toast_seconds" default:"4" live:"true" min:"1" help:"Seconds a toast stays visible."`
 	SparklineSeconds    int    `toml:"sparkline_seconds" default:"60" live:"true" min:"1" help:"Seconds of speed history in sparklines."`
 	WindowTitle         bool   `toml:"window_title" default:"true" live:"true" help:"Set the terminal window title." unused:"true"`

@@ -919,7 +919,7 @@
     "live": true,
     "enum": [],
     "help": "Offer to add URLs found in pasted text.",
-    "not_used_yet": true
+    "not_used_yet": false
   },
   {
     "key": "ui.toast_seconds",

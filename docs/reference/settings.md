@@ -180,7 +180,7 @@ warning.
 | `ui.details_width_percent` | `34` | now | Details pane width in percent. |
 | `ui.wide_breakpoint` | `100` | now | Columns at which the wide layout starts. |
 | `ui.sort` | `smart` | now | Default list sort. One of: `smart`, `added`, `name`, `progress`, `speed`, `size`. *Not used yet.* |
-| `ui.paste_detection` | `true` | now | Offer to add URLs found in pasted text. *Not used yet.* |
+| `ui.paste_detection` | `true` | now | Offer to add URLs found in pasted text. |
 | `ui.toast_seconds` | `4` | now | Seconds a toast stays visible. |
 | `ui.sparkline_seconds` | `60` | now | Seconds of speed history in sparklines. |
 | `ui.window_title` | `true` | now | Set the terminal window title. *Not used yet.* |

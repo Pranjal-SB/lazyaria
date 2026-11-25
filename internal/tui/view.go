@@ -100,6 +100,8 @@ func (m Model) overlay(l layout) overlay {
 	switch {
 	case m.remove.open():
 		return m.removeView(l.w - 2)
+	case m.add.open:
+		return m.formView(l.w - 2)
 	case m.help:
 		return m.helpView(l.w-2, l.h-2)
 	}
