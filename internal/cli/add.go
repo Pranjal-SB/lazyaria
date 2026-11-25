@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/Pranjal-SB/lazyaria/internal/addlink"
 	"github.com/Pranjal-SB/lazyaria/internal/daemon"
 	"github.com/Pranjal-SB/lazyaria/internal/ipc"
 	"github.com/Pranjal-SB/lazyaria/internal/store"
@@ -135,16 +135,9 @@ func addRequests(args []string) ([]daemon.AddParams, []string, error) {
 }
 
 func addRequest(link string) (daemon.AddParams, error) {
-	path := strings.TrimPrefix(link, "file://")
-	if strings.HasSuffix(strings.ToLower(path), ".torrent") {
-		if b, err := os.ReadFile(path); err == nil {
-			return daemon.AddParams{Torrent: b}, nil
-		} else if !strings.Contains(link, "://") || strings.HasPrefix(link, "file://") {
-			return daemon.AddParams{}, fmt.Errorf("read %s: %w", path, err)
-		}
+	p, err := addlink.Params(link)
+	if errors.Is(err, addlink.ErrNotLink) {
+		return p, usagef("%q is not a link or a .torrent file", link)
 	}
-	if !strings.Contains(link, "://") && !strings.HasPrefix(strings.ToLower(link), "magnet:") {
-		return daemon.AddParams{}, usagef("%q is not a link or a .torrent file", link)
-	}
-	return daemon.AddParams{URIs: []string{link}}, nil
+	return p, err
 }
