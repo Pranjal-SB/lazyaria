@@ -117,4 +117,7 @@ const (
 	fmtAdded         = "Added #%d %s"
 	fmtAddedMany     = "Added %d downloads"
 	textNoLinks      = "No links in the pasted text"
+	textNotConnected = "Not connected to the daemon yet; try again in a moment"
+	fmtSkippedMany   = "%d already in the list"
+	fmtFailedMany    = "%d links were not added. The first: %s"
 )

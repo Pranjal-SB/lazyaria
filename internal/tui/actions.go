@@ -78,18 +78,20 @@ func (m Model) run(a string) (Model, tea.Cmd) {
 	case actHelp:
 		m.help = true
 	case actAdd:
-		m.openAdd(nil)
+		return m.openAdd(nil)
 	}
 	return m, nil
 }
 
-// openAdd opens the add form with links filled in, saving to the daemon's folder.
-func (m *Model) openAdd(links []string) {
+// openAdd opens the add form with links filled in, saving to the daemon's
+// folder, which it only knows once connected.
+func (m Model) openAdd(links []string) (Model, tea.Cmd) {
 	if m.d == nil {
-		return
+		return m, m.showToast(toast{text: textNotConnected})
 	}
 	m.add = newAddForm(m.theme, m.status.DownloadDir, links)
 	m.add.setWidth(m.formFieldWidth())
+	return m, nil
 }
 
 func (m Model) formFieldWidth() int { return min(formMaxW, m.layout().w-2) - 7 }
@@ -107,8 +109,7 @@ func (m Model) paste(msg tea.PasteMsg) (Model, tea.Cmd) {
 	if len(links) == 0 {
 		return m, m.showToast(toast{text: textNoLinks})
 	}
-	m.openAdd(links)
-	return m, nil
+	return m.openAdd(links)
 }
 
 // toggle pauses or resumes the selected job, whichever the daemon allows.

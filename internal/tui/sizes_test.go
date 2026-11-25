@@ -6,7 +6,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/Pranjal-SB/lazyaria/internal/daemon"
 	"github.com/Pranjal-SB/lazyaria/internal/store"
 )
 
@@ -17,7 +16,7 @@ func TestTinySizesDraw(t *testing.T) {
 		"help":   {key("?")},
 		"remove": {key("x")},
 		"add":    {key("a")},
-		"dup":    {key("a"), tea.PasteMsg{Content: "https://e.example/a.iso"}, addMsg{err: &daemon.DuplicateError{Existing: &store.Job{ID: "x", Num: 3}}}},
+		"dup":    {key("a"), tea.PasteMsg{Content: "https://e.example/a.iso"}, addMsg{dup: &store.Job{ID: "x", Num: 3}}},
 	}
 	for name, msgs := range opens {
 		for w := 1; w <= 20; w++ {

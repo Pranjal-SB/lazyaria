@@ -1,7 +1,12 @@
 package tui
 
 import (
+	"errors"
+	"os"
+	"path"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -59,19 +64,22 @@ func TestAddParams(t *testing.T) {
 	f.fields[stopDir].SetValue("/data")
 	f.fields[stopName].SetValue("mine.iso")
 	f.paused.Toggle()
-	want := []daemon.AddParams{{URIs: []string{"https://a.example/one.iso"}, Dir: "/data", Out: "mine.iso", StartPaused: true}}
-	if got := f.params(); !slices.EqualFunc(got, want, eqParams) {
-		t.Fatalf("params %+v, want %+v", got, want)
+	want := daemon.AddParams{URIs: []string{"https://a.example/one.iso"}, Dir: "/data", Out: "mine.iso", StartPaused: true}
+	if got := f.items(); len(got) != 1 || !eqParams(got[0].p, want) || got[0].err != nil {
+		t.Fatalf("items %+v, want %+v", got, want)
 	}
-	f.fields[stopLink].SetValue("https://a.example/one.iso  https://b.example/two.iso")
-	got := f.params()
-	if len(got) != 2 || got[0].Out != "" || got[1].URIs[0] != "https://b.example/two.iso" || got[1].Dir != "/data" || !got[1].StartPaused {
-		t.Fatalf("two links give %+v; want two adds without the file name", got)
+	f.fields[stopLink].SetValue("https://a.example/one.iso  https://b.example/two.iso nonsense")
+	got := f.items()
+	if len(got) != 3 || got[0].p.Out != "" || got[1].p.URIs[0] != "https://b.example/two.iso" || got[1].p.Dir != "/data" || !got[1].p.StartPaused {
+		t.Fatalf("three links give %+v; want three adds without the file name", got)
+	}
+	if got[2].err == nil || got[2].link != "nonsense" {
+		t.Fatalf("a word that is no link gave %+v", got[2])
 	}
 	f.setFocus(stopDir)
 	f.move(1)
 	if f.focus != stopPaused {
-		t.Fatalf("tab from the folder went to stop %d; the file name is off for two links", f.focus)
+		t.Fatalf("tab from the folder went to stop %d; the file name is off for several links", f.focus)
 	}
 }
 
@@ -140,10 +148,9 @@ func TestDuplicateShowItSelects(t *testing.T) {
 }
 
 func TestNoSpaceMessage(t *testing.T) {
-	m := update(sampleModel(t, 120, 32), key("a"))
-	m, _ = m.added(addMsg{err: &daemon.NoSpaceError{Dir: "/data", Need: 6 << 30, Free: 2254857830}})
-	if want := "Not enough space in /data: needs 6.0 GiB, 2.1 GiB free."; m.add.msg != want || !m.add.bad {
-		t.Fatalf("message %q (bad %v), want %q", m.add.msg, m.add.bad, want)
+	got := addErrText(&daemon.NoSpaceError{Dir: "/data", Need: 6 << 30, Free: 2254857830}, false)
+	if want := "Not enough space in /data: needs 6.0 GiB, 2.1 GiB free."; got != want {
+		t.Fatalf("message %q, want %q", got, want)
 	}
 }
 
@@ -156,5 +163,99 @@ func TestFormGolden(t *testing.T) {
 	} {
 		tc.profile = colorprofile.ANSI
 		t.Run(tc.name, func(t *testing.T) { runGolden(t, tc) })
+	}
+}
+
+// batchDaemon adds ok-*, refuses bad-* and no-space-*, and knows dup-* already.
+func batchDaemon() *fakeDaemon {
+	d := sampleDaemon()
+	d.add = func(p daemon.AddParams) (*store.Job, error) {
+		name := path.Base(p.URIs[0])
+		switch {
+		case strings.HasPrefix(name, "bad"):
+			return nil, &daemon.BadRequestError{Err: errors.New("the server says no")}
+		case strings.HasPrefix(name, "no-space"):
+			return nil, &daemon.NoSpaceError{Dir: "/dl", Need: 2 << 30, Free: 1 << 30}
+		case strings.HasPrefix(name, "dup") && !p.Force:
+			return nil, &daemon.DuplicateError{Existing: &store.Job{ID: "paper.pdf", Num: 9, State: store.Done}}
+		}
+		return &store.Job{ID: name, Num: 20, Name: name, State: store.Queued}, nil
+	}
+	return d
+}
+
+const batchLinks = "https://e.example/ok-1 https://e.example/bad-1 https://e.example/dup-1 https://e.example/no-space-1 https://e.example/ok-2"
+
+func addCall(name string) string {
+	return "add https://e.example/" + name + " dir=/dl out= paused=false force=false"
+}
+
+// A batch goes past refused links, pauses at a duplicate, goes on after
+// the answer, and leaves only the links not added in the field.
+func TestBatchKeepsOnlyFailedLinks(t *testing.T) {
+	// esc skips the duplicate; so does Cancel, left of Download again
+	for _, answer := range [][]tea.Msg{{key("esc")}, {tea.KeyPressMsg{Code: tea.KeyLeft}, key("enter")}} {
+		d := batchDaemon()
+		u := startTUI(t, options(t, d), 120, 32)
+		u.waitFor(t, "aria2")
+		u.Send(tea.PasteMsg{Content: batchLinks})
+		u.waitFor(t, titleAdd)
+		u.Send(key("enter"))
+		u.waitFor(t, "Already in the list as #9")
+		waitCalls(t, d, addCall("ok-1"), addCall("bad-1"), addCall("dup-1"))
+		for _, k := range answer {
+			u.Send(k)
+		}
+		waitCalls(t, d, addCall("ok-1"), addCall("bad-1"), addCall("dup-1"), addCall("no-space-1"), addCall("ok-2"))
+		u.waitFor(t, "2 links were not added. The first: the server says no")
+		m := u.quit(t)
+		if got := m.add.fields[stopLink].Value(); got != "https://e.example/bad-1 https://e.example/no-space-1" {
+			t.Fatalf("link field %q, want only the two links not added", got)
+		}
+	}
+}
+
+func TestBatchDownloadAgainGoesOn(t *testing.T) {
+	d := batchDaemon()
+	u := startTUI(t, options(t, d), 120, 32)
+	u.waitFor(t, "aria2")
+	u.Send(tea.PasteMsg{Content: "https://e.example/dup-1 https://e.example/ok-1"})
+	u.waitFor(t, titleAdd)
+	u.Send(key("enter"))
+	u.waitFor(t, "Already in the list as #9")
+	u.Send(key("enter")) // Download again
+	waitCalls(t, d, addCall("dup-1"), "add https://e.example/dup-1 dir=/dl out= paused=false force=true", addCall("ok-1"))
+	u.waitFor(t, "Added 2 downloads")
+	if m := u.quit(t); m.add.open {
+		t.Fatal("the form stayed open after every link was added")
+	}
+}
+
+func TestPasteTorrentFile(t *testing.T) {
+	tor := filepath.Join(t.TempDir(), "debian.torrent")
+	if err := os.WriteFile(tor, []byte("d4:infoe"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d := sampleDaemon()
+	u := startTUI(t, options(t, d), 120, 32)
+	u.waitFor(t, "aria2")
+	u.Send(tea.PasteMsg{Content: tor})
+	u.waitFor(t, titleAdd)
+	u.Send(key("enter"))
+	waitCalls(t, d, "add torrent(8 bytes) dir=/dl out= paused=false force=false")
+	u.quit(t)
+}
+
+func TestPasteWhileDisconnectedToasts(t *testing.T) {
+	m := update(New(options(t)), tea.WindowSizeMsg{Width: 120, Height: 32}, tea.PasteMsg{Content: pasted})
+	if m.add.open || m.toast.text != textNotConnected {
+		t.Fatalf("form open %v, toast %q", m.add.open, m.toast.text)
+	}
+}
+
+func TestPasteOnButtonGoesToLink(t *testing.T) {
+	m := update(sampleModel(t, 120, 32), key("a"), key("tab"), key("tab"), key("tab"), key("tab"), tea.PasteMsg{Content: "https://e.example/x"})
+	if got := m.add.fields[stopLink].Value(); got != "https://e.example/x" || m.add.focus != stopLink {
+		t.Fatalf("link %q, focus %d", got, m.add.focus)
 	}
 }

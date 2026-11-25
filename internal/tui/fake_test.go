@@ -71,11 +71,19 @@ func (f *fakeDaemon) Status(context.Context) (ipc.Status, error) {
 }
 
 func (f *fakeDaemon) Add(_ context.Context, p daemon.AddParams) (*store.Job, error) {
-	f.record(fmt.Sprintf("add %s dir=%s out=%s paused=%v force=%v", strings.Join(p.URIs, " "), p.Dir, p.Out, p.StartPaused, p.Force))
+	what := strings.Join(p.URIs, " ")
+	if p.Torrent != nil {
+		what = fmt.Sprintf("torrent(%d bytes)", len(p.Torrent))
+	}
+	f.record(fmt.Sprintf("add %s dir=%s out=%s paused=%v force=%v", what, p.Dir, p.Out, p.StartPaused, p.Force))
 	if f.add != nil {
 		return f.add(p)
 	}
-	return &store.Job{ID: "new", Num: 18, Name: path.Base(p.URIs[0]), State: store.Queued}, nil
+	name := "new"
+	if len(p.URIs) > 0 {
+		name = path.Base(p.URIs[0])
+	}
+	return &store.Job{ID: "new", Num: 18, Name: name, State: store.Queued}, nil
 }
 
 func (f *fakeDaemon) Pause(_ context.Context, ids ...string) error {
