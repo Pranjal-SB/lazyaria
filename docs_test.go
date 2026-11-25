@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/Pranjal-SB/lazyaria/internal/config"
+	"github.com/Pranjal-SB/lazyaria/internal/tui"
 )
 
 // The reference pages are generated from the code: the help text and flag
@@ -24,6 +25,7 @@ func TestReferenceDocs(t *testing.T) {
 	pages := map[string]string{
 		"docs/reference/commands.md": commandsDoc(),
 		"docs/reference/settings.md": settingsDoc(),
+		"docs/reference/keys.md":     keysDoc(),
 	}
 	for path, want := range pages {
 		if *updateDocs {
@@ -105,6 +107,27 @@ func helpEntries() map[string]string {
 	return out
 }
 
+// keysDoc is the terminal interface's key table.
+func keysDoc() string {
+	var b strings.Builder
+	b.WriteString("# Keys\n\n" + generatedNote + `
+These are the keys of the terminal interface, which ` + "`lazyaria`" + ` opens when
+you run it with no command. ` + "`?`" + ` shows the same list on screen. Keys
+in a dialog are listed in [The terminal interface](../guides/terminal-interface.md).
+
+| Keys | What they do |
+|---|---|
+`)
+	for _, k := range tui.KeyHelp() {
+		keys := make([]string, len(k.Keys))
+		for i, key := range k.Keys {
+			keys[i] = "`" + key + "`"
+		}
+		fmt.Fprintf(&b, "| %s | %s |\n", strings.Join(keys, " "), k.Help)
+	}
+	return b.String()
+}
+
 // settingsDoc is one table per section of the settings schema.
 func settingsDoc() string {
 	var b strings.Builder
@@ -134,8 +157,8 @@ Durations are written like ` + "`30s`" + `, ` + "`5m`" + ` or ` + "`1h`" + `. On
 comma separated (` + "`429,network`" + `); in the file it is a TOML array.
 
 The **Applies** column says when a change takes effect: **now**, or after
-the daemon **restarts**. Settings marked *Not used yet* are read only by
-the terminal interface, which is not released yet. ` + "`lazyaria config list`" + `
+the daemon **restarts**. Settings marked *Not used yet* are for features
+that are not built yet; nothing reads them. ` + "`lazyaria config list`" + `
 marks them ` + "`(not used yet)`" + `, and ` + "`lazyaria config set`" + ` saves one with a
 warning.
 `)

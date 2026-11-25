@@ -49,6 +49,13 @@ Put the binary somewhere on your `PATH`, for example:
 install -D -m 755 lazyaria ~/.local/bin/lazyaria
 ```
 
+If you like a shorter name, add `laria` as a link to the same binary. It
+works the same, and its messages say `laria`:
+
+```sh
+ln -s lazyaria ~/.local/bin/laria
+```
+
 Check that it runs:
 
 ```sh
@@ -87,4 +94,5 @@ background process starts it. See [The daemon](../concepts/the-daemon.md).
 
 ## Next
 
-[Your first download](first-download.md).
+[Your first download](first-download.md), or run `lazyaria` with no
+command to open [the terminal interface](../guides/terminal-interface.md).

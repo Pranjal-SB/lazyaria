@@ -79,3 +79,19 @@ func keyFor(action string) string {
 	}
 	return ""
 }
+
+// KeyDoc is one line of the key reference: the keys, the action they run
+// and what it does.
+type KeyDoc struct {
+	Keys         []string
+	Action, Help string
+}
+
+// KeyHelp is the key table, for the generated key reference.
+func KeyHelp() []KeyDoc {
+	out := make([]KeyDoc, len(keyTable))
+	for i, d := range keyTable {
+		out[i] = KeyDoc{Keys: slices.Clone(d.keys), Action: d.action, Help: d.help}
+	}
+	return out
+}

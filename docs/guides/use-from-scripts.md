@@ -26,10 +26,10 @@ lazyaria add --wait https://example.com/a.bin https://example.com/b.bin
 ```
 
 ```text
-added 01M7MCZ0VXYRJJBWTNHH42HQKD a.bin
-added 01M7MCZ0VZHY5V9RGSPYTSE5XB b.bin
-done 01M7MCZ0VXYRJJBWTNHH42HQKD a.bin
-done 01M7MCZ0VZHY5V9RGSPYTSE5XB b.bin
+added #4 a.bin
+added #5 b.bin
+done #4 a.bin
+done #5 b.bin
 ```
 
 - It exits with 0 when all of them finished.
@@ -37,7 +37,7 @@ done 01M7MCZ0VZHY5V9RGSPYTSE5XB b.bin
   standard error:
 
   ```text
-  lazyaria add: 01M7MDACV3K47XV99EQBD1RKDH e.bin failed: Reached max-file-not-found count=3
+  lazyaria add: #8 e.bin failed: Reached max-file-not-found count=3
   ```
 
 - If lazyaria pauses a download because the disk is full, `--wait` stops
@@ -72,12 +72,15 @@ If standard input holds no link at all, `add` exits with 2.
 one JSON document:
 
 ```sh
-lazyaria list --all --json | jq -r '.jobs[] | select(.state == "error") | .id + " " + .name'
+lazyaria list --all --json | jq -r '.jobs[] | select(.state == "error") | "#\(.num) \(.name)"'
 ```
 
 ```text
-01M7MDACV3K47XV99EQBD1RKDH e.bin
+#8 e.bin
 ```
+
+Each job has `num`, the number the other commands take, and `id`, a long
+ID that never changes either.
 
 A job in the list is `queued`, `active`, `paused`, `retry-wait` (waiting
 to try again after a temporary error), `seeding` (a finished torrent that

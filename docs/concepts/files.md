@@ -110,7 +110,7 @@ are, and `add` refuses a link that is already in the list, or a download
 whose file name already exists in the folder, and exits with 4:
 
 ```text
-lazyaria add: "ubuntu.iso" is already in the list (done); add it with --force to download it again [existing job 01M7MCXK5GYY1BXGRJA7MD9R97]
+lazyaria add: "ubuntu.iso" is already in the list (done); add it with --force to download it again [existing job #1]
 ```
 
 With `--force`, lazyaria downloads it, and when it finishes, saves it
@@ -123,7 +123,7 @@ lazyaria add --force https://example.com/files/notes.pdf
 ```
 
 ```text
-added 01M7MD22FTPMDGRGZA5W2731BP notes.pdf
+added #6 notes.pdf
 ```
 
 `lazyaria list --all` shows the name it was saved under once it is done.
@@ -141,11 +141,11 @@ Two settings change this:
 
 ## Removing a job and its files
 
-`lazyaria remove <id>` takes the job off the list. Its file stays where
+`lazyaria remove <job>` takes the job off the list. Its file stays where
 it is: a finished one in the download folder, an unfinished one in its
 `.laria/<job id>/` folder.
 
-`lazyaria remove --delete-files <id>` also moves the job's files to the
+`lazyaria remove --delete-files <job>` also moves the job's files to the
 trash: the one in your home folder (`~/.local/share/Trash`) when the file
 is on the same disk, otherwise a `.Trash-<your user id>` folder at the top
 of the file's disk. It is the same trash your file manager uses. If no
@@ -179,7 +179,7 @@ kept /home/you/Downloads/Music: cannot tell which files are this torrent's
 `remove` prints an undo command:
 
 ```text
-removed 01M7MCYN6ZSBZPXYHXGG8SH1RN
+removed #3
 undo: lazyaria undo VCDLIKHYM7PNFOM5FLMGY6FZ2Q
 ```
 

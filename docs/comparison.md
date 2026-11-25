@@ -18,13 +18,15 @@ writing, and what lazyaria does not do today.
   engine, deep browser integration and video capture. lazyaria runs on
   Linux, has no browser integration and cannot download from video pages.
 - **Surge.** A terminal download manager written in Go, with its own HTTP
-  engine, a terminal interface you can use today, and a browser extension.
-  lazyaria has no terminal interface yet. It adds torrents and magnet
-  links through aria2.
+  engine, a terminal interface and a browser extension. lazyaria has no
+  browser extension. It adds torrents and magnet links through aria2, and
+  its command line is meant for scripts as much as for people.
 
 ## What lazyaria does not do today
 
-- There is no terminal interface (TUI) yet, only the command line.
+- The terminal interface covers the everyday tasks: add, pause, resume,
+  remove and undo, and details. Refreshing a link and changing settings
+  need the command line for now.
 - There is no browser integration, and no downloading from video sites.
 - There is no graphical app, and no Windows support.
 - There are no packages or prebuilt binaries; you build it from source.

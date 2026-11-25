@@ -11,8 +11,8 @@ The job shows up in `lazyaria list` with the state `error` and the
 server's answer in brackets:
 
 ```text
-ID        STATE   DONE  SIZE       NAME
-01M7MD92  error   2%    190.7 MiB  movie.mkv  (The response status is not successful. status=403)
+#   STATE   DONE  SIZE       NAME
+#7  error   2%    190.7 MiB  movie.mkv  (The response status is not successful. status=403)
 ```
 
 A `403` (forbidden) or `410` (gone) answer to a download that was working
@@ -26,18 +26,18 @@ in the `error_kind` field, which is `link-expired` in this case.
 2. Give it to the job:
 
    ```sh
-   lazyaria refresh 01M7MD92 'https://example.com/movie.mkv?sig=new'
+   lazyaria refresh 7 'https://example.com/movie.mkv?sig=new'
    ```
 
    ```text
-   refreshed 01M7MD923S8PNYSXSMX0BDWEYG
+   refreshed #7
    ```
 
 The job starts again from where it stopped:
 
 ```text
-ID        STATE   DONE  SIZE       NAME
-01M7MD92  active  2%    190.7 MiB  movie.mkv
+#   STATE   DONE  SIZE       NAME
+#7  active  2%    190.7 MiB  movie.mkv
 ```
 
 Put the link in single quotes. Signed links often contain `&` or `?`,

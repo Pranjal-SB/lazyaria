@@ -28,7 +28,7 @@ $ echo $?
 
 ```text
 $ lazyaria add https://example.com/files/ubuntu.iso
-lazyaria add: "ubuntu.iso" is already in the list (done); add it with --force to download it again [existing job 01M7MCXK5GYY1BXGRJA7MD9R97]
+lazyaria add: "ubuntu.iso" is already in the list (done); add it with --force to download it again [existing job #1]
 $ echo $?
 4
 ```

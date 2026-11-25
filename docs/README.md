@@ -4,9 +4,9 @@ lazyaria is a download manager for the terminal. It keeps a list of
 downloads and runs them with aria2, in a background process that only runs
 while there is work to do.
 
-lazyaria is pre-release. These pages describe what works today. The
-terminal interface (TUI) is not released yet, so everything here uses the
-command line.
+lazyaria is pre-release. These pages describe what works today: the
+terminal interface, which `lazyaria` opens with no command, and the
+command line, which works next to it.
 
 ## Getting started
 
@@ -19,6 +19,9 @@ command line.
 
 One task per page.
 
+- [The terminal interface](guides/terminal-interface.md): the download
+  list, adding by paste, pausing, removing and undo, the mouse and the
+  keys.
 - [Refresh an expired link](guides/refresh-an-expired-link.md): give a
   download a new link and keep what it has.
 - [Use lazyaria from scripts](guides/use-from-scripts.md): exit codes,
@@ -39,6 +42,8 @@ How lazyaria works, and why.
 ## Reference
 
 - [Commands](reference/commands.md): every command and flag (generated).
+- [Keys](reference/keys.md): every key of the terminal interface
+  (generated).
 - [Settings](reference/settings.md): every setting and its default
   (generated).
 - [Exit codes](reference/exit-codes.md)

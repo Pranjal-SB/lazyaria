@@ -117,12 +117,24 @@ The job is a torrent or magnet download. It has no link that expires.
 
 Run `lazyaria add` with the link to download it again.
 
-## IDs
+## Job numbers and IDs
+
+**`no job #99; see `lazyaria list --all``** (exit code 2)
+
+No job has that number. `lazyaria list` shows the numbers of the jobs that
+are not finished, and `lazyaria list --all` the finished ones too.
+Removed jobs are not listed, and their numbers are not used again.
+
+**`"#x1" is not a job number; give one like #14`** (exit code 2)
+
+A job is named by its number, `14` or `#14`. Anything with a `#` must be
+a number from 1 up.
 
 **`id prefix "01M7" matches 4 jobs, give more characters`**
 
-IDs that were created close together start the same. Give more of the ID,
-as shown by `lazyaria list`.
+A command can also take the first characters of a job's long ID, which
+`lazyaria list --json` shows. IDs created close together start the same;
+give more of the ID, or use the job number.
 
 **`no job id starts with "..."`**
 

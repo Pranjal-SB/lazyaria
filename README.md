@@ -2,13 +2,17 @@
 
 A download manager for the terminal, built on aria2.
 
-> **Status: pre-release.** lazyaria is not ready for use yet. The command
-> line described here works, but commands and settings may still change.
+> **Status: pre-release.** lazyaria is not ready for use yet. The terminal
+> interface and the command line described here work, but commands, keys
+> and settings may still change.
 
-<!-- demo: added when the TUI ships -->
+<!-- demo: a recording of the terminal interface goes here -->
 
 ## Highlights
 
+- **A terminal interface and a command line over the same downloads.**
+  `lazyaria` opens a live list with tabs, speeds, a piece map and mouse
+  support; every command works next to it, from any terminal or script.
 - **Nothing runs when nothing downloads.** The background daemon starts
   with the first command that needs it and exits about 30 seconds after
   the last download ends. There is no service to set up.
@@ -46,12 +50,18 @@ See [Installation](docs/getting-started/installation.md) for details.
 
 ## Quick start
 
+Run `lazyaria` with no command to open the terminal interface. Paste a
+link, or press `a`, to add a download. Quitting leaves the downloads
+running. See [The terminal interface](docs/guides/terminal-interface.md).
+
+The same works from the command line:
+
 ```sh
 lazyaria add https://example.com/files/ubuntu.iso
 ```
 
 ```text
-added 01M7MCXK5GYY1BXGRJA7MD9R97 ubuntu.iso
+added #1 ubuntu.iso
 ```
 
 ```sh
@@ -59,16 +69,16 @@ lazyaria list
 ```
 
 ```text
-ID        STATE   DONE  SIZE  NAME
-01M7MCXK  active  -     -     ubuntu.iso
+#   STATE   DONE  SIZE  NAME
+#1  active  -     -     ubuntu.iso
 ```
 
-Pause, resume and remove take the ID, or its first characters:
+Pause, resume and remove take the job number:
 
 ```sh
-lazyaria pause 01M7MCXK
-lazyaria resume 01M7MCXK
-lazyaria remove 01M7MCXK
+lazyaria pause 1
+lazyaria resume 1
+lazyaria remove 1
 ```
 
 Wait for a download in a script; the exit code is 0 when it finished and
@@ -82,7 +92,6 @@ More in [Your first download](docs/getting-started/first-download.md).
 
 ## Coming next
 
-- the terminal interface (TUI), with mouse support;
 - browser capture;
 - video downloads through yt-dlp.
 
@@ -92,13 +101,13 @@ The [documentation](docs/README.md) has four parts:
 
 - [Getting started](docs/README.md#getting-started): installation and a
   first download.
-- [Guides](docs/README.md#guides): refresh an expired link, use lazyaria
-  from scripts.
+- [Guides](docs/README.md#guides): the terminal interface, refresh an
+  expired link, use lazyaria from scripts.
 - [Concepts](docs/README.md#concepts): the daemon, where files go, the
   engine, and [how lazyaria compares](docs/comparison.md) with other
   download managers.
 - [Reference](docs/README.md#reference): [commands](docs/reference/commands.md),
-  [settings](docs/reference/settings.md),
+  [keys](docs/reference/keys.md), [settings](docs/reference/settings.md),
   [exit codes](docs/reference/exit-codes.md),
   [files and paths](docs/reference/files-and-paths.md) and
   [troubleshooting](docs/reference/troubleshooting.md).
@@ -118,8 +127,8 @@ go test -race ./...
 go test -race -tags e2e ./e2e/    # end-to-end tests; need aria2c
 ```
 
-The command and settings reference pages are generated from the code.
-After you change a command's help, a flag or a setting, run:
+The command, key and settings reference pages are generated from the
+code. After you change a command's help, a flag, a key or a setting, run:
 
 ```sh
 go generate .

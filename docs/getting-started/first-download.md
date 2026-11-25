@@ -1,7 +1,9 @@
 # Your first download
 
 This page walks through the everyday commands. The links are examples:
-use any HTTP, HTTPS or FTP link you like.
+use any HTTP, HTTPS or FTP link you like. If you would rather see your
+downloads on one screen, run `lazyaria` with no command; see
+[The terminal interface](../guides/terminal-interface.md).
 
 ## Add a download
 
@@ -10,12 +12,13 @@ lazyaria add https://example.com/files/ubuntu.iso
 ```
 
 ```text
-added 01M7MCXK5GYY1BXGRJA7MD9R97 ubuntu.iso
+added #1 ubuntu.iso
 ```
 
 `add` returns at once. The download runs in the background, in the
-lazyaria daemon, so you can close the terminal. The long code is the job
-ID. Each download in the list is called a job.
+lazyaria daemon, so you can close the terminal. Each download in the list
+is called a job, and `#1` is its number. Other commands take the number,
+with or without the `#`. Numbers are never reused.
 
 The file goes to your download directory: `~/Downloads`, or the folder
 your desktop set as its download folder. While it downloads, it is kept in
@@ -37,8 +40,8 @@ lazyaria list
 ```
 
 ```text
-ID        STATE   DONE  SIZE       NAME
-01M7MCXP  active  6%    190.7 MiB  big.img
+#   STATE   DONE  SIZE       NAME
+#3  active  6%    190.7 MiB  big.img
 ```
 
 `list` shows the jobs that are not finished. Add `--all` to include the
@@ -49,13 +52,13 @@ lazyaria list --all
 ```
 
 ```text
-ID          STATE  DONE  SIZE      NAME
-01M7MCXK5Z  done   100%  48.8 KiB  notes.pdf
-01M7MCXK5G  done   100%  2.9 MiB   ubuntu.iso
+#   STATE  DONE  SIZE      NAME
+#2  done   100%  48.8 KiB  notes.pdf
+#1  done   100%  2.9 MiB   ubuntu.iso
 ```
 
-The ID column shows only as many characters as it takes to tell the jobs
-apart. Every command that takes an ID accepts these short forms.
+Each job also has a long ID, shown by `list --json`. Commands accept its
+first characters too, as long as they match only one job.
 
 ## Wait for a download
 
@@ -66,8 +69,8 @@ lazyaria add --wait https://example.com/files/notes.pdf
 ```
 
 ```text
-added 01M7MCXK5ZQT001Q0398MM2Y6V notes.pdf
-done 01M7MCXK5ZQT001Q0398MM2Y6V notes.pdf
+added #2 notes.pdf
+done #2 notes.pdf
 ```
 
 It exits with 0 when every download finished and 1 when one failed. This
@@ -76,19 +79,19 @@ is useful in scripts; see [Use lazyaria from scripts](../guides/use-from-scripts
 ## Pause and resume
 
 ```sh
-lazyaria pause 01M7MCYB
+lazyaria pause 3
 ```
 
 ```text
-paused 01M7MCYB1KXEVX88FT1M77601A
+paused #3
 ```
 
 ```sh
-lazyaria resume 01M7MCYB
+lazyaria resume 3
 ```
 
 ```text
-resumed 01M7MCYB1KXEVX88FT1M77601A
+resumed #3
 ```
 
 A resumed download carries on from where it stopped, as long as the
@@ -100,8 +103,8 @@ starts again.
 A failed job shows the state `error` and the reason in brackets:
 
 ```text
-ID        STATE   DONE  SIZE  NAME
-01M7MDHT  error   -     -     later.bin  (Reached max-file-not-found count=3)
+#   STATE   DONE  SIZE  NAME
+#4  error   -     -     later.bin  (Reached max-file-not-found count=3)
 ```
 
 `lazyaria resume` tries a failed job again, from where it stopped. If the
@@ -112,11 +115,11 @@ errors are explained in [Troubleshooting](../reference/troubleshooting.md).
 ## Remove a download
 
 ```sh
-lazyaria remove 01M7MCXP
+lazyaria remove 3
 ```
 
 ```text
-removed 01M7MCXPME2MRR93GPM4J5ZDDA
+removed #3
 undo: lazyaria undo KJY3SB2H4I2VYVUFLL4DC3QIXK
 ```
 
@@ -127,7 +130,7 @@ it. It moves it to the trash; for an unfinished download, that is its
 folder in `.laria`, with aria2's `.aria2` control file:
 
 ```sh
-lazyaria remove --delete-files 01M7MCYN
+lazyaria remove --delete-files 4
 ```
 
 It only takes files the job downloaded itself. See
@@ -158,7 +161,7 @@ lazyaria refuses a link that is already in the list, and a file name that
 already exists in the folder:
 
 ```text
-lazyaria add: "ubuntu.iso" is already in the list (done); add it with --force to download it again [existing job 01M7MCXK5GYY1BXGRJA7MD9R97]
+lazyaria add: "ubuntu.iso" is already in the list (done); add it with --force to download it again [existing job #1]
 ```
 
 `--force` downloads it anyway, and saves it under a new name such as

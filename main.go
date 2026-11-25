@@ -93,7 +93,7 @@ func main() {
 
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	cli.Prog = "lazyaria"
-	if len(args) > 0 && filepath.Base(args[0]) == "laria" { // the short alias, decision 25
+	if len(args) > 0 && filepath.Base(args[0]) == "laria" { // the short alias
 		cli.Prog = "laria"
 	}
 	if len(args) < 2 {
