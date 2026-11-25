@@ -119,12 +119,6 @@ func (e *env) getenv(k string) string {
 	return ""
 }
 
-func (e *env) cmd(args ...string) *exec.Cmd {
-	c := exec.Command(bin, args...)
-	c.Env = e.vars
-	return c
-}
-
 // run runs one CLI command and returns stdout, stderr and the exit code.
 func (e *env) run(args ...string) (string, string, int) {
 	e.t.Helper()
