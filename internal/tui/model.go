@@ -142,6 +142,9 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		if msg.gen != m.gen {
 			return m, nil
 		}
+		if p, ok := msg.ev.Data["phase"].(string); ok && msg.ev.Type == "engine.state" {
+			m.status.EngineState = p
+		}
 		cmds := []tea.Cmd{m.waitEvent()}
 		if !m.pending {
 			m.pending = true

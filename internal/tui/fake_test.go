@@ -102,7 +102,10 @@ func (f *fakeDaemon) Resume(_ context.Context, ids ...string) error {
 	return nil
 }
 
-func (f *fakeDaemon) Remove(_ context.Context, ids []string, deleteFiles bool) (string, []string, error) {
+func (f *fakeDaemon) Remove(ctx context.Context, ids []string, deleteFiles bool) (string, []string, error) {
+	if _, ok := ctx.Deadline(); ok {
+		f.record("remove with a deadline") // a slow trash would be cut off
+	}
 	how := "keep"
 	if deleteFiles {
 		how = "trash"

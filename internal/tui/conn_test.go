@@ -82,3 +82,15 @@ func TestOlderSnapshotDropped(t *testing.T) {
 		t.Fatalf("jobs %v after an older snapshot, want only new.iso", js)
 	}
 }
+
+// The engine dot follows the daemon's engine.state events.
+func TestEngineStateFollowsEvents(t *testing.T) {
+	m := update(sampleModel(t, 120, 32), eventMsg{ev: daemon.Event{Type: "engine.state", Data: map[string]any{"phase": "ready"}}})
+	if !strings.Contains(m.topBar(120), textEngineOK) {
+		t.Fatalf("top bar %q before the event", m.topBar(120))
+	}
+	m = update(m, eventMsg{ev: daemon.Event{Type: "engine.state", Data: map[string]any{"phase": "failed"}}})
+	if bar := m.topBar(120); !strings.Contains(bar, "aria2 failed") {
+		t.Fatalf("top bar %q after the engine failed", bar)
+	}
+}

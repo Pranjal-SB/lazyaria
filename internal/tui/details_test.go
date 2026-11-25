@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -112,5 +113,14 @@ func TestDetailsGolden(t *testing.T) {
 	} {
 		tc.profile = colorprofile.ANSI
 		t.Run(tc.name, func(t *testing.T) { runGolden(t, tc) })
+	}
+}
+
+// A server link url.Parse rejects is still shown without its password.
+func TestHostCountsHideCredentials(t *testing.T) {
+	for _, h := range hostCounts([]string{"ftp://user:se cret@host/%zz"}) {
+		if strings.Contains(h.host, "se cret") || strings.Contains(h.host, "user") {
+			t.Fatalf("host %q shows the credentials", h.host)
+		}
 	}
 }

@@ -37,11 +37,16 @@ type Options struct {
 	Prog     string              // the name the binary was invoked as, for hints
 	Now      func() time.Time    // nil: time.Now; tests fix it for relative times
 	Program  []tea.ProgramOption // tests: input, output, size, colour profile
+
+	ctx context.Context // ends when Run returns; calls with no deadline use it
 }
 
 // Run shows the TUI until the user quits. It returns the line to print
 // once the terminal is restored, if downloads go on in the background.
 func Run(ctx context.Context, o Options) (string, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	o.ctx = ctx
 	opts := append([]tea.ProgramOption{tea.WithContext(ctx)}, o.Program...)
 	final, err := tea.NewProgram(New(o), opts...).Run()
 	m, ok := final.(Model)

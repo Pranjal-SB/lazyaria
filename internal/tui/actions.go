@@ -133,10 +133,13 @@ func (m Model) removeJobs(ids []string, name string, deleteFiles bool) tea.Cmd {
 	if m.d == nil {
 		return nil
 	}
-	d := m.d
+	d, ctx := m.d, m.o.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	// No deadline: moving files to the Trash across disks can take long,
+	// and giving up here would lose the undo token while the daemon goes on.
 	return m.cmd(func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
-		defer cancel()
 		token, _, err := d.Remove(ctx, ids, deleteFiles)
 		return doneMsg{act: daemon.ActRemove, ids: ids, name: name, undo: token, err: err}
 	})

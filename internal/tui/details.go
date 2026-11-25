@@ -259,7 +259,7 @@ type hostCount struct {
 func hostCounts(servers []string) []hostCount {
 	var out []hostCount
 	for _, s := range servers {
-		h := s
+		h := textutil.StripUserinfo(s, "")
 		if u, err := url.Parse(s); err == nil && u.Host != "" {
 			h = u.Hostname()
 		}
