@@ -124,3 +124,27 @@ func TestHostCountsHideCredentials(t *testing.T) {
 		}
 	}
 }
+
+// J and K scroll a details pane too short for its text, within its ends.
+func TestDetailsScrollKeys(t *testing.T) {
+	m := sampleModel(t, 120, 24)
+	m.det = httpDetails()
+	m.det.Job = m.selected()
+	if m.detailsMaxTop() == 0 {
+		t.Fatal("the details fit; the test needs them to scroll")
+	}
+	for i, tc := range []struct {
+		key  string
+		want int
+	}{{"K", 0}, {"J", 1}, {"J", 2}, {"K", 1}} {
+		if m = update(m, key(tc.key)); m.detTop != tc.want {
+			t.Fatalf("step %d (%s): top %d, want %d", i, tc.key, m.detTop, tc.want)
+		}
+	}
+	for range 50 {
+		m = update(m, key("J"))
+	}
+	if m.detTop != m.detailsMaxTop() {
+		t.Fatalf("top %d past the end %d", m.detTop, m.detailsMaxTop())
+	}
+}

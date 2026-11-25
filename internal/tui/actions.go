@@ -64,6 +64,10 @@ func (m Model) run(a string) (Model, tea.Cmd) {
 		if l.narrow() {
 			m.showDetails = !m.showDetails
 		}
+	case actDetDown:
+		m.detTop = min(m.detTop+1, m.detailsMaxTop())
+	case actDetUp:
+		m.detTop = max(m.detTop-1, 0)
 	case actToggle:
 		if m.selJustMoved() {
 			return m, nil

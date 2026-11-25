@@ -22,6 +22,8 @@ const (
 	actUndo     = "undo"
 	actHelp     = "help"
 	actAdd      = "add"
+	actDetDown  = "details_down"
+	actDetUp    = "details_up"
 	actQuit     = "quit"
 )
 
@@ -48,6 +50,8 @@ var keyTable = []keyDef{
 	{actNextTab, []string{"]", "tab"}, helpNextTab},
 	{actPrevTab, []string{"[", "shift+tab"}, helpPrevTab},
 	{actDetails, []string{"enter"}, helpDetails},
+	{actDetDown, []string{"J"}, helpDetDown},
+	{actDetUp, []string{"K"}, helpDetUp},
 	{actAdd, []string{"a"}, helpAdd},
 	{actToggle, []string{"space"}, helpToggle},
 	{actRemove, []string{"x", "delete"}, helpRemove},

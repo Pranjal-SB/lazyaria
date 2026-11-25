@@ -1,21 +1,22 @@
  [1mlazyaria[m   [34m↓[m 12.1 MiB/s [34m▁▂▂▃▅▆▅▄▆█[m   [90m↑ 512.0 KiB/s[m                            [90mabout 4 min to finish all[m     [32m●[m aria2 ok
 
   [1mDownloading 3[m   Waiting 3   Finished 2   [31mProblems 1[m
-  [34m━━━━━━━━━━━━━[90m───────────────────────────────────────────────────────────────────────────────────────────────────────[m
-[34m╭─[m [34;1mDownloading[m [34m──────────────╭─[m [34;1mKeys[m [34m────────────────────────────────────────────────────╮[m [90m────────────────────────────╮[m
-[34m│▌[m [34m↓[m [90m#16[m [1mubuntu-26.04-desktop[34;22m│[m [1mj down       [m  move down                                  [34m│[39;1m6.04-desktop-amd64.iso[m       [90m│[m
-[34m│▌[m  [34m██████████████████▎[90m░░░░░[m [34m│[m [1mk up         [m  move up                                    [34m│downloading[m · 76%            [90m│[m
-[34m│[m                            [34m│[m [1mg home       [m  go to the first download                   [34m│[m.0 GiB                       [90m│[m
-[34m│[m  [34m↓[m [90m#15[m conference-talk-1080[34m│[m [1mG end        [m  go to the last download                    [34m│[ms, 2 min left                [90m│[m
-[34m│[m   [34m███████▎[90m░░░░░░░░░░░░░░░░[m [34m│[m [1mpgup ctrl+u  [m  move a page up                             [34m│[m                             [90m│[m
-[34m│[m                            [34m│[m [1mpgdown ctrl+d[m  move a page down                           [34m│[m                             [90m│[m
-[34m│[m  [34m↓[m [90m#14[m a-file-whose-name-is[34m│[m [1m1            [m  show what is downloading                   [34m│[m]8;;file:///home/me/Downloads/Downloads]8;;                   [90m│[m
-[34m│[m   [34mstarting[m                 [34m│[m [1m2            [m  show what is waiting                       [34m│[m                             [90m│[m
-[34m│[m                            [34m│[m [1m3            [m  show finished downloads                    [34m│[90med from[m                      [90m│[m
-[34m│[m                            [34m│[m [1m4            [m  show problems, when there are any          [34m│[mexample.com/file…p-amd64.iso [90m│[m
-[34m│[m                            [34m│[m [1m] tab        [m  next tab                                   [34m│[m                             [90m│[m
+  [34m━━━━━━━━━━━━━[90m──────────────[34m╭─[m [34;1mKeys[m [34m────────────────────────────────────────────────────╮[90m────────────────────────────[m
+[34m╭─[m [34;1mDownloading[m [34m──────────────│[m [1mj down       [m  move down                                  [34m│[m [90m────────────────────────────╮[m
+[34m│▌[m [34m↓[m [90m#16[m [1mubuntu-26.04-desktop[34;22m│[m [1mk up         [m  move up                                    [34m│[39;1m6.04-desktop-amd64.iso[m       [90m│[m
+[34m│▌[m  [34m██████████████████▎[90m░░░░░[m [34m│[m [1mg home       [m  go to the first download                   [34m│downloading[m · 76%            [90m│[m
+[34m│[m                            [34m│[m [1mG end        [m  go to the last download                    [34m│[m.0 GiB                       [90m│[m
+[34m│[m  [34m↓[m [90m#15[m conference-talk-1080[34m│[m [1mpgup ctrl+u  [m  move a page up                             [34m│[ms, 2 min left                [90m│[m
+[34m│[m   [34m███████▎[90m░░░░░░░░░░░░░░░░[m [34m│[m [1mpgdown ctrl+d[m  move a page down                           [34m│[m                             [90m│[m
+[34m│[m                            [34m│[m [1m1            [m  show what is downloading                   [34m│[m                             [90m│[m
+[34m│[m  [34m↓[m [90m#14[m a-file-whose-name-is[34m│[m [1m2            [m  show what is waiting                       [34m│[m]8;;file:///home/me/Downloads/Downloads]8;;                   [90m│[m
+[34m│[m   [34mstarting[m                 [34m│[m [1m3            [m  show finished downloads                    [34m│[m                             [90m│[m
+[34m│[m                            [34m│[m [1m4            [m  show problems, when there are any          [34m│[90med from[m                      [90m│[m
+[34m│[m                            [34m│[m [1m] tab        [m  next tab                                   [34m│[mexample.com/file…p-amd64.iso [90m│[m
 [34m│[m                            [34m│[m [1m[ shift+tab  [m  previous tab                               [34m│[m                             [90m│[m
 [34m│[m                            [34m│[m [1menter        [m  open or close details on a narrow terminal [34m│[m                             [90m│[m
+[34m│[m                            [34m│[m [1mJ            [m  scroll details down                        [34m│[m                             [90m│[m
+[34m│[m                            [34m│[m [1mK            [m  scroll details up                          [34m│[m                             [90m│[m
 [34m│[m                            [34m│[m [1ma            [m  add a download                             [34m│[m                             [90m│[m
 [34m│[m                            [34m│[m [1mspace        [m  pause or resume                            [34m│[m                             [90m│[m
 [34m│[m                            [34m│[m [1mx delete     [m  remove from the list                       [34m│[m                             [90m│[m
@@ -25,7 +26,6 @@
 [34m│[m                            [34m│[m                                                           [34m│[m                             [90m│[m
 [34m│[m                            [34m│[m [90mHold Shift to select text in your terminal.[m               [34m│[m                             [90m│[m
 [34m│[m                            [34m╰───────────────────────────────────────────────────────────╯[m                             [90m│[m
-[34m│[m                                                                              [34m│[90m│[m                                      [90m│[m
 [34m│[m                                                                              [34m│[90m│[m                                      [90m│[m
 [34m│[m                                                                              [34m│[90m│[m                                      [90m│[m
 [34m╰──────────────────────────────────────────────────────────────────────────────╯[90m╰──────────────────────────────────────╯[m

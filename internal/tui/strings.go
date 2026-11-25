@@ -78,6 +78,8 @@ const (
 	helpNextTab  = "next tab"
 	helpPrevTab  = "previous tab"
 	helpDetails  = "open or close details on a narrow terminal"
+	helpDetDown  = "scroll details down"
+	helpDetUp    = "scroll details up"
 	helpToggle   = "pause or resume"
 	helpRemove   = "remove from the list"
 	helpUndo     = "undo a remove while its note shows"
