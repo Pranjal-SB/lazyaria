@@ -130,7 +130,7 @@ type HistorySettings struct {
 }
 
 type UISettings struct {
-	Mouse               string `toml:"mouse" default:"all" live:"true" enum:"all|cell|off" help:"Mouse reporting mode." unused:"true"`
+	Mouse               string `toml:"mouse" default:"all" live:"true" enum:"all|cell|off" help:"Mouse reporting mode."`
 	DoubleClickMS       int    `toml:"double_click_ms" default:"400" live:"true" min:"50" help:"Double click interval in milliseconds." unused:"true"`
 	Glyphs              string `toml:"glyphs" default:"unicode" live:"true" enum:"unicode|ascii|nerd" help:"Glyph set; nerd needs a Nerd Font."`
 	Units               string `toml:"units" default:"iec" live:"true" enum:"iec|si" help:"Size units (1024 or 1000 based)."`
@@ -141,7 +141,7 @@ type UISettings struct {
 	WideBreakpoint      int    `toml:"wide_breakpoint" default:"100" live:"true" min:"1" help:"Columns at which the wide layout starts."`
 	Sort                string `toml:"sort" default:"smart" live:"true" enum:"smart|added|name|progress|speed|size" help:"Default list sort." unused:"true"`
 	PasteDetection      bool   `toml:"paste_detection" default:"true" live:"true" help:"Offer to add URLs found in pasted text." unused:"true"`
-	ToastSeconds        int    `toml:"toast_seconds" default:"4" live:"true" min:"1" help:"Seconds a toast stays visible." unused:"true"`
+	ToastSeconds        int    `toml:"toast_seconds" default:"4" live:"true" min:"1" help:"Seconds a toast stays visible."`
 	SparklineSeconds    int    `toml:"sparkline_seconds" default:"60" live:"true" min:"1" help:"Seconds of speed history in sparklines."`
 	WindowTitle         bool   `toml:"window_title" default:"true" live:"true" help:"Set the terminal window title." unused:"true"`
 	TitleFormat         string `toml:"title_format" default:"lazyaria ↓ {down} · {active} active" live:"true" help:"Window title template." unused:"true"`

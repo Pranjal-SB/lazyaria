@@ -782,7 +782,7 @@
       "off"
     ],
     "help": "Mouse reporting mode.",
-    "not_used_yet": true
+    "not_used_yet": false
   },
   {
     "key": "ui.double_click_ms",
@@ -930,7 +930,7 @@
     "live": true,
     "enum": [],
     "help": "Seconds a toast stays visible.",
-    "not_used_yet": true
+    "not_used_yet": false
   },
   {
     "key": "ui.sparkline_seconds",

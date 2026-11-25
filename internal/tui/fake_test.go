@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -30,7 +31,20 @@ type fakeDaemon struct {
 
 	mu     sync.Mutex
 	paused []string
+	calls  []string // "resume a.iso", "remove a.iso keep", "undo tok-1", ...
 	closed bool
+}
+
+func (f *fakeDaemon) record(s string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, s)
+}
+
+func (f *fakeDaemon) called() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.calls)
 }
 
 func newFakeDaemon(jobs ...*store.Job) *fakeDaemon {
@@ -59,17 +73,31 @@ func (f *fakeDaemon) Pause(_ context.Context, ids ...string) error {
 	if f.pause != nil {
 		f.pause(ids)
 	}
+	f.record("pause " + strings.Join(ids, " "))
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.paused = append(f.paused, ids...)
 	return nil
 }
 
-func (f *fakeDaemon) Resume(context.Context, ...string) error { return nil }
-func (f *fakeDaemon) Remove(context.Context, []string, bool) (string, []string, error) {
-	return "", nil, nil
+func (f *fakeDaemon) Resume(_ context.Context, ids ...string) error {
+	f.record("resume " + strings.Join(ids, " "))
+	return nil
 }
-func (f *fakeDaemon) Undo(context.Context, string) error { return nil }
+
+func (f *fakeDaemon) Remove(_ context.Context, ids []string, deleteFiles bool) (string, []string, error) {
+	how := "keep"
+	if deleteFiles {
+		how = "trash"
+	}
+	f.record("remove " + strings.Join(ids, " ") + " " + how)
+	return "tok-1", nil, nil
+}
+
+func (f *fakeDaemon) Undo(_ context.Context, token string) error {
+	f.record("undo " + token)
+	return nil
+}
 func (f *fakeDaemon) Details(_ context.Context, id string, _ int) (daemon.Details, error) {
 	f.detailsCalls.Add(1)
 	d := f.details[id]
@@ -183,10 +211,10 @@ func (u tui) waitFor(t *testing.T, want string) {
 	}
 }
 
-// quit presses q and returns the final model.
+// quit presses ctrl+c, which quits from any screen, and returns the final model.
 func (u tui) quit(t *testing.T) Model {
 	t.Helper()
-	u.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	u.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	return u.FinalModel(t, teatest.WithFinalTimeout(5*time.Second)).(probe).Model
 }
 

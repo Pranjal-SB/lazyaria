@@ -18,33 +18,40 @@ const (
 	actPrevTab  = "prev_tab"
 	actDetails  = "details"
 	actToggle   = "pause_resume"
+	actRemove   = "remove"
+	actUndo     = "undo"
+	actHelp     = "help"
 	actQuit     = "quit"
 )
 
 // keyDef binds keys to an action. The table is the one place keys live:
-// the key handler and the help read it, so rebinding keys later only
-// has to edit it.
+// the key handler, the footer and the help read it, so rebinding keys
+// later only has to edit it.
 type keyDef struct {
 	action string
 	keys   []string // as tea.KeyPressMsg.String() names them
+	help   string
 }
 
 var keyTable = []keyDef{
-	{actDown, []string{"j", "down"}},
-	{actUp, []string{"k", "up"}},
-	{actTop, []string{"g", "home"}},
-	{actBottom, []string{"G", "end"}},
-	{actPageUp, []string{"pgup", "ctrl+u"}},
-	{actPageDown, []string{"pgdown", "ctrl+d"}},
-	{actTab1, []string{"1"}},
-	{actTab2, []string{"2"}},
-	{actTab3, []string{"3"}},
-	{actTab4, []string{"4"}},
-	{actNextTab, []string{"]", "tab"}},
-	{actPrevTab, []string{"[", "shift+tab"}},
-	{actDetails, []string{"enter"}},
-	{actToggle, []string{"space"}},
-	{actQuit, []string{"q", "ctrl+c"}},
+	{actDown, []string{"j", "down"}, helpDown},
+	{actUp, []string{"k", "up"}, helpUp},
+	{actTop, []string{"g", "home"}, helpTop},
+	{actBottom, []string{"G", "end"}, helpBottom},
+	{actPageUp, []string{"pgup", "ctrl+u"}, helpPageUp},
+	{actPageDown, []string{"pgdown", "ctrl+d"}, helpPageDown},
+	{actTab1, []string{"1"}, helpTab1},
+	{actTab2, []string{"2"}, helpTab2},
+	{actTab3, []string{"3"}, helpTab3},
+	{actTab4, []string{"4"}, helpTab4},
+	{actNextTab, []string{"]", "tab"}, helpNextTab},
+	{actPrevTab, []string{"[", "shift+tab"}, helpPrevTab},
+	{actDetails, []string{"enter"}, helpDetails},
+	{actToggle, []string{"space"}, helpToggle},
+	{actRemove, []string{"x", "delete"}, helpRemove},
+	{actUndo, []string{"u"}, helpUndo},
+	{actHelp, []string{"?"}, helpHelp},
+	{actQuit, []string{"q", "ctrl+c"}, helpQuit},
 }
 
 // actionFor is the action bound to key, or "".

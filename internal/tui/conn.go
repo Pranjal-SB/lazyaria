@@ -50,9 +50,11 @@ type (
 		err  error
 	}
 	doneMsg struct {
-		act string
-		ids []string
-		err error
+		act  string
+		ids  []string
+		name string // the job's name, for the toast
+		undo string // a remove's undo token
+		err  error
 	}
 )
 

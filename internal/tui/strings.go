@@ -62,3 +62,37 @@ const (
 	hintHelp    = "keys"
 	hintQuit    = "quit"
 )
+
+// Help, dialogs and toasts.
+const (
+	helpDown     = "move down"
+	helpUp       = "move up"
+	helpTop      = "go to the first download"
+	helpBottom   = "go to the last download"
+	helpPageUp   = "move a page up"
+	helpPageDown = "move a page down"
+	helpTab1     = "show what is downloading"
+	helpTab2     = "show what is waiting"
+	helpTab3     = "show finished downloads"
+	helpTab4     = "show problems, when there are any"
+	helpNextTab  = "next tab"
+	helpPrevTab  = "previous tab"
+	helpDetails  = "open or close details on a narrow terminal"
+	helpToggle   = "pause or resume"
+	helpRemove   = "remove from the list"
+	helpUndo     = "undo a remove while its note shows"
+	helpHelp     = "show or hide these keys"
+	helpQuit     = "quit; downloads keep going"
+
+	titleHelp       = "Keys"
+	textShiftSelect = "Hold Shift to select text in your terminal."
+	titleRemove     = "Remove"
+	fmtRemoveQ      = "Remove %s?"
+	btnKeep         = "Remove from list"
+	btnTrash        = "Delete files → Trash"
+	btnCancel       = "Cancel"
+	textRemoveKeys  = "← → choose   enter confirm   esc cancel"
+	fmtRemoved      = "Removed %s"
+	fmtRestored     = "Put back %s"
+	hintUndo        = "undo"
+)

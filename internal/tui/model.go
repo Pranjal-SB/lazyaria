@@ -4,7 +4,6 @@
 package tui
 
 import (
-	"context"
 	"fmt"
 	"slices"
 	"time"
@@ -44,8 +43,12 @@ type Model struct {
 	top         [len(tabs)]int    // the first row shown, per tab
 	showDetails bool              // narrow layouts: the pane under the list is open
 	hover       string            // the layer under the pointer
-	flash       string            // the last action's error
-	dumb        bool              // TERM=dumb: ASCII glyphs, no links
+	toast       toast             // the note in the footer
+	toastSeq    int
+	remove      removeModal // the remove dialog, when open
+	help        bool        // the key help is open
+	detTop      int         // the first details line shown
+	dumb        bool        // TERM=dumb: ASCII glyphs, no links
 
 	det     daemon.Details // the last details reply
 	detID   string         // the job the pane shows; "" while it is hidden
@@ -153,65 +156,17 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 	case detailsMsg:
 		m.gotDetails(msg)
 	case doneMsg:
-		m.flash = ""
-		if msg.err != nil {
-			m.flash = msg.err.Error()
+		return m.done(msg)
+	case toastDoneMsg:
+		if msg.seq == m.toast.seq {
+			m.toast = toast{}
 		}
 	case tea.KeyPressMsg:
 		return m.key(msg)
+	case tea.MouseMsg:
+		return m.mouse(msg)
 	}
 	return m, nil
-}
-
-func (m Model) key(k tea.KeyPressMsg) (Model, tea.Cmd) {
-	l := m.layout()
-	switch a := actionFor(k.String()); a {
-	case actQuit:
-		return m, tea.Quit
-	case actDown:
-		m.move(1)
-	case actUp:
-		m.move(-1)
-	case actTop:
-		m.move(-len(m.jobs))
-	case actBottom:
-		m.move(len(m.jobs))
-	case actPageUp:
-		m.move(-l.visibleRows())
-	case actPageDown:
-		m.move(l.visibleRows())
-	case actTab1, actTab2, actTab3, actTab4:
-		if i := int(a[len(a)-1] - '1'); i < m.tabsShown() {
-			m.tab = i
-		}
-	case actNextTab:
-		m.tab = (m.tab + 1) % m.tabsShown()
-	case actPrevTab:
-		m.tab = (m.tab + m.tabsShown() - 1) % m.tabsShown()
-	case actDetails:
-		if l.narrow() {
-			m.showDetails = !m.showDetails
-		}
-	case actToggle:
-		return m, m.toggle()
-	}
-	return m, nil
-}
-
-// toggle pauses or resumes the selected job, whichever the daemon allows.
-func (m Model) toggle() tea.Cmd {
-	j := m.selected()
-	if j == nil || m.d == nil {
-		return nil
-	}
-	ids := []string{j.ID}
-	switch {
-	case slices.Contains(j.Actions, daemon.ActPause):
-		return m.act(daemon.ActPause, ids, func(ctx context.Context, d Daemon) error { return d.Pause(ctx, ids...) })
-	case slices.Contains(j.Actions, daemon.ActResume):
-		return m.act(daemon.ActResume, ids, func(ctx context.Context, d Daemon) error { return d.Resume(ctx, ids...) })
-	}
-	return nil
 }
 
 // cursor is the selected row of the current tab, or -1 when it is empty.

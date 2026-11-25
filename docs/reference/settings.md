@@ -170,7 +170,7 @@ warning.
 
 | Setting | Default | Applies | Description |
 |---|---|---|---|
-| `ui.mouse` | `all` | now | Mouse reporting mode. One of: `all`, `cell`, `off`. *Not used yet.* |
+| `ui.mouse` | `all` | now | Mouse reporting mode. One of: `all`, `cell`, `off`. |
 | `ui.double_click_ms` | `400` | now | Double click interval in milliseconds. *Not used yet.* |
 | `ui.glyphs` | `unicode` | now | Glyph set; nerd needs a Nerd Font. One of: `unicode`, `ascii`, `nerd`. |
 | `ui.units` | `iec` | now | Size units (1024 or 1000 based). One of: `iec`, `si`. |
@@ -181,7 +181,7 @@ warning.
 | `ui.wide_breakpoint` | `100` | now | Columns at which the wide layout starts. |
 | `ui.sort` | `smart` | now | Default list sort. One of: `smart`, `added`, `name`, `progress`, `speed`, `size`. *Not used yet.* |
 | `ui.paste_detection` | `true` | now | Offer to add URLs found in pasted text. *Not used yet.* |
-| `ui.toast_seconds` | `4` | now | Seconds a toast stays visible. *Not used yet.* |
+| `ui.toast_seconds` | `4` | now | Seconds a toast stays visible. |
 | `ui.sparkline_seconds` | `60` | now | Seconds of speed history in sparklines. |
 | `ui.window_title` | `true` | now | Set the terminal window title. *Not used yet.* |
 | `ui.title_format` | `lazyaria ↓ {down} · {active} active` | now | Window title template. *Not used yet.* |

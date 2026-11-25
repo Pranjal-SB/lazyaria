@@ -45,7 +45,7 @@ func (m *Model) watchDetails(msg tea.Msg) tea.Cmd {
 		return nil
 	}
 	if j.ID != m.detID {
-		m.detID, m.detDue = j.ID, true
+		m.detID, m.detDue, m.detTop = j.ID, true, 0
 		m.detSeq++
 		seq := m.detSeq
 		return tea.Tick(detailsDebounce, func(time.Time) tea.Msg { return detailsTickMsg{seq} })
@@ -281,6 +281,12 @@ func plural(n int, one, many string) string {
 
 // detailsView is the pane's lines from the scroll offset on.
 func (m Model) detailsView(l layout) string {
+	lines := strings.Split(m.detailsText(l), "\n")
+	return strings.Join(lines[min(m.detTop, len(lines)-1):], "\n")
+}
+
+// detailsText is all of the pane's lines, padded.
+func (m Model) detailsText(l layout) string {
 	d := m.selectedDetails()
 	if d.Job == nil {
 		return ""

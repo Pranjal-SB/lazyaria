@@ -10,10 +10,11 @@ import (
 
 // Hit-test layer ids are "<kind>:<id>".
 const (
-	layerRow  = "row:"
-	layerTab  = "tab:"
-	layerBtn  = "btn:"
-	layerPane = "pane:"
+	layerRow   = "row:"
+	layerTab   = "tab:"
+	layerBtn   = "btn:"
+	layerPane  = "pane:"
+	layerModal = "modal:" // alone: the dialog's background
 )
 
 // Layer depths. Hit-test layers lie under the drawn screen (z 0), so they
@@ -21,7 +22,10 @@ const (
 const (
 	zPane = -30 + iota
 	zRow
-	zDrawn = 0
+	zModal
+	zModalBtn
+	zDrawn   = 0
+	zOverlay = 1
 )
 
 // View draws the screen from the same layers that mouse hit tests use.
@@ -29,6 +33,7 @@ func (m Model) View() tea.View {
 	defer logPanic(m.o.CrashDir)
 	v := tea.NewView(m.compose().Render())
 	v.AltScreen = true
+	v.MouseMode = m.mouseMode()
 	return v
 }
 
@@ -71,13 +76,34 @@ func (m Model) compose() *lipgloss.Compositor {
 		}
 	}
 
-	foot, xs := m.footer(l)
-	for i, h := range m.hints() {
-		hitBox(layerBtn+h.action, xs[i], l.h-1, lipgloss.Width(h.key)+1+lipgloss.Width(h.label), 1, zRow)
+	foot, areas := m.footer(l)
+	for _, a := range areas {
+		hitBox(a.id, a.x, l.h-1, a.w, 1, zRow)
 	}
 
 	screen := strings.Join([]string{m.topBar(l.w), "", tabsLine, rule, panes, foot}, "\n")
-	return lipgloss.NewCompositor(append(hits, lipgloss.NewLayer(screen).Z(zDrawn))...)
+	layers := append(hits, lipgloss.NewLayer(screen).Z(zDrawn))
+	if ov := m.overlay(l); ov.body != "" {
+		w, h := lipgloss.Width(ov.body), lipgloss.Height(ov.body)
+		x, y := max((l.w-w)/2, 0), max((l.h-h)/2, 0)
+		layers = append(layers, lipgloss.NewLayer(ov.body).X(x).Y(y).Z(zOverlay),
+			lipgloss.NewLayer(blank(w, h)).ID(layerModal).X(x).Y(y).Z(zModal))
+		for _, a := range ov.hits {
+			layers = append(layers, lipgloss.NewLayer(blank(a.w, a.h)).ID(a.id).X(x+a.x).Y(y+a.y).Z(zModalBtn))
+		}
+	}
+	return lipgloss.NewCompositor(layers...)
+}
+
+// overlay is the dialog or help drawn over the screen, if one is open.
+func (m Model) overlay(l layout) overlay {
+	switch {
+	case m.remove.open():
+		return m.removeView(l.w - 2)
+	case m.help:
+		return m.helpView(l.w-2, l.h-2)
+	}
+	return overlay{}
 }
 
 // hit is the kind and id of the top-most layer with an id at x, y:

@@ -14,6 +14,12 @@ import (
 // hint is one footer key: the key, what it does, and the action it runs.
 type hint struct{ key, label, action string }
 
+// area is a clickable span of one line: a layer id, its x and width.
+type area struct {
+	id   string
+	x, w int
+}
+
 // hints are the keys for the selected job, built from what the daemon
 // says it allows, plus the ones that always work.
 func (m Model) hints() []hint {
@@ -25,16 +31,29 @@ func (m Model) hints() []hint {
 		case slices.Contains(j.Actions, daemon.ActResume):
 			hs = append(hs, hint{keyFor(actToggle), hintResume, actToggle})
 		}
+		if slices.Contains(j.Actions, daemon.ActRemove) {
+			hs = append(hs, hint{keyFor(actRemove), hintRemove, actRemove})
+		}
 		if m.layout().narrow() && m.o.Settings.UI.DetailsPosition != "hidden" {
 			hs = append(hs, hint{keyFor(actDetails), hintDetails, actDetails})
 		}
 	}
-	return append(hs, hint{keyFor(actQuit), hintQuit, actQuit})
+	return append(hs, hint{keyFor(actHelp), hintHelp, actHelp}, hint{keyFor(actQuit), hintQuit, actQuit})
 }
 
-// footerLeft is the connection error, else the chip that says something
-// failed, else the small-terminal hint.
-func (m Model) footerLeft(l layout) string {
+// hintView is a key in bold and its label muted, or bold under the pointer.
+func (m Model) hintView(h hint) string {
+	label := m.theme.muted.Render(h.label)
+	if m.hover == layerBtn+h.action {
+		label = m.theme.bold.Render(h.label)
+	}
+	return m.theme.bold.Render(h.key) + " " + label
+}
+
+// footerLeft is the connection error, else the toast, else the chip that
+// says something failed, else the small-terminal hint. undoX is where
+// the toast's undo key starts, or -1.
+func (m Model) footerLeft(l layout) (s string, undoX, undoW int) {
 	t := m.theme
 	switch {
 	case m.failures >= failuresShown && m.lastErr != nil:
@@ -42,37 +61,40 @@ func (m Model) footerLeft(l layout) string {
 		if !strings.Contains(msg, "doctor") {
 			msg = fmt.Sprintf(fmtDoctor, m.lastErr, m.o.Prog)
 		}
-		return t.bad.Render(msg)
-	case m.flash != "":
-		return t.bad.Render(m.flash)
+		return t.bad.Render(msg), -1, 0
+	case m.toast.text != "":
+		return m.toastView()
 	case m.summary.Attention > 0 && m.tab != tabProbIx:
-		return t.bad.Render(t.G.icon(store.Error)+" ") + fmt.Sprintf(fmtChipFailed, m.summary.Attention)
+		return t.bad.Render(t.G.icon(store.Error)+" ") + fmt.Sprintf(fmtChipFailed, m.summary.Attention), -1, 0
 	case l.compact:
-		return t.muted.Render(textTooSmall)
+		return t.muted.Render(textTooSmall), -1, 0
 	}
-	return ""
+	return "", -1, 0
 }
 
-// footer lays out the left text and the hints at the right edge. It
-// returns each hint's x so clicks can find it.
-func (m Model) footer(l layout) (string, []int) {
-	t := m.theme
+// footer lays out the left text and the hints at the right edge, and
+// says where each clickable key is.
+func (m Model) footer(l layout) (string, []area) {
 	hs := m.hints()
 	parts := make([]string, len(hs))
 	for i, h := range hs {
-		parts[i] = t.bold.Render(h.key) + " " + t.muted.Render(h.label)
+		parts[i] = m.hintView(h)
 	}
 	right := strings.Join(parts, "   ") + " "
-	left := " " + m.footerLeft(l)
+	left, undoX, undoW := m.footerLeft(l)
+	left = " " + left
 	room := l.w - lipgloss.Width(right) - 2
 	if lipgloss.Width(left) > room {
 		left = truncate(left, max(room, 0), m.theme.G.ellipsis)
 	}
-	xs := make([]int, len(hs))
+	var areas []area
+	if undoX >= 0 && 1+undoX+undoW <= room {
+		areas = append(areas, area{layerBtn + actUndo, 1 + undoX, undoW})
+	}
 	x := l.w - lipgloss.Width(right)
 	for i, p := range parts {
-		xs[i] = x
+		areas = append(areas, area{layerBtn + hs[i].action, x, lipgloss.Width(p)})
 		x += lipgloss.Width(p) + 3
 	}
-	return fit(left, l.w-lipgloss.Width(right)) + right, xs
+	return fit(left, l.w-lipgloss.Width(right)) + right, areas
 }
