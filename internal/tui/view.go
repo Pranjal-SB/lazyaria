@@ -78,7 +78,8 @@ func (m Model) compose() *lipgloss.Compositor {
 
 	foot, areas := m.footer(l)
 	for _, a := range areas {
-		if l.footY < l.h { // a footer cut off below the screen cannot be clicked
+		// a key cut off below or right of the screen cannot be clicked
+		if l.footY < l.h && a.x+a.w <= l.w {
 			hitBox(a.id, a.x, l.footY, a.w, 1, zRow)
 		}
 	}

@@ -2,9 +2,12 @@ package tui
 
 import (
 	"fmt"
+	"slices"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/Pranjal-SB/lazyaria/internal/store"
 )
@@ -60,4 +63,39 @@ func TestDoubleClickNeverDeletes(t *testing.T) {
 			}
 		}
 	}
+}
+
+// Every footer key is clickable exactly where it is drawn, also when the
+// keys are wider than the terminal.
+func TestFooterKeysUnderClick(t *testing.T) {
+	for _, w := range append([]int{80, 120}, rangeInts(20, 60)...) {
+		m := sampleModel(t, w, 24)
+		l := m.layout()
+		c := m.compose()
+		line := ansi.Strip(strings.Split(c.Render(), "\n")[l.footY])
+		labels := map[string]string{}
+		for _, h := range m.hints() {
+			labels[layerBtn+h.action] = h.key + " " + h.label
+		}
+		_, areas := m.footer(l)
+		for x := range w {
+			kind, id := hit(c, x, l.footY)
+			if kind != "btn" {
+				continue
+			}
+			i := slices.IndexFunc(areas, func(a area) bool { return a.id == layerBtn+id })
+			a := areas[i]
+			if drawn := ansi.Cut(line, a.x, a.x+a.w); drawn != labels[a.id] || a.x+a.w > w {
+				t.Fatalf("%d wide: a click at %d runs %s, but %q is drawn there", w, x, id, drawn)
+			}
+		}
+	}
+}
+
+func rangeInts(lo, hi int) []int {
+	var out []int
+	for i := lo; i <= hi; i++ {
+		out = append(out, i)
+	}
+	return out
 }

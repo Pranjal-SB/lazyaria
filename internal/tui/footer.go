@@ -91,7 +91,7 @@ func (m Model) footer(l layout) (string, []area) {
 	if undoX >= 0 && 1+undoX+undoW <= room {
 		areas = append(areas, area{layerBtn + actUndo, 1 + undoX, undoW})
 	}
-	x := l.w - lipgloss.Width(right)
+	x := max(l.w-lipgloss.Width(right), 0) // keys wider than the screen start at its left edge
 	for i, p := range parts {
 		areas = append(areas, area{layerBtn + hs[i].action, x, lipgloss.Width(p)})
 		x += lipgloss.Width(p) + 3
