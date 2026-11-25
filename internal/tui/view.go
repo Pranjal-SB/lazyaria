@@ -62,7 +62,7 @@ func (m Model) compose() *lipgloss.Compositor {
 	hitBox(layerPane+"list", l.list.x, l.list.y, l.list.w, l.list.h, zPane)
 	panes := list
 	if d := l.details; d.w > 0 {
-		det := pane(m.theme, titleDetails, "", d.w, d.h, false)
+		det := pane(m.theme, titleDetails, m.detailsView(l), d.w, d.h, false)
 		hitBox(layerPane+"details", d.x, d.y, d.w, d.h, zPane)
 		if d.y == l.list.y {
 			panes = lipgloss.JoinHorizontal(lipgloss.Top, list, det)

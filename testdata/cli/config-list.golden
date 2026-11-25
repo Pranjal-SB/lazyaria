@@ -974,7 +974,7 @@
     "live": true,
     "enum": [],
     "help": "Use OSC 8 hyperlinks.",
-    "not_used_yet": true
+    "not_used_yet": false
   },
   {
     "key": "ui.clipboard",

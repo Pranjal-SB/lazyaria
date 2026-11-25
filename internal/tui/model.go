@@ -45,6 +45,14 @@ type Model struct {
 	showDetails bool              // narrow layouts: the pane under the list is open
 	hover       string            // the layer under the pointer
 	flash       string            // the last action's error
+	dumb        bool              // TERM=dumb: ASCII glyphs, no links
+
+	det     daemon.Details // the last details reply
+	detID   string         // the job the pane shows; "" while it is hidden
+	detSeq  int            // bumped when the job changes, so older ticks are dropped
+	detAt   time.Time      // when the last fetch started
+	detBusy bool           // a fetch is running
+	detDue  bool           // a fetch is scheduled
 }
 
 func New(o Options) Model { return Model{o: o, theme: NewTheme(o.Settings.UI.Glyphs)} }
@@ -64,7 +72,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	defer logPanic(m.o.CrashDir)
 	m, cmd := m.update(msg)
 	m.syncSel()
-	return m, cmd
+	return m, tea.Batch(cmd, m.watchDetails(msg))
 }
 
 func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
@@ -73,7 +81,7 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		m.w, m.h = msg.Width, msg.Height
 	case tea.EnvMsg:
 		if msg.Getenv("TERM") == "dumb" {
-			m.theme = NewTheme("ascii")
+			m.theme, m.dumb = NewTheme("ascii"), true
 		}
 	case connectedMsg:
 		if msg.gen != m.gen {
@@ -81,6 +89,7 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		}
 		m.d, m.ev, m.fr, m.status = msg.d, msg.ev, msg.fr, msg.status
 		m.everUp, m.failures, m.lastErr, m.backoff = true, 0, nil, 0
+		m.detID = "" // fetch the details again from the new connection
 		m.setSnapshot(msg.snap)
 		m.speeds = nil
 		for _, s := range msg.snap.Speed {
@@ -141,6 +150,8 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 			m.addSpeed(msg.f.Summary.Down)
 		}
 		return m, m.waitFrame()
+	case detailsMsg:
+		m.gotDetails(msg)
 	case doneMsg:
 		m.flash = ""
 		if msg.err != nil {

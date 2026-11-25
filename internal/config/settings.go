@@ -145,7 +145,7 @@ type UISettings struct {
 	SparklineSeconds    int    `toml:"sparkline_seconds" default:"60" live:"true" min:"1" help:"Seconds of speed history in sparklines."`
 	WindowTitle         bool   `toml:"window_title" default:"true" live:"true" help:"Set the terminal window title." unused:"true"`
 	TitleFormat         string `toml:"title_format" default:"lazyaria ↓ {down} · {active} active" live:"true" help:"Window title template." unused:"true"`
-	OSCLinks            bool   `toml:"osc_links" default:"true" live:"true" help:"Use OSC 8 hyperlinks." unused:"true"`
+	OSCLinks            bool   `toml:"osc_links" default:"true" live:"true" help:"Use OSC 8 hyperlinks."`
 	Clipboard           string `toml:"clipboard" default:"auto" live:"true" enum:"auto|osc52|wl-copy|xclip|off" help:"Clipboard backend." unused:"true"`
 	OpenCommand         string `toml:"open_command" default:"xdg-open" live:"true" help:"Command used to open files." unused:"true"`
 	OpenFolderCommand   string `toml:"open_folder_command" default:"" live:"true" help:"Command used to open folders; empty uses open_command." unused:"true"`

@@ -1,0 +1,32 @@
+ [1mlazyaria[m   [34m↓[m 12.1 MiB/s [34m▁▂▂▃▅▆▅▄▆█[m   [90m↑ 512.0 KiB/s[m                            [90mabout 4 min to finish all[m     [32m●[m aria2 ok
+
+  [1mDownloading 3[m   Waiting 3   Finished 2   [31mProblems 1[m
+  [34m━━━━━━━━━━━━━[90m───────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[34m╭─[m [34;1mDownloading[m [34m────────────────────────────────────────────────────────────────╮[90m╭─[m [90mDetails[m [90m────────────────────────────╮[m
+[34m│▌[m [34m↓[m [90m#16[m [1mubuntu-26.04-desktop-amd64.iso[m                         [90m4.6 of 6.0 GiB[m [34m│[90m│[m [1mubuntu-26.04-desktop-amd64.iso[m       [90m│[m
+[34m│▌[m  [34m██████████████████▎[90m░░░░░[m    76%    9.3 MiB/s   [90m2 min left[m                  [34m│[90m│[m #16 · [34m↓ downloading[m · 76%            [90m│[m
+[34m│[m                                                                              [34m│[90m│[m 4.6 of 6.0 GiB                       [90m│[m
+[34m│[m  [34m↓[m [90m#15[m conference-talk-1080p.mkv                              [90m1.1 of 3.5 GiB[m [34m│[90m│[m 9.3 MiB/s, 2 min left                [90m│[m
+[34m│[m   [34m███████▎[90m░░░░░░░░░░░░░░░░[m    30%    2.8 MiB/s   [90m9 min left[m                  [34m│[90m│[m                                      [90m│[m
+[34m│[m                                                                              [34m│[90m│[m [90mSaved to[m                             [90m│[m
+[34m│[m  [34m↓[m [90m#14[m a-file-whose-name-is-far-too-long-to-fit-in-…t-all-even-wide.tar.gz   [34m│[90m│[m ]8;;file:///home/me/Downloads/home/me/Downloads]8;;                   [90m│[m
+[34m│[m   [34mstarting[m                                                                   [34m│[90m│[m                                      [90m│[m
+[34m│[m                                                                              [34m│[90m│[m [90mDownloaded from[m                      [90m│[m
+[34m│[m                                                                              [34m│[90m│[m https://example.com/file…p-amd64.iso [90m│[m
+[34m│[m                                                                              [34m│[90m│[m                                      [90m│[m
+[34m│[m                                                                              [34m│[90m│[m [90mPieces[m                               [90m│[m
+[34m│[m                                                                              [34m│[90m│[m [32m████████████████████████████████████[m [90m│[m
+[34m│[m                                                                              [34m│[90m│[m [32m██████████████[34m▒▒▒▒▒[90m░░░░░░░░░░░░░░░░░[m [90m│[m
+[34m│[m                                                                              [34m│[90m│[m [32m█[m [90mdone[m  [34m▒[m [90mdownloading now[m  [90m░ not yet[m [90m│[m
+[34m│[m                                                                              [34m│[90m│[m                                      [90m│[m
+[34m│[m                                                                              [34m│[90m│[m [90mConnections[m                          [90m│[m
+[34m│[m                                                                              [34m│[90m│[m releases.example.com  10 connections [90m│[m
+[34m│[m                                                                              [34m│[90m│[m mirror.example.org    6 connections  [90m│[m
+[34m│[m                                                                              [34m│[90m│[m                                      [90m│[m
+[34m│[m                                                                              [34m│[90m│[m [90mWhat happened[m                        [90m│[m
+[34m│[m                                                                              [34m│[90m│[m [90m30 min ago [m added                    [90m│[m
+[34m│[m                                                                              [34m│[90m│[m [90m22 min ago [m paused                   [90m│[m
+[34m│[m                                                                              [34m│[90m│[m [90m21 min ago [m resumed                  [90m│[m
+[34m│[m                                                                              [34m│[90m│[m                                      [90m│[m
+[34m╰──────────────────────────────────────────────────────────────────────────────╯[90m╰──────────────────────────────────────╯[m
+ [31m✗ [m1 failed, press 4 to see                                                                        [1mspace[m [90mpause[m   [1mq[m [90mquit[m

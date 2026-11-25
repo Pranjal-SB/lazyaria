@@ -185,7 +185,7 @@ warning.
 | `ui.sparkline_seconds` | `60` | now | Seconds of speed history in sparklines. |
 | `ui.window_title` | `true` | now | Set the terminal window title. *Not used yet.* |
 | `ui.title_format` | `lazyaria ↓ {down} · {active} active` | now | Window title template. *Not used yet.* |
-| `ui.osc_links` | `true` | now | Use OSC 8 hyperlinks. *Not used yet.* |
+| `ui.osc_links` | `true` | now | Use OSC 8 hyperlinks. |
 | `ui.clipboard` | `auto` | now | Clipboard backend. One of: `auto`, `osc52`, `wl-copy`, `xclip`, `off`. *Not used yet.* |
 | `ui.open_command` | `xdg-open` | now | Command used to open files. *Not used yet.* |
 | `ui.open_folder_command` | empty | now | Command used to open folders; empty uses open_command. *Not used yet.* |

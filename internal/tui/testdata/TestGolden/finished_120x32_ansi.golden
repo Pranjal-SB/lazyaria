@@ -3,15 +3,15 @@
   Downloading 3   Waiting 3   [1mFinished 2[m   [31mProblems 1[m
   [90m────────────────────────────[34m━━━━━━━━━━[90m──────────────────────────────────────────────────────────────────────────────[m
 [34m╭─[m [34;1mFinished[m [34m───────────────────────────────────────────────────────────────────╮[90m╭─[m [90mDetails[m [90m────────────────────────────╮[m
-[34m│▌[m [32m↑[m [90m#8[m [1mdebian-13.0.0-amd64-netinst.iso[m                              [90m700.0 MiB[m [34m│[90m│[m                                      [90m│[m
-[34m│▌[m  [32mseeding[m   [90m↑ 512.0 KiB/s[m                                                    [34m│[90m│[m                                      [90m│[m
-[34m│[m                                                                              [34m│[90m│[m                                      [90m│[m
+[34m│▌[m [32m↑[m [90m#8[m [1mdebian-13.0.0-amd64-netinst.iso[m                              [90m700.0 MiB[m [34m│[90m│[m [1mdebian-13.0.0-amd64-netinst.iso[m      [90m│[m
+[34m│▌[m  [32mseeding[m   [90m↑ 512.0 KiB/s[m                                                    [34m│[90m│[m #8 · [32m↑ seeding[m                       [90m│[m
+[34m│[m                                                                              [34m│[90m│[m 700.0 MiB                            [90m│[m
 [34m│[m  [32m✓[m [90m#9[m paper.pdf                                                      [90m1.2 MiB[m [34m│[90m│[m                                      [90m│[m
-[34m│[m   [32mdone[90m 2 min ago[m                                                             [34m│[90m│[m                                      [90m│[m
+[34m│[m   [32mdone[90m 2 min ago[m                                                             [34m│[90m│[m [90mSaved to[m                             [90m│[m
+[34m│[m                                                                              [34m│[90m│[m ]8;;file:///home/me/Downloads/home/me/Downloads]8;;                   [90m│[m
 [34m│[m                                                                              [34m│[90m│[m                                      [90m│[m
-[34m│[m                                                                              [34m│[90m│[m                                      [90m│[m
-[34m│[m                                                                              [34m│[90m│[m                                      [90m│[m
-[34m│[m                                                                              [34m│[90m│[m                                      [90m│[m
+[34m│[m                                                                              [34m│[90m│[m [90mDownloaded from[m                      [90m│[m
+[34m│[m                                                                              [34m│[90m│[m https://example.com/file…netinst.iso [90m│[m
 [34m│[m                                                                              [34m│[90m│[m                                      [90m│[m
 [34m│[m                                                                              [34m│[90m│[m                                      [90m│[m
 [34m│[m                                                                              [34m│[90m│[m                                      [90m│[m

@@ -20,10 +20,13 @@ import (
 // fakeDaemon serves a fixed snapshot. Closing ev or fr is the daemon
 // going away.
 type fakeDaemon struct {
-	snap  ipc.SnapshotResult
-	ev    chan daemon.Event
-	fr    chan daemon.Frame
-	pause func(ids []string) // nil: record only
+	snap    ipc.SnapshotResult
+	ev      chan daemon.Event
+	fr      chan daemon.Frame
+	pause   func(ids []string)        // nil: record only
+	details map[string]daemon.Details // by job id; others get no extras
+
+	detailsCalls atomic.Int32
 
 	mu     sync.Mutex
 	paused []string
@@ -67,8 +70,15 @@ func (f *fakeDaemon) Remove(context.Context, []string, bool) (string, []string, 
 	return "", nil, nil
 }
 func (f *fakeDaemon) Undo(context.Context, string) error { return nil }
-func (f *fakeDaemon) Details(context.Context, string, int) (daemon.Details, error) {
-	return daemon.Details{}, nil
+func (f *fakeDaemon) Details(_ context.Context, id string, _ int) (daemon.Details, error) {
+	f.detailsCalls.Add(1)
+	d := f.details[id]
+	for _, j := range f.snap.Jobs {
+		if j.ID == id {
+			d.Job = j
+		}
+	}
+	return d, nil
 }
 
 func (f *fakeDaemon) Close() error {
@@ -178,4 +188,13 @@ func (u tui) quit(t *testing.T) Model {
 	t.Helper()
 	u.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	return u.FinalModel(t, teatest.WithFinalTimeout(5*time.Second)).(probe).Model
+}
+
+func waitFor(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	for end := time.Now().Add(5 * time.Second); !cond(); time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(end) {
+			t.Fatalf("timed out waiting for %s", what)
+		}
+	}
 }
