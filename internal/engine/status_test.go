@@ -31,3 +31,16 @@ func TestDetailsBitfield(t *testing.T) {
 		t.Fatal("the status poll asks for the piece map")
 	}
 }
+
+func TestCleanMessage(t *testing.T) {
+	for in, want := range map[string]string{
+		"CUID#11 - Name resolution for example.invalid failed:Name or service not known": "Name resolution for example.invalid failed:Name or service not known",
+		"CUID#7 - ":         "",
+		"No URI available.": "No URI available.",
+		"see CUID#3 - here": "see CUID#3 - here",
+	} {
+		if got := cleanMessage(in); got != want {
+			t.Errorf("cleanMessage(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 
 	"github.com/Pranjal-SB/lazyaria/internal/aria2"
@@ -149,13 +150,20 @@ func (e *aria2Engine) tell(ctx context.Context, refs []EngineRef, keys []string)
 	return out, nil
 }
 
+// cuidPrefix is how aria2 starts many messages: the internal number of
+// the connection that hit the error, which means nothing to a person.
+var cuidPrefix = regexp.MustCompile(`^CUID#\d+ - `)
+
+// cleanMessage is aria2's error message without its connection number.
+func cleanMessage(msg string) string { return cuidPrefix.ReplaceAllString(msg, "") }
+
 func toStatus(s *aria2.Status) EngineStatus {
 	st := EngineStatus{
 		Ref: EngineRef(s.GID), State: s.Status,
 		Total: int64(s.TotalLength), Done: int64(s.CompletedLength),
 		Down: int64(s.DownloadSpeed), Up: int64(s.UploadSpeed),
 		Conns: int64(s.Connections), Seeders: int64(s.NumSeeders),
-		ErrorMsg:   s.ErrorMessage,
+		ErrorMsg:   cleanMessage(s.ErrorMessage),
 		HTTPStatus: aria2.HTTPStatus(s.ErrorMessage),
 		IsBT:       s.Bittorrent != nil,
 		Known:      true,
