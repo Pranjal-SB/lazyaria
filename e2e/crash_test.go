@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -13,8 +14,9 @@ import (
 	"github.com/Pranjal-SB/lazyaria/internal/testutil"
 )
 
-// TestCrashNeverLoses: kill -9 the daemon or aria2c at random points 20
-// times; every job still ends done with the right bytes.
+// TestCrashNeverLoses: kill -9 the daemon or aria2c, in turn, at 23 chosen
+// points of progress, three of them above 90%; every job still ends done
+// with the right bytes.
 func TestCrashNeverLoses(t *testing.T) {
 	files := map[string][]byte{}
 	for i, name := range []string{"c1.bin", "c2.bin", "c3.bin"} {
@@ -55,75 +57,46 @@ func TestCrashNeverLoses(t *testing.T) {
 		return float64(done) / float64(total), allDone
 	}
 
-	// Kill until every job is done: one kill per 4% of progress up to 90%,
-	// then one as progress first crosses each of 91%, 94% and 97%, so kills
-	// also land in the finalise window (.aria2 removal, Done). A threshold
-	// the downloads finish before is skipped.
+	// One kill at each 4% of progress up to 80%, then at 91%, 94% and 97%,
+	// so kills also land late, near the finalise window. The server holds
+	// every file 2% past the next kill point, so each point is reached and
+	// none is overshot, however fast or slow the machine.
+	var targets []float64
+	for p := 4; p <= 80; p += 4 {
+		targets = append(targets, float64(p)/100)
+	}
+	targets = append(targets, 0.91, 0.94, 0.97)
+	gate := func(frac float64) {
+		for name, b := range files {
+			srv.SetGate(name, int64(frac*float64(len(b))))
+		}
+	}
 	start := time.Now()
-	const minKills = 20
-	lateAt := []float64{0.91, 0.94, 0.97}
-	kills, late := 0, 0
-	for time.Since(start) < 150*time.Second {
-		frac, allDone := progress()
-		if allDone {
-			break
-		}
-		if frac > 0.9 {
-			if len(lateAt) == 0 {
-				break // the late kills are done; let the jobs finish
+	for i, target := range targets {
+		gate(target + 0.02)
+		var frac float64
+		waitFor(t, time.Minute, fmt.Sprintf("progress to reach %.0f%%", target*100), func() bool {
+			var allDone bool
+			frac, allDone = progress()
+			if allDone {
+				t.Fatalf("all jobs done at a gate of %.0f%%", (target+0.02)*100)
 			}
-			// Poll fast and kill the moment the next threshold is crossed.
-			for !allDone && len(lateAt) > 0 && frac < lateAt[0] && time.Since(start) < 150*time.Second {
-				time.Sleep(100 * time.Millisecond)
-				frac, allDone = progress()
-			}
-			if allDone || frac < lateAt[0] {
-				break // done, or the deadline passed before the threshold
-			}
-			for len(lateAt) > 0 && frac >= lateAt[0] {
-				lateAt = lateAt[1:]
-			}
-		}
+			return frac >= target
+		})
 		// status auto-starts the daemon after the previous kill.
 		pid := e.status().PID
 		victim, what := pid, "daemon"
-		if kills%2 == 1 {
+		if i%2 == 1 {
 			what = "aria2c"
-			waitFor(t, 10*time.Second, "an aria2c child or completion", func() bool {
-				victim = aria2Child(pid)
-				_, allDone = progress()
-				return victim != 0 || allDone
-			})
-			if victim == 0 {
-				break
-			}
+			waitFor(t, 10*time.Second, "an aria2c child", func() bool { victim = aria2Child(pid); return victim != 0 })
 		}
 		if err := syscall.Kill(victim, syscall.SIGKILL); err != nil {
 			t.Fatalf("kill %s %d: %v", what, victim, err)
 		}
-		kills++
-		if frac > 0.9 {
-			late++
-		}
-		t.Logf("kill %2d: %s %d at %s, progress %.1f%%", kills, what, victim, time.Since(start).Round(time.Millisecond), frac*100)
-		if frac > 0.9 {
-			continue // the threshold loop above paces the late kills
-		}
-		// Wait for the next 4% (or 4 s, if a restart makes no headway).
-		target, until := frac+0.04, time.Now().Add(4*time.Second)
-		for time.Now().Before(until) {
-			if f, done := progress(); f >= target || done {
-				break
-			}
-			time.Sleep(200 * time.Millisecond)
-		}
+		t.Logf("kill %2d: %s %d at %s, progress %.1f%%", i+1, what, victim, time.Since(start).Round(time.Millisecond), frac*100)
 	}
-	t.Logf("%d kills, %d up to 90%% progress, %d after", kills, kills-late, late)
-	if kills < minKills {
-		t.Errorf("only %d kills, want at least %d", kills, minKills)
-	}
-	if late < 2 {
-		t.Errorf("only %d kills above 90%% progress, want at least 2", late)
+	for name := range files {
+		srv.SetGate(name, -1)
 	}
 
 	for _, id := range ids {
