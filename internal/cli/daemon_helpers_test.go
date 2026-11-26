@@ -30,6 +30,9 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	bin = filepath.Join(dir, "lazyaria")
+	// Trash goes to a folder of its own on the temp disk, never the real
+	// home trash or a shared .Trash-<uid> at the top of the temp disk.
+	os.Setenv("XDG_DATA_HOME", filepath.Join(dir, "data"))
 	out, err := exec.Command("go", "build", "-o", bin, "../..").CombinedOutput()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "build lazyaria: %v\n%s", err, out)
