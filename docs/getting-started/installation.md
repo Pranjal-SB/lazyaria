@@ -1,14 +1,14 @@
 # Installation
 
-lazyaria is pre-release. There are no packages or prebuilt binaries yet,
-so you build it from source.
+lazyaria is pre-release. You can download a prebuilt binary from GitHub
+Releases or build it from source. There are no distribution packages yet.
 
 ## What you need
 
 - **Linux.** lazyaria is developed and tested on Linux. It also compiles
   for macOS and FreeBSD, but nobody tests it there yet. Windows is not
   supported.
-- **Go 1.27 or newer**, to build it.
+- **Go 1.27 or newer**, only to build from source.
 - **aria2 1.35 or newer.** aria2 is the program that does the downloading
   (see [The engine](../concepts/the-engine.md)). lazyaria is developed
   against aria2 1.37. It looks for `aria2c` on your `PATH`.
@@ -35,7 +35,34 @@ aria2c --version | head -1
 aria2 version 1.37.0
 ```
 
-## Build lazyaria
+## Install from a release
+
+Releases have binaries for Linux (amd64, arm64), macOS (amd64, arm64) and
+FreeBSD (amd64). Download the tarball for your platform and `checksums.txt`
+from the [releases page](https://github.com/Pranjal-SB/lazyaria/releases).
+The tarball is named `lazyaria_<version>_<os>_<arch>.tar.gz`.
+
+Verify it and unpack it:
+
+```sh
+sha256sum --ignore-missing -c checksums.txt
+tar xzf lazyaria_<version>_linux_amd64.tar.gz lazyaria
+```
+
+On macOS use `shasum -a 256 -c checksums.txt` in place of `sha256sum`. On
+FreeBSD, compare the output of `sha256 <file>` with `checksums.txt`.
+
+Put the binary on your `PATH` and, if you like, add the short name:
+
+```sh
+install -D -m 755 lazyaria ~/.local/bin/lazyaria
+ln -s lazyaria ~/.local/bin/laria
+```
+
+aria2 must be installed too (see above). A release binary reports the
+release version from `lazyaria version`.
+
+## Build from source
 
 ```sh
 git clone https://github.com/Pranjal-SB/lazyaria.git

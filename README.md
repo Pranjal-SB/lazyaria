@@ -34,8 +34,11 @@ A download manager for the terminal, built on aria2.
 
 ## Install
 
-lazyaria builds from source for now. You need Linux, Go 1.27 or newer, and
-aria2 1.35 or newer (developed against 1.37).
+Prebuilt binaries are on the
+[releases page](https://github.com/Pranjal-SB/lazyaria/releases); see
+[Installation](docs/getting-started/installation.md). To build from source
+you need Linux, Go 1.27 or newer, and aria2 1.35 or newer (developed
+against 1.37).
 
 ```sh
 sudo apt install aria2        # or pacman, dnf, zypper, apk, brew
@@ -117,7 +120,9 @@ The [documentation](docs/README.md) has four parts:
 ## Contributing
 
 lazyaria is pre-release, so expect things to move. Bug reports and ideas
-are welcome as issues. Please open an issue before a large change.
+are welcome as issues. Please open an issue before a large change. See
+[CONTRIBUTING.md](CONTRIBUTING.md). To report a security problem, see
+[SECURITY.md](SECURITY.md).
 
 To work on the code:
 
