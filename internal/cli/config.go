@@ -92,15 +92,14 @@ func Config(ctx context.Context, args []string, out, errOut io.Writer) int {
 			return fail(errOut, "config", err)
 		}
 		if config.Unused(pos[0]) {
-			fmt.Fprintf(errOut, "lazyaria config: warning: %s is not used yet; it is saved for the terminal interface, which is not released yet\n", pos[0])
+			fmt.Fprintf(errOut, "lazyaria config: warning: %s is not used yet; it is saved for a feature that is not built yet\n", pos[0])
 		}
-		if e, ok := schemaByKey()[pos[0]]; ok && !e.Live {
-			fmt.Fprintf(out, "%s saved; it applies after the daemon restarts\n", pos[0])
-		}
+		appliesWhen(out, pos[0], "saved")
 	case "reset":
 		if err := c.ConfigReset(ctx, pos[0]); err != nil {
 			return fail(errOut, "config", err)
 		}
+		appliesWhen(out, pos[0], "reset")
 	default: // list, keys
 		ents, err := c.ConfigList(ctx)
 		if err != nil {
@@ -141,4 +140,16 @@ func printSettings(out io.Writer, ents []ipc.ConfigEntry) {
 		fmt.Fprintf(tw, "%s\t%s\t%s%s\n", e.Key, fmtValue(maskSetting(e.Key, e.Value)), e.Source, note)
 	}
 	tw.Flush()
+}
+
+// appliesWhen says when a changed setting takes effect, if not at once:
+// the daemon reads some only at start, and the terminal interface reads
+// its own when it opens.
+func appliesWhen(out io.Writer, key, what string) {
+	switch e, ok := schemaByKey()[key]; {
+	case ok && !e.Live:
+		fmt.Fprintf(out, "%s %s; it takes effect after the daemon restarts\n", key, what)
+	case strings.HasPrefix(key, "ui."):
+		fmt.Fprintf(out, "%s %s; it takes effect the next time you open %s\n", key, what, Prog)
+	}
 }

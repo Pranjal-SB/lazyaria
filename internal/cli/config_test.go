@@ -219,3 +219,22 @@ func TestConfigEditPromptEOF(t *testing.T) {
 		t.Errorf("editor ran %s times, want 1", n)
 	}
 }
+
+// A setting the daemon reads only at start, or one the terminal interface
+// reads when it opens, says when it takes effect; a live one says nothing.
+func TestConfigSetSaysWhenItApplies(t *testing.T) {
+	startFake(t)
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"set", "downloads.dir", "/tmp/x"}, "downloads.dir saved; it takes effect after the daemon restarts\n"},
+		{[]string{"reset", "downloads.dir"}, "downloads.dir reset; it takes effect after the daemon restarts\n"},
+		{[]string{"set", "ui.glyphs", "ascii"}, "ui.glyphs saved; it takes effect the next time you open lazyaria\n"},
+		{[]string{"set", "downloads.max_concurrent", "2"}, ""},
+	} {
+		if code, out, errOut := run(t, Config, "", tc.args...); code != 0 || out != tc.want {
+			t.Errorf("config %v: exit %d, out %q (stderr %q), want %q", tc.args, code, out, errOut, tc.want)
+		}
+	}
+}
