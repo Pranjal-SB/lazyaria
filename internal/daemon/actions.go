@@ -181,6 +181,11 @@ func (m *Manager) RefreshURI(ctx context.Context, id, uri string) (*store.Job, e
 	stopped := j.State == store.Error || j.State == store.RetryWait
 	j, err = m.change(ctx, id, "refreshed", "", func(x *store.Job) {
 		x.URIs, x.Options = []string{clean}, opts
+		if x.Out == nil && x.Name != "" {
+			// The job keeps the name it shows, not one from the new link.
+			name := x.Name
+			x.Out = &name
+		}
 		if newRef == "" {
 			return
 		}
