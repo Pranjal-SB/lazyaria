@@ -237,7 +237,7 @@ func TestRemoveSeedingTorrentKeepsPublishedCopy(t *testing.T) {
 	}
 }
 
-// Decision 69: the user deleting what was published ends the seeding and
+// The user deleting what was published ends the seeding and
 // frees the staging copy; deleting part of a folder does not.
 func TestSeedingStopsWhenPublishedFileDeleted(t *testing.T) {
 	r := newRig(t)

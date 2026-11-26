@@ -32,7 +32,7 @@ func resumable(j *store.Job) bool {
 
 // emptyStaging removes everything in j's staging folder, which the job owns
 // by construction. Without a control file aria2 cannot resume, and with
-// continue=true it would take a stale file for finished (decision 64).
+// continue=true it would take a stale file for finished.
 func emptyStaging(j *store.Job) error {
 	dir := stagingDir(j)
 	es, err := os.ReadDir(dir)
@@ -70,7 +70,7 @@ func (m *Manager) stagingRefs(ctx context.Context, j *store.Job) (refs []engine.
 	return refs, true
 }
 
-// legacy means an unfinished job from before staging (decision 67): it
+// legacy means an unfinished job from a version before staging folders: it
 // downloads straight into Dir and is stopped, never resumed.
 func legacy(j *store.Job) bool { return !j.Staged && j.State != store.Seeding }
 

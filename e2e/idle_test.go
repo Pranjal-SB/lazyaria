@@ -14,8 +14,8 @@ import (
 	"github.com/Pranjal-SB/lazyaria/internal/testutil"
 )
 
-// TestIdleZeroProcesses is quality bar Q2: with the default 30 s idle_exit,
-// once the queue empties and no client is attached, nothing of ours runs.
+// TestIdleZeroProcesses: with the default 30 s idle_exit, once the queue
+// empties and no client is attached, nothing of ours runs.
 // A user-paused job must not keep the daemon alive.
 func TestIdleZeroProcesses(t *testing.T) {
 	t.Parallel()
@@ -49,8 +49,8 @@ func TestIdleZeroProcesses(t *testing.T) {
 	// The queue is empty and status, the last client, has gone.
 	emptied := time.Now()
 
-	// 30 s idle_exit, then the shutdown: aria2c gets SIGTERM and, per the
-	// spec §21 escalation, SIGKILL at the latest 5 s later.
+	// 30 s idle_exit, then the shutdown: aria2c gets SIGTERM and, if it
+	// lingers, SIGKILL at the latest 5 s later.
 	// An early exit would also pass the zero-process check below.
 	time.Sleep(time.Until(emptied.Add(25 * time.Second)))
 	if !alive(pid) {

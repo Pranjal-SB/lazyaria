@@ -19,7 +19,7 @@ import (
 // stdin is what `add -` and the `config edit` prompt read; tests swap it.
 var stdin io.Reader = os.Stdin
 
-// Exit codes (spec §10).
+// Exit codes, as documented in docs/reference/exit-codes.md.
 const (
 	exitOK          = 0
 	exitRuntime     = 1
@@ -141,7 +141,7 @@ func greet(ctx context.Context, p config.Paths, autoStart bool, exe string) (*ip
 	return c, nil
 }
 
-// exitCode maps an error to the spec §10 exit codes.
+// exitCode maps an error to the documented exit codes.
 func exitCode(err error) int {
 	if err == nil {
 		return exitOK

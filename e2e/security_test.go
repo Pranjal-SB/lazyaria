@@ -18,9 +18,9 @@ import (
 	"github.com/Pranjal-SB/lazyaria/internal/testutil"
 )
 
-// TestNoNetworkListeners is quality bar Q8, checked while a download runs:
-// lazyaria listens on no TCP port, aria2 only on loopback, the RPC secret
-// is not in anyone's argv, and the private files are 0600.
+// TestNoNetworkListeners checks, while a download runs, that lazyaria
+// listens on no TCP port, aria2 only on loopback, the RPC secret is not in
+// anyone's argv, and the private files are 0600.
 func TestNoNetworkListeners(t *testing.T) {
 	t.Parallel()
 	srv := testutil.NewFaultServer(t, map[string][]byte{"sec.bin": payload(1<<20, 0x31)})

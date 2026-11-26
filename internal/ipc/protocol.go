@@ -1,5 +1,5 @@
 // Package ipc is the daemon's JSON-RPC 2.0 interface over a unix socket,
-// with server push for job events and progress (spec §6).
+// with server push for job events and progress.
 package ipc
 
 import (
@@ -10,7 +10,8 @@ import (
 	"github.com/Pranjal-SB/lazyaria/internal/store"
 )
 
-// MaxFrame is the largest message either side accepts (spec §17 G26).
+// MaxFrame is the largest message either side accepts, so a broken or
+// hostile peer cannot make the other side allocate without limit.
 const MaxFrame = 32 << 20
 
 // Push notification methods.

@@ -13,7 +13,7 @@ import (
 
 // existingTarget returns dir/out when a finished file already sits there:
 // the file exists and has no .aria2 control file, which would mean an
-// unfinished download that aria2 resumes (spec §8.4).
+// unfinished download that aria2 resumes.
 func existingTarget(dir string, p AddParams) string {
 	name := targetName(dir, p)
 	if name == "" {

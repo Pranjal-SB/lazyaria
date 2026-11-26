@@ -12,8 +12,9 @@ import (
 	"github.com/Pranjal-SB/lazyaria/internal/textutil"
 )
 
-// The marker (decision 62): a relative symbolic link <name>.laria in the
-// download folder pointing at .laria/<id>/<out>, the file aria2 writes.
+// The marker shows an unfinished download where people look for it: a
+// relative symbolic link <name>.laria in the download folder pointing at
+// .laria/<id>/<out>, the file aria2 writes.
 
 const markerExt = ".laria"
 

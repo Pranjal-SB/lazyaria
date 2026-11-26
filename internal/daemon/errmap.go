@@ -13,7 +13,8 @@ import (
 // e.g. a refused connection, or a 403 seen on a resumed download.
 const noURI = "No URI available."
 
-// failure is what an aria2 error means for a job (spec §4.6, §19.3).
+// failure is what an aria2 error means for a job: what to call it, and
+// whether it is retried by itself.
 type failure struct {
 	kind   string // error_kind shown to the user
 	retry  string // retry.auto_retry entry that covers it; "" = manual only

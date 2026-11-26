@@ -144,7 +144,8 @@ func checkTerminal() checkDoc {
 var proxyVars = []string{"http_proxy", "https_proxy", "ftp_proxy", "all_proxy", "no_proxy",
 	"HTTP_PROXY", "HTTPS_PROXY", "FTP_PROXY", "ALL_PROXY", "NO_PROXY"}
 
-// checkProxy lists the proxy variables the daemon runs with (G22): its
+// checkProxy lists the proxy variables the daemon runs with, a common
+// cause of downloads that cannot connect: its
 // own environment where /proc shows it, else ours, which a daemon started
 // on demand inherits.
 func checkProxy(d daemonView, s *config.Settings) checkDoc {

@@ -14,8 +14,9 @@ import (
 
 // waitJobs blocks until every job in ids is finished: 0 when all are done
 // (or seeding, whose payload is complete), 1 when any failed. events must
-// have been subscribed before the jobs were added; per the §20 rule the
-// snapshot is taken after, and events at or below its seq are dropped.
+// have been subscribed before the jobs were added; the snapshot is taken
+// after, and events at or below its seq are dropped, so no change is
+// missed or counted twice.
 // ids maps each job id to the job as added, which names it.
 func waitJobs(ctx context.Context, c *ipc.Client, events <-chan daemon.Event, ids map[string]*store.Job, out, errOut io.Writer) int {
 	pending := map[string]bool{}

@@ -208,7 +208,7 @@ func TestHelperSupervisor(t *testing.T) {
 }
 
 // aria2.shutdown waits a fixed 3 s before halting; the daemon's idle exit
-// must not (spec Q2: gone within 5 s of going idle with a 2 s timer).
+// must not: it is gone within 5 s of going idle with a 2 s timer.
 func TestShutdownIsQuick(t *testing.T) {
 	sv, _ := startSupervisor(t)
 	start := time.Now()

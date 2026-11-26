@@ -13,7 +13,7 @@ import (
 )
 
 // Reconcile brings the database and the engine back in line after a start,
-// an engine restart or lost notifications (spec §4.4).
+// an engine restart or lost notifications, so no download is lost or run twice.
 func (m *Manager) Reconcile(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -171,7 +171,8 @@ func (m *Manager) recover(ctx context.Context, j *store.Job) error {
 // the job is already in error(dir-missing).
 var errDirMissing = errors.New("download directory is missing or on a different drive; mount it and retry")
 
-// dirMissing is the unmounted-drive guard (spec G6). st_dev is not stable
+// dirMissing is the unmounted-drive guard: a download must not restart
+// into an empty mount point while its drive is away. st_dev is not stable
 // across reboots on btrfs, overlay or NFS, so a changed device counts only
 // when the job had started and neither its file nor its control file is
 // there any more.
@@ -238,8 +239,9 @@ func (m *Manager) readd(ctx context.Context, j *store.Job, paused bool, why stri
 	}
 	emptied := j.Staged && !isBT(j.Kind) && !resumable(j)
 	if emptied {
-		// Nothing to resume from: start over in an empty staging folder
-		// (decision 64). The old download was dropped above.
+		// Nothing to resume from: start over in an empty staging folder, as
+		// aria2 would take a stale file for finished. The old download was
+		// dropped above.
 		if err := emptyStaging(j); err != nil {
 			return j, fmt.Errorf("empty the staging folder %s to start over: %w", stagingDir(j), err)
 		}

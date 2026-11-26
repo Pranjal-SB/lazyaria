@@ -88,7 +88,7 @@ func (d *daemonProc) run(ctx context.Context, ready func()) (int, error) {
 	} else {
 		if supervised {
 			// Fail before the socket exists, so the client that started us
-			// reports how to install aria2 instead of hanging (spec G13).
+			// reports how to install aria2 instead of hanging.
 			if d.ariaVer, err = aria2.CheckVersion(pre.Engine.Aria2cPath); err != nil {
 				return 1, err
 			}

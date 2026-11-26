@@ -60,8 +60,8 @@ func (m *Manager) apply(ctx context.Context, j *store.Job, st engine.EngineStatu
 		return j
 	}
 	if j.State == store.Seeding && j.Publish != nil && st.State == "active" && !anyPublished(j) {
-		// Decision 69: the user deleted what was published, so the copy
-		// seeded from staging is not wanted either.
+		// The user deleted what was published, so the copy seeded from
+		// staging is not wanted either.
 		if err := m.e.Remove(ctx, refOf(j)); err != nil {
 			m.log.Warn("stop seeding a deleted download", "job", j.ID, "err", err)
 			return j
@@ -136,7 +136,7 @@ func setDone(x *store.Job, done int64) {
 }
 
 // trackName follows the file aria2 actually writes, which differs from out
-// after an auto-rename (spec G7), and learns a torrent's name.
+// after aria2 renames it to avoid a clash, and learns a torrent's name.
 func (m *Manager) trackName(ctx context.Context, j *store.Job, st engine.EngineStatus) *store.Job {
 	if st.IsBT {
 		if j.Name != "download" || st.Name == "" || st.Name == "download" || strings.HasPrefix(st.Name, "[METADATA]") {
@@ -172,7 +172,7 @@ func (m *Manager) trackName(ctx context.Context, j *store.Job, st engine.EngineS
 }
 
 // learnTotal stores a newly reported size and, the first time one shows
-// up, runs the space check the add could not (spec §8.2).
+// up, runs the space check the add could not, since the size was unknown.
 func (m *Manager) learnTotal(ctx context.Context, j *store.Job, st engine.EngineStatus) (*store.Job, bool) {
 	if st.Total <= 0 || (j.TotalBytes != nil && *j.TotalBytes == st.Total) {
 		return j, false
@@ -192,9 +192,9 @@ func (m *Manager) learnTotal(ctx context.Context, j *store.Job, st engine.Engine
 	return m.set(ctx, j, "", "", func(x *store.Job) { x.TotalBytes = &total }), false
 }
 
-// adopt moves a magnet job onto the torrent its metadata download started
-// (spec §4.4), and a link to a .torrent or metalink onto what aria2 started
-// from that file. The row points at the child before the parent is dropped,
+// adopt moves a magnet job onto the torrent its metadata download started,
+// and a link to a .torrent or metalink onto what aria2 started from that
+// file. The row points at the child before the parent is dropped,
 // so a crash in between leaves at worst a stale finished result.
 // shortcut: a metalink with several files starts several downloads and the
 // job follows only the first (one engine ref per job); the others run in

@@ -1,4 +1,5 @@
-// Package trash moves files to the freedesktop.org trash (spec 1.0) and back.
+// Package trash moves files to the freedesktop.org trash (Trash
+// specification 1.0) and back.
 // Only the home trash and the per-user $topdir/.Trash-$uid form are used; the
 // shared $topdir/.Trash/$uid form is not implemented.
 package trash

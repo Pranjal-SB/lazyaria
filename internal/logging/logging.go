@@ -14,7 +14,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-// Options configure New. Zero values pick the spec defaults.
+// Options configure New. Zero values pick the defaults noted on each field.
 type Options struct {
 	File    string
 	MaxSize int64 // bytes before rotating; default 5 MiB

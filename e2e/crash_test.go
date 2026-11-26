@@ -13,8 +13,8 @@ import (
 	"github.com/Pranjal-SB/lazyaria/internal/testutil"
 )
 
-// TestCrashNeverLoses is quality bar Q1: kill -9 the daemon or aria2c at
-// random points 20 times; every job still ends done with the right bytes.
+// TestCrashNeverLoses: kill -9 the daemon or aria2c at random points 20
+// times; every job still ends done with the right bytes.
 func TestCrashNeverLoses(t *testing.T) {
 	files := map[string][]byte{}
 	for i, name := range []string{"c1.bin", "c2.bin", "c3.bin"} {

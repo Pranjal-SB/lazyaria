@@ -119,7 +119,8 @@ func printDetails(out io.Writer, d daemon.Details) {
 	}
 }
 
-// pieceMap draws cells as done, started or not yet (decision: █▒░).
+// pieceMap draws cells as done (█), started (▒) or not yet (░), the same
+// glyphs as the terminal interface.
 func pieceMap(cells []int) string {
 	var b strings.Builder
 	for _, v := range cells {

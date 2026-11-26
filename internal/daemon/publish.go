@@ -43,7 +43,7 @@ var (
 // Out/Name = the first entry's final name). The finished row keeps Publish
 // as the record of every entry it put in Dir. Safe to call again on a job
 // whose intent is already recorded: every step can be repeated after a
-// crash (decision 63). A failure leaves the intent and puts the job in
+// crash. A failure leaves the intent and puts the job in
 // error; resuming it publishes again.
 func (m *Manager) publish(ctx context.Context, j *store.Job) (*store.Job, error) {
 	staging := stagingDir(j)

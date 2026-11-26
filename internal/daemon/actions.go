@@ -137,7 +137,8 @@ func (m *Manager) warnRestarted(id, path string) {
 	}
 }
 
-// RefreshURI points a job at a new link (spec §4.7) and clears its error.
+// RefreshURI points a job at a new link, keeping what it has downloaded,
+// and clears its error.
 func (m *Manager) RefreshURI(ctx context.Context, id, uri string) (*store.Job, error) {
 	if err := CheckLink(uri); err != nil {
 		return nil, &BadRequestError{err}

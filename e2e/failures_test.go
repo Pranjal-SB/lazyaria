@@ -17,8 +17,8 @@ import (
 // fastRetry keeps aria2's own retries and lazyaria's backoff short.
 const fastRetry = "[retry]\nmax_tries = 2\nretry_wait = \"1s\"\nbackoff_base = \"1s\"\n"
 
-// TestFailurePaths is quality bar Q10: every failure the spec names ends
-// in the documented state, and the recoverable ones recover.
+// TestFailurePaths: every failure a download can meet ends in the
+// documented state, and the recoverable ones recover.
 func TestFailurePaths(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct {

@@ -17,7 +17,8 @@ import (
 )
 
 // handoffEnv carries the inherited fds and the running aria2c's port and
-// secret to the re-exec'd image (spec §19.1). The new image unsets it at
+// secret to the re-exec'd image, so an upgrade keeps aria2 and its
+// downloads running. The new image unsets it at
 // once, so no child ever sees it, and it is never on argv.
 const handoffEnv = "LAZYARIA_UPGRADE"
 

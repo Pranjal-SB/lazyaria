@@ -8,8 +8,8 @@ import (
 	"github.com/Pranjal-SB/lazyaria/internal/store"
 )
 
-// The documents below are what --json prints. They are a public interface
-// (spec §10, G28): change them only together with the golden files in
+// The documents below are what --json prints. Scripts depend on them:
+// change them only together with the golden files in
 // testdata/cli. Field names are snake_case like the IPC wire format.
 
 // listDoc is `lazyaria list --json`. Jobs use the IPC job shape: no

@@ -33,7 +33,7 @@ WantedBy=default.target
 `
 
 // Service runs `lazyaria service install|uninstall`, a systemd user
-// service that keeps the daemon running (spec §17 G18).
+// service that keeps the daemon running, for people who want it always on.
 func Service(ctx context.Context, args []string, out, errOut io.Writer) int {
 	if len(args) != 1 || (args[0] != "install" && args[0] != "uninstall") {
 		fmt.Fprintln(errOut, "usage: lazyaria service install|uninstall")

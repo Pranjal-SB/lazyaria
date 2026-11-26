@@ -72,7 +72,8 @@ func TestRunUnknown(t *testing.T) {
 	}
 }
 
-// Help, usage and hints name the binary as it was invoked (decision 25).
+// Help, usage and hints name the binary as it was invoked, lazyaria or
+// its short alias laria.
 func TestHelpUsesInvokedName(t *testing.T) {
 	var out, errb bytes.Buffer
 	if code := run(context.Background(), []string{"/usr/bin/laria", "help"}, &out, &errb); code != 0 || !strings.HasPrefix(out.String(), "usage: laria <command>") {

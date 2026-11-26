@@ -72,7 +72,8 @@ func resolvePaths(s *Settings, env func(string) string, tmpRoot string) (Paths, 
 	return p, nil
 }
 
-// xdgDir follows the XDG spec: relative or empty values are ignored.
+// xdgDir follows the XDG Base Directory specification: relative or empty
+// values are ignored.
 func xdgDir(env func(string) string, key, def string) string {
 	if v := env(key); v != "" && filepath.IsAbs(v) {
 		return v

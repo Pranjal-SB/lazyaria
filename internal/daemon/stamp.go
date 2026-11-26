@@ -11,7 +11,8 @@ import (
 // files when privacy.stamp_origin_xattr is on. Failures are only logged, at
 // debug: filesystems without xattrs are ignored by xattr itself.
 // shortcut: a torrent added from a file has no link, so it is not stamped
-// (spec §8.6 "comment URL" deferred); a magnet's URI is stamped.
+// (using the torrent's comment URL is left for later); a magnet's URI is
+// stamped.
 func (m *Manager) stampOrigin(ctx context.Context, j *store.Job) {
 	p, ok := payloadPath(j)
 	if !m.s.Load().Privacy.StampOriginXattr || len(j.URIs) == 0 || !ok {

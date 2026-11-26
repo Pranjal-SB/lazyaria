@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	speedHalfLife = 5 * time.Second  // spec G16
-	speedSpan     = 60 * time.Second // spec G17
+	speedHalfLife = 5 * time.Second  // speeds are smoothed so they do not jump about
+	speedSpan     = 60 * time.Second // the speed history clients graph
 )
 
 // SpeedSample is the total transfer rate at one moment.

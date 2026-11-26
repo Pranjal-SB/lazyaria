@@ -27,7 +27,7 @@ type undoRecord struct {
 // kept lists torrent folders left in place with deleteFiles because nothing
 // says which of their files are the torrent's.
 //
-// With deleteFiles the order matters (spec §8.3): check a trash exists, stop
+// With deleteFiles the order matters: check a trash exists, stop
 // the download so aria2 saves its control file, drop it, trash the files,
 // and only then mark the row removed. If trashing fails after the engine let
 // go, the files are put back and the job is added again, paused.

@@ -11,10 +11,10 @@ import (
 	"github.com/Pranjal-SB/lazyaria/internal/store"
 )
 
-// publishLinks publishes a finished torrent that aria2 goes on seeding
-// (decision 61): its files are hard-linked into .up/ in staging and that
-// tree is renamed into Dir, so all of it appears at once while aria2 keeps
-// reading the staging copy. The rename follows publish's recorded intent.
+// publishLinks publishes a finished torrent that aria2 goes on seeding,
+// without waiting for the seeding to end: its files are hard-linked into
+// .up/ in staging and that tree is renamed into Dir, so all of it appears
+// at once while aria2 keeps reading the staging copy. The rename follows publish's recorded intent.
 // Where links fail (FAT, exFAT), reseed takes over.
 func (m *Manager) publishLinks(ctx context.Context, j *store.Job) (*store.Job, error) {
 	staging := stagingDir(j)

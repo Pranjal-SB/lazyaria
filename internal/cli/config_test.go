@@ -40,7 +40,7 @@ func TestConfigSetInvalid(t *testing.T) {
 }
 
 // Settings nothing reads yet are marked in the list, and setting one warns
-// but still saves it (decision 48).
+// but still saves it, so a config written for a later version keeps working.
 func TestConfigNotUsedYet(t *testing.T) {
 	startFake(t)
 	_, out, _ := run(t, Config, "", "list")
@@ -60,7 +60,7 @@ func TestConfigNotUsedYet(t *testing.T) {
 	}
 }
 
-// A bad value in a LAZYARIA_* variable is a usage error (spec §10).
+// A bad value in a LAZYARIA_* variable is a usage error (exit 2).
 func TestBadEnvValueExitsUsage(t *testing.T) {
 	startFake(t)
 	t.Setenv("LAZYARIA_DOWNLOADS_MAX_CONCURRENT", "lots")

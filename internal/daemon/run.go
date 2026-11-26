@@ -56,7 +56,8 @@ func (m *Manager) Run(ctx context.Context) error {
 }
 
 // pollEvery is the poll period: fast while a client watches progress,
-// a slow sentinel otherwise, and none without running jobs (spec §4.5).
+// a slow sentinel otherwise, and none without running jobs, so an idle
+// daemon does no work.
 func (m *Manager) pollEvery(ctx context.Context) time.Duration {
 	n, err := m.st.CountJobs(ctx, runningStates...)
 	if err != nil || n == 0 {

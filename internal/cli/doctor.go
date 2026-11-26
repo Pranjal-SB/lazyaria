@@ -27,7 +27,8 @@ type daemonView struct {
 	jobs     []*store.Job
 }
 
-// Doctor runs `lazyaria doctor [--json] [--restart-engine]` (spec §10, G3, G22).
+// Doctor runs `lazyaria doctor [--json] [--restart-engine]`: aria2, the
+// folders, the daemon, BitTorrent ports and proxy variables.
 // It exits 1 when any check fails.
 func Doctor(ctx context.Context, args []string, out, errOut io.Writer) int {
 	fs := newFlags("doctor", errOut)
@@ -139,7 +140,8 @@ func checkDaemon(ctx context.Context, p config.Paths, restart bool) (daemonView,
 	return d, rows
 }
 
-// checkBT lists the BitTorrent ports while a torrent is running (G3).
+// checkBT lists the BitTorrent ports while a torrent is running, since a
+// firewall that blocks them is the usual reason a torrent stalls.
 func checkBT(d daemonView) (checkDoc, bool) {
 	for _, j := range d.jobs {
 		if (j.Kind == "torrent" || j.Kind == "magnet") && (j.State == store.Active || j.State == store.Seeding) {

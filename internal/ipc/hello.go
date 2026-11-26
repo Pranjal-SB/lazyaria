@@ -26,7 +26,8 @@ func (e *ErrProtocolMismatch) Error() string {
 		daemonV, e.Protocol, buildinfo.Protocol)
 }
 
-// Hello does the version handshake (spec §17 G4). With upgrade set, an
+// Hello does the version handshake, so a client never talks to a daemon
+// that speaks another protocol. With upgrade set, an
 // older but compatible daemon is asked to upgrade itself; upgraded is true
 // when it agreed, and the caller should reconnect. A daemon that refuses
 // (the binary at its path is no newer) is still compatible and is used as
