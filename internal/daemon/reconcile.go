@@ -228,6 +228,12 @@ func (m *Manager) readd(ctx context.Context, j *store.Job, paused bool, why stri
 	if done, ok := m.completedOffline(ctx, j); ok {
 		return done, nil
 	}
+	if j.Staged && !isBT(j.Kind) && j.Out == nil {
+		if out, ok := controlledPartial(j); ok {
+			// What the first poll would have learnt; aria2 resumes into it.
+			j = m.set(ctx, j, "", "", func(x *store.Job) { x.Out, x.Name = &out, out })
+		}
+	}
 	req := m.request(j, paused)
 	req.Torrent = m.torrent(ctx, j)
 	if j.EngineRef != nil {

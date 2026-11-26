@@ -88,6 +88,26 @@ func TestReaddWithoutControlFileEmptiesStaging(t *testing.T) {
 	}
 }
 
+// A crash before the first poll leaves no Out on the row, but aria2 may
+// already have written a partial with its control file: keep both, and
+// resume into them under that name.
+func TestReaddWithoutOutKeepsControlledPartial(t *testing.T) {
+	r := newRig(t)
+	j := r.insert(t, store.Active, "old1", func(j *store.Job) { j.Name = "page" })
+	stageFiles(t, j, map[string]string{"real.iso": "early", "real.iso.aria2": "ctl"})
+	if _, err := r.m.readd(bg, j, false, "readded"); err != nil {
+		t.Fatal(err)
+	}
+	if names := listDir(t, stagingDir(j)); !slices.Equal(names, []string{"real.iso", "real.iso.aria2"}) {
+		t.Fatalf("staging holds %v", names)
+	}
+	add := r.e.adds[len(r.e.adds)-1]
+	got := r.get(t, j.ID)
+	if add.Out != "real.iso" || got.Out == nil || *got.Out != "real.iso" || got.Name != "real.iso" {
+		t.Fatalf("re-add out %q, row out %v name %q", add.Out, got.Out, got.Name)
+	}
+}
+
 func TestCompletedOfflineStaged(t *testing.T) {
 	t.Run("full size", func(t *testing.T) {
 		r := newRig(t)

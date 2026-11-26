@@ -30,6 +30,23 @@ func resumable(j *store.Job) bool {
 	return j.Out != nil && exists(filepath.Join(stagingDir(j), *j.Out)+".aria2")
 }
 
+// controlledPartial finds the file a staged download wrote before its name
+// reached the row (a crash before the first poll): the only file in the
+// staging folder with a control file beside it.
+func controlledPartial(j *store.Job) (string, bool) {
+	es, _ := os.ReadDir(stagingDir(j))
+	var found []string
+	for _, e := range es {
+		if name, ok := strings.CutSuffix(e.Name(), ".aria2"); ok && name != "" && exists(filepath.Join(stagingDir(j), name)) {
+			found = append(found, name)
+		}
+	}
+	if len(found) != 1 {
+		return "", false
+	}
+	return found[0], true
+}
+
 // emptyStaging removes everything in j's staging folder, which the job owns
 // by construction. Without a control file aria2 cannot resume, and with
 // continue=true it would take a stale file for finished.
