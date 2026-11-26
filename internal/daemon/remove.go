@@ -22,6 +22,7 @@ type undoRecord struct {
 	until time.Time
 	prev  map[string]store.State   // job id -> state before removal
 	files map[string][]trash.Entry // job id -> its trashed files
+	moved map[string][]keptFile    // job id -> its unfinished files moved into Dir
 }
 
 // Remove soft-deletes jobs: the engine forgets them, the rows stay as
@@ -40,6 +41,7 @@ func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (t
 	ctx = context.WithoutCancel(ctx) // see Add
 	prev := map[string]store.State{}
 	files := map[string][]trash.Entry{}
+	moved := map[string][]keptFile{}
 	var moves []*pendingTrash
 	err = m.each(ctx, ids, func(ctx context.Context, j *store.Job) error {
 		if j.State == store.Removed {
@@ -100,8 +102,12 @@ func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (t
 			moves = append(moves, &pendingTrash{j: j, listed: listed})
 			return nil
 		}
+		ks, err := keepUnfinished(j)
+		if err != nil {
+			m.log.Warn("move the unfinished download into the download folder; it stays in its staging folder", "job", j.ID, "path", stagingDir(j), "err", err)
+		}
 		m.removed(ctx, j)
-		prev[j.ID] = j.State
+		prev[j.ID], moved[j.ID] = j.State, ks
 		return nil
 	})
 	for _, p := range moves {
@@ -137,7 +143,7 @@ func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (t
 		}
 	}
 	tok := rand.Text()
-	m.undo[tok] = undoRecord{until: now.Add(time.Duration(secs) * time.Second), prev: prev, files: files}
+	m.undo[tok] = undoRecord{until: now.Add(time.Duration(secs) * time.Second), prev: prev, files: files, moved: moved}
 	return tok, kept, err
 }
 
@@ -229,13 +235,18 @@ func (m *Manager) Undo(ctx context.Context, token string) error {
 		return ErrUndoExpired
 	}
 	var errs []error
-	left := undoRecord{until: rec.until, prev: map[string]store.State{}, files: map[string][]trash.Entry{}}
+	left := undoRecord{until: rec.until, prev: map[string]store.State{}, files: map[string][]trash.Entry{}, moved: map[string][]keptFile{}}
 	for id, was := range rec.prev {
 		// Entries an earlier attempt already put back would fail the pre-check.
 		todo := inTrash(rec.files[id])
 		if err := m.Files.RestoreFiles(ctx, todo); err != nil {
 			errs = append(errs, fmt.Errorf("job %s stays removed, its files are still in the trash: %w", id, err))
-			left.prev[id], left.files[id] = was, inTrash(todo)
+			left.prev[id], left.files[id], left.moved[id] = was, inTrash(todo), rec.moved[id]
+			continue
+		}
+		if err := putBack(rec.moved[id]); err != nil {
+			errs = append(errs, fmt.Errorf("job %s stays removed, its unfinished files are still in %s: %w", id, filepath.Dir(rec.moved[id][0].To), err))
+			left.prev[id], left.moved[id] = was, rec.moved[id]
 			continue
 		}
 		to := was

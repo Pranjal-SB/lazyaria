@@ -141,9 +141,22 @@ Two settings change this:
 
 ## Removing a job and its files
 
-`lazyaria remove <job>` takes the job off the list. Its file stays where
-it is: a finished one in the download folder, an unfinished one in its
-`.laria/<job id>/` folder.
+`lazyaria remove <job>` takes the job off the list and keeps its files. A
+finished download stays where it is, in the download folder. An
+unfinished one is stopped and moved out of `.laria/<job id>/` into the
+download folder, under the name it would have finished with, together
+with its `.aria2` control file:
+
+```text
+movie.mkv
+movie.mkv.aria2
+```
+
+If that name is taken, it gets the next free name, as described
+[below](#when-a-name-is-taken), for example `movie.1.mkv` and
+`movie.1.mkv.aria2`. The `.laria/<job id>/` folder is then removed. The
+control file marks the file as unfinished; delete both when you no
+longer need them. Undo moves them back, so the download resumes.
 
 `lazyaria remove --delete-files <job>` also moves the job's files to the
 trash: the one in your home folder (`~/.local/share/Trash`) when the file
@@ -184,7 +197,8 @@ removed #3
 undo: lazyaria undo VCDLIKHYM7PNFOM5FLMGY6FZ2Q
 ```
 
-It brings back the jobs and any files the remove moved to the trash. A
+It brings back the jobs and any files the remove moved, to the trash or
+out of `.laria`. A
 job that was running comes back paused. The command works for 10 seconds
 (`remove.undo_seconds`; `0` turns undo off) and only while the same
 daemon runs. If a file cannot go back because something else now has its
