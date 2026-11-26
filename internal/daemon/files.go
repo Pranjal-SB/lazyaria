@@ -164,9 +164,6 @@ func (t *TrashFiles) RemoveFiles(_ context.Context, j *store.Job, files []string
 			pruneEmpty(real, done)
 		}
 	}
-	if j.Staged {
-		os.Remove(filepath.Dir(stagingDir(j))) // .laria, once no job uses it
-	}
 	return done, nil
 }
 
