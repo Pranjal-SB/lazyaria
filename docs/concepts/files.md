@@ -155,7 +155,8 @@ It takes only files the job downloaded:
 
 - An unfinished download is stopped first, and its `.laria/<job id>/`
   folder goes to the trash, with the unfinished file and its control
-  file.
+  file. The trash lists it as `<name> (unfinished)`, so you can tell it
+  apart in a file manager.
 - A finished download takes the file or folder it put in the download
   folder, as long as it is still there under that name. A download saved
   under a new name, such as `notes.1.pdf`, takes that file and leaves

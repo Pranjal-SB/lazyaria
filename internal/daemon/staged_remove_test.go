@@ -41,6 +41,13 @@ func TestRemoveStagedTrashesStagingOnly(t *testing.T) {
 	if read(t, user) != "the user's" {
 		t.Fatal("the user's a.iso was touched")
 	}
+	// The trash shows it by the download's name, not the job id.
+	if got := filepath.Base(es[0].TrashedPath); got != "a.iso (unfinished)" {
+		t.Fatalf("trashed as %q", got)
+	}
+	if names := listDir(t, es[0].TrashedPath); !slices.Equal(names, []string{"a.iso", "a.iso.aria2"}) {
+		t.Fatalf("the trashed folder holds %v", names)
+	}
 	if names := listDir(t, r.dir); !slices.Equal(names, []string{"a.iso"}) {
 		t.Fatalf("download folder holds %v", names)
 	}

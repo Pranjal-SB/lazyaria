@@ -376,3 +376,43 @@ func TestDefaultRenameNeverReplaces(t *testing.T) {
 		t.Fatalf("destination replaced: %q", b)
 	}
 }
+
+// TrashAs lists the item under another name, with that name's path in
+// its info, takes the next free name on a clash, and Restore still puts
+// it back where it was.
+func TestTrashAsShowsAnotherName(t *testing.T) {
+	work := setup(t)
+	shown := filepath.Join(work, "movie.mkv (unfinished)")
+	var es []Entry
+	for range 2 {
+		dir := filepath.Join(work, ".laria", "01JOB")
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		write(t, filepath.Join(dir, "movie.mkv"), "half")
+		e, err := TrashAs(dir, shown)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if e.Original != dir {
+			t.Fatalf("original %s, want %s", e.Original, dir)
+		}
+		es = append(es, e)
+	}
+	if got := filepath.Base(es[0].TrashedPath); got != "movie.mkv (unfinished)" {
+		t.Fatalf("trashed as %q", got)
+	}
+	if got := filepath.Base(es[1].TrashedPath); got != "movie.mkv (unfinished).2" {
+		t.Fatalf("second one trashed as %q", got)
+	}
+	info, err := os.ReadFile(es[0].InfoPath)
+	if err != nil || !strings.Contains(string(info), "Path="+filepath.ToSlash(work)+"/movie.mkv%20%28unfinished%29\n") {
+		t.Fatalf("info %q, %v", info, err)
+	}
+	if err := Restore(es[1]); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := os.ReadFile(filepath.Join(work, ".laria", "01JOB", "movie.mkv")); err != nil || string(b) != "half" {
+		t.Fatalf("restored %q, %v", b, err)
+	}
+}

@@ -126,8 +126,8 @@ undo: lazyaria undo KJY3SB2H4I2VYVUFLL4DC3QIXK
 This takes the job off the list and leaves its file where it is.
 
 To remove the file too, add `--delete-files`. lazyaria does not delete
-it. It moves it to the trash; for an unfinished download, that is its
-folder in `.laria`, with aria2's `.aria2` control file:
+it. It moves it to the trash; an unfinished download goes there as a
+folder named `<name> (unfinished)`, with aria2's `.aria2` control file:
 
 ```sh
 lazyaria remove --delete-files 4

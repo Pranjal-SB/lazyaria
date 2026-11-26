@@ -42,11 +42,23 @@ type TrashFiles struct {
 	check func(string) error
 }
 
-func (t *TrashFiles) move(p string) (trash.Entry, error) {
+// move trashes p, listed in the trash as shownAs when that is set.
+func (t *TrashFiles) move(p, shownAs string) (trash.Entry, error) {
 	if t.trash != nil {
 		return t.trash(p)
 	}
-	return trash.Trash(p)
+	return trash.TrashAs(p, shownAs)
+}
+
+// unfinishedName is how an unfinished download's staging folder shows in
+// the trash: "<name> (unfinished)" beside where the download would have
+// landed, instead of a folder named by the job's id.
+func unfinishedName(j *store.Job) string {
+	name := j.ID
+	if p, ok := payloadPath(&store.Job{Dir: j.Dir, Name: j.Name, Out: j.Out}); ok {
+		name = filepath.Base(p)
+	}
+	return filepath.Join(j.Dir, fmt.Sprintf("%s (unfinished)", name))
 }
 
 func (t *TrashFiles) probe(p string) error {
@@ -122,7 +134,11 @@ func (t *TrashFiles) Check(_ context.Context, j *store.Job, files []string) erro
 func (t *TrashFiles) RemoveFiles(_ context.Context, j *store.Job, files []string) ([]trash.Entry, error) {
 	var done []trash.Entry
 	for _, f := range targets(j, files) {
-		e, err := t.move(f)
+		shown := ""
+		if j.Staged && f == stagingDir(j) {
+			shown = unfinishedName(j)
+		}
+		e, err := t.move(f, shown)
 		if errors.Is(err, fs.ErrNotExist) {
 			continue
 		}

@@ -149,6 +149,10 @@ func TestRemoveStagedWithFilesAndUndo(t *testing.T) {
 			t.Fatalf("%s left in the download folder after remove", p)
 		}
 	}
+	// The trash shows the unfinished download by its name, not its id.
+	if trashed := filepath.Join(e.root, "data", "Trash", "files", "rm.bin (unfinished)"); !lexists(filepath.Join(trashed, "rm.bin")) {
+		t.Fatalf("no partial file in %s", trashed)
+	}
 
 	e.ok("undo", tok)
 	if j := e.job(id); j.State != store.Paused {

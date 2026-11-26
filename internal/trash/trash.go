@@ -147,7 +147,13 @@ func Check(path string) error {
 }
 
 // Trash moves path into the trash. It never copies across devices.
-func Trash(path string) (Entry, error) {
+func Trash(path string) (Entry, error) { return TrashAs(path, "") }
+
+// TrashAs moves path into the trash as if it were shownAs, an absolute
+// path on the same disk: the trash lists it under that name, and a file
+// manager restores it there. Restore still puts it back at path. An
+// empty shownAs is path itself.
+func TrashAs(path, shownAs string) (Entry, error) {
 	abs, dev, err := locate(path)
 	if err != nil {
 		return Entry{}, err
@@ -156,9 +162,17 @@ func Trash(path string) (Entry, error) {
 	if err != nil {
 		return Entry{}, err
 	}
-	recorded := abs
+	shown := abs
+	if shownAs != "" {
+		shown = shownAs
+		// resolved like path, so it compares with the resolved topdir
+		if p, err := filepath.EvalSymlinks(filepath.Dir(shown)); err == nil {
+			shown = filepath.Join(p, filepath.Base(shown))
+		}
+	}
+	recorded := shown
 	if top != "" {
-		rel, err := filepath.Rel(top, abs)
+		rel, err := filepath.Rel(top, shown)
 		if err != nil {
 			return Entry{}, err
 		}
@@ -169,7 +183,7 @@ func Trash(path string) (Entry, error) {
 	body := fmt.Sprintf("[Trash Info]\nPath=%s\nDeletionDate=%s\n",
 		encodePath(filepath.ToSlash(recorded)), time.Now().Format("2006-01-02T15:04:05"))
 
-	base := filepath.Base(abs)
+	base := filepath.Base(shown)
 	for n := 1; n < 100000; n++ {
 		name := base
 		if n > 1 {
