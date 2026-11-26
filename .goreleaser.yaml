@@ -1,0 +1,48 @@
+version: 2
+
+project_name: lazyaria
+
+builds:
+  - main: .
+    binary: lazyaria
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, freebsd]
+    goarch: [amd64, arm64]
+    ignore:
+      - goos: freebsd
+        goarch: arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X github.com/Pranjal-SB/lazyaria/internal/buildinfo.Version={{.Version}}
+
+archives:
+  - formats: [tar.gz]
+    name_template: "lazyaria_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - NOTICE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^feat(\(.+\))?!?:'
+      order: 0
+    - title: Fixes
+      regexp: '^fix(\(.+\))?!?:'
+      order: 1
+    - title: Documentation
+      regexp: '^docs(\(.+\))?!?:'
+      order: 2
+  filters:
+    exclude:
+      - '^chore(\(.+\))?!?:'
+      - '^test(\(.+\))?!?:'
+      - '^ci(\(.+\))?!?:'
