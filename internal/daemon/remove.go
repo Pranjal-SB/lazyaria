@@ -14,12 +14,28 @@ import (
 	"github.com/Pranjal-SB/lazyaria/internal/trash"
 )
 
-// ErrUndoExpired means the undo window has passed or the token is unknown
-// (mistyped, or from before a daemon restart: tokens live in memory only).
-var ErrUndoExpired = errors.New("nothing to undo: the undo token is unknown or has expired (tokens end after remove.undo_seconds or when the daemon restarts). Add the link again with `lazyaria add`; files that were deleted are in the Trash")
+// ErrUndoUnknown means the token was never handed out by this daemon:
+// mistyped, or from before a restart (tokens live in memory only).
+var ErrUndoUnknown = errors.New("no undo with that token: check that you copied all of it; tokens also end when the daemon restarts. Add the link again with `lazyaria add`; files that were deleted are in the Trash")
+
+// ErrUndoExpired means the token's undo window has passed.
+var ErrUndoExpired = errors.New("the undo has expired")
+
+// undoKeep is how long an expired token is still recognised as expired
+// rather than unknown.
+const undoKeep = 24 * time.Hour
+
+func undoExpired(secs int) error {
+	unit := "seconds"
+	if secs == 1 {
+		unit = "second"
+	}
+	return fmt.Errorf("%w: undo works for %d %s after a remove (remove.undo_seconds). Add the link again with `lazyaria add`; files that were deleted are in the Trash", ErrUndoExpired, secs, unit)
+}
 
 type undoRecord struct {
 	until time.Time
+	secs  int                      // the window, for the message once it has passed
 	prev  map[string]store.State   // job id -> state before removal
 	files map[string][]trash.Entry // job id -> its trashed files
 	moved map[string][]keptFile    // job id -> its unfinished files moved into Dir
@@ -138,12 +154,14 @@ func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (t
 	}
 	now := m.now()
 	for tok, r := range m.undo {
-		if now.After(r.until) {
+		if now.After(r.until.Add(undoKeep)) {
 			delete(m.undo, tok)
+		} else if now.After(r.until) {
+			m.undo[tok] = undoRecord{until: r.until, secs: r.secs} // only the expiry is still needed
 		}
 	}
 	tok := rand.Text()
-	m.undo[tok] = undoRecord{until: now.Add(time.Duration(secs) * time.Second), prev: prev, files: files, moved: moved}
+	m.undo[tok] = undoRecord{until: now.Add(time.Duration(secs) * time.Second), secs: secs, prev: prev, files: files, moved: moved}
 	return tok, kept, err
 }
 
@@ -230,12 +248,14 @@ func (m *Manager) Undo(ctx context.Context, token string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	rec, ok := m.undo[token]
-	if !ok || m.now().After(rec.until) {
-		delete(m.undo, token)
-		return ErrUndoExpired
+	if !ok {
+		return ErrUndoUnknown
+	}
+	if m.now().After(rec.until) {
+		return undoExpired(rec.secs)
 	}
 	var errs []error
-	left := undoRecord{until: rec.until, prev: map[string]store.State{}, files: map[string][]trash.Entry{}, moved: map[string][]keptFile{}}
+	left := undoRecord{until: rec.until, secs: rec.secs, prev: map[string]store.State{}, files: map[string][]trash.Entry{}, moved: map[string][]keptFile{}}
 	for id, was := range rec.prev {
 		// Entries an earlier attempt already put back would fail the pre-check.
 		todo := inTrash(rec.files[id])

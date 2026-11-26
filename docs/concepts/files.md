@@ -198,16 +198,23 @@ undo: lazyaria undo VCDLIKHYM7PNFOM5FLMGY6FZ2Q
 ```
 
 It brings back the jobs and any files the remove moved, to the trash or
-out of `.laria`. A
-job that was running comes back paused. The command works for 10 seconds
-(`remove.undo_seconds`; `0` turns undo off) and only while the same
-daemon runs. If a file cannot go back because something else now has its
-name, undo says so and the token stays valid for another try.
+out of `.laria`. A job that was running comes back paused. The command
+works for 10 seconds (`remove.undo_seconds`; `0` turns undo off) and only
+while the same daemon runs. If a file cannot go back because something
+else now has its name, undo says so and the token stays valid for another
+try.
 
 After that, undo exits with 1:
 
 ```text
-lazyaria undo: nothing to undo: the undo token is unknown or has expired (tokens end after remove.undo_seconds or when the daemon restarts). Add the link again with `lazyaria add`; files that were deleted are in the Trash
+lazyaria undo: the undo has expired: undo works for 10 seconds after a remove (remove.undo_seconds). Add the link again with `lazyaria add`; files that were deleted are in the Trash
+```
+
+A token the daemon does not know, because it was mistyped or the daemon
+has restarted since, also exits with 1:
+
+```text
+lazyaria undo: no undo with that token: check that you copied all of it; tokens also end when the daemon restarts. Add the link again with `lazyaria add`; files that were deleted are in the Trash
 ```
 
 The files are still in the trash.
