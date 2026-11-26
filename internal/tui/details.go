@@ -112,6 +112,10 @@ func (m Model) selectedDetails() daemon.Details {
 	return d
 }
 
+// hiddenEvents are kinds kept for `show --json` and the log, but noise in
+// the pane: "engine-added" only names aria2's internal download id.
+var hiddenEvents = []string{"engine-added"}
+
 type detailOpts struct {
 	width int // cells for the text, padding excluded
 	si    bool
@@ -149,7 +153,9 @@ func renderDetails(t Theme, d daemon.Details, o detailOpts) string {
 		add(s)
 	}
 	if j.ErrorMsg != nil {
-		add(t.bad.Render(truncate(*j.ErrorMsg, w, t.G.ellipsis)))
+		for _, l := range strings.Split(lipgloss.Wrap(*j.ErrorMsg, w, " "), "\n") {
+			add(t.bad.Render(l))
+		}
 	}
 
 	head(headSavedTo)
@@ -169,6 +175,7 @@ func renderDetails(t Theme, d daemon.Details, o detailOpts) string {
 			add(pieceRow(t, d.Segments[i:min(i+w, len(d.Segments))]))
 		}
 		g := t.G.pieces
+		add("")
 		add(truncate(t.ok.Render(g[0])+" "+t.muted.Render(legendDone)+"  "+t.accent.Render(g[1])+" "+t.muted.Render(legendNow)+
 			"  "+t.muted.Render(g[2]+" "+legendNotYet), w, ""))
 	}
@@ -203,9 +210,10 @@ func renderDetails(t Theme, d daemon.Details, o detailOpts) string {
 		}
 	}
 
-	if len(d.Events) > 0 {
+	evs := slices.DeleteFunc(slices.Clone(d.Events), func(e daemon.DetailEvent) bool { return slices.Contains(hiddenEvents, e.Kind) })
+	if len(evs) > 0 {
 		head(headHistory)
-		for _, e := range d.Events[max(len(d.Events)-detailEvents, 0):] {
+		for _, e := range evs[max(len(evs)-detailEvents, 0):] {
 			s := t.muted.Render(fmt.Sprintf("%-11s", ago(o.now, e.At))) + " " + strings.ReplaceAll(e.Kind, "-", " ")
 			if e.Detail != "" {
 				s += t.muted.Render(" " + e.Detail)

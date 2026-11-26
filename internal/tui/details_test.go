@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/colorprofile"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/Pranjal-SB/lazyaria/internal/daemon"
 	"github.com/Pranjal-SB/lazyaria/internal/store"
@@ -146,5 +147,28 @@ func TestDetailsScrollKeys(t *testing.T) {
 	}
 	if m.detTop != m.detailsMaxTop() {
 		t.Fatalf("top %d past the end %d", m.detTop, m.detailsMaxTop())
+	}
+}
+
+// The error shows in full over as many lines as it needs, and the event
+// that only names aria2's internal id stays out of the history.
+func TestDetailsWrapsErrorHidesEngineEvent(t *testing.T) {
+	msg := "Name resolution for downloads.example.invalid failed: Name or service not known"
+	j := job(3, "x.iso", store.Error)
+	j.ErrorMsg = &msg
+	d := daemon.Details{Job: j, Events: []daemon.DetailEvent{
+		{At: goldenNow, Kind: "added"}, {At: goldenNow, Kind: "engine-added", Detail: "2089b05ecca3d829"},
+	}}
+	out := ansi.Strip(renderDetails(NewTheme("unicode"), d, detailOpts{width: 30, now: goldenNow}))
+	if got := strings.Join(strings.Fields(out), " "); !strings.Contains(got, msg) {
+		t.Fatalf("the error is cut:\n%s", out)
+	}
+	if strings.Contains(out, "2089b05e") || strings.Contains(out, "engine") || !strings.Contains(out, "added") {
+		t.Fatalf("history:\n%s", out)
+	}
+	for _, l := range strings.Split(out, "\n") {
+		if ansi.StringWidth(l) > 30 {
+			t.Fatalf("line wider than the pane: %q", l)
+		}
 	}
 }

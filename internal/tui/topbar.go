@@ -64,32 +64,29 @@ func (m Model) engineDot() string {
 	return t.warn.Render(t.G.dotWait) + " " + textEngine + " " + m.status.EngineState
 }
 
-// sparkline draws the last samples in at most width cells, scaled to the
-// highest. With more samples than cells each cell shows its bucket's peak.
+// sparkline draws the last samples in width cells, scaled to the highest,
+// newest on the right. With more samples than cells each cell shows its
+// bucket's peak. Cells without a sample, and a window with no speed at
+// all, are blank, so the bar keeps its width and shows nothing at rest.
 func sparkline(g Glyphs, samples []int64, width int) string {
 	n := min(len(samples), width)
-	if n == 0 {
-		return ""
-	}
 	cells := make([]int64, n)
+	var top int64
 	for i := range cells {
 		lo, hi := i*len(samples)/n, (i+1)*len(samples)/n
 		for _, v := range samples[lo:hi] {
 			cells[i] = max(cells[i], v)
 		}
+		top = max(top, cells[i])
 	}
-	var top int64
-	for _, v := range cells {
-		top = max(top, v)
+	if top == 0 {
+		return strings.Repeat(" ", width)
 	}
 	var b strings.Builder
+	b.WriteString(strings.Repeat(" ", width-n))
 	levels := int64(len(g.spark) - 1)
 	for _, v := range cells {
-		i := int64(0)
-		if top > 0 {
-			i = (v*levels + top/2) / top
-		}
-		b.WriteString(g.spark[i])
+		b.WriteString(g.spark[(v*levels+top/2)/top])
 	}
 	return b.String()
 }

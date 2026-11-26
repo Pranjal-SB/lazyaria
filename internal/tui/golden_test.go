@@ -153,9 +153,9 @@ func TestSparkline(t *testing.T) {
 		width   int
 		want    string
 	}{
-		{"none", nil, 5, ""},
-		{"zero", []int64{0, 0, 0}, 5, "▁▁▁"},
-		{"flat", []int64{5, 5, 5}, 5, "███"},
+		{"none", nil, 5, "     "},
+		{"no speed draws nothing", []int64{0, 0, 0}, 5, "     "},
+		{"flat", []int64{5, 5, 5}, 5, "  ███"},
 		{"ramp", []int64{0, 1, 2, 3, 4, 5, 6, 7}, 8, "▁▂▃▄▅▆▇█"},
 		{"more than width keeps peaks", []int64{0, 0, 8, 0, 4, 4}, 3, "▁█▅"},
 	} {
