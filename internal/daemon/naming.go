@@ -43,6 +43,24 @@ func targetName(dir string, p AddParams) string {
 	return textutil.SanitizeName(name, fsinfo.IsFAT(dir))
 }
 
+// unfinishedBase is the name an unfinished download goes by outside its
+// staging folder: "<stem> (unfinished)<ext>", so it keeps its type and
+// cannot pass for the finished file. The extension starts at the last dot
+// after the first character, or covers a compressed tarball's two parts.
+func unfinishedBase(name string) string {
+	stem, ext := name, ""
+	if i := strings.LastIndexByte(name, '.'); i > 0 {
+		stem, ext = name[:i], name[i:]
+	}
+	lower := strings.ToLower(name)
+	for _, tar := range []string{".tar.gz", ".tar.xz", ".tar.zst", ".tar.bz2"} {
+		if strings.HasSuffix(lower, tar) && len(name) > len(tar) {
+			stem, ext = name[:len(name)-len(tar)], name[len(name)-len(tar):]
+		}
+	}
+	return stem + " (unfinished)" + ext
+}
+
 // freeName picks the name aria2 itself would rename path to: the first
 // base.N.ext not on disk and not held by a live job, shortened to fit
 // textutil.MaxName.

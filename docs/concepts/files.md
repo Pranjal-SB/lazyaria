@@ -144,19 +144,22 @@ Two settings change this:
 `lazyaria remove <job>` takes the job off the list and keeps its files. A
 finished download stays where it is, in the download folder. An
 unfinished one is stopped and moved out of `.laria/<job id>/` into the
-download folder, under the name it would have finished with, together
-with its `.aria2` control file:
+download folder, together with its `.aria2` control file. It never gets
+the name the finished download would have: `(unfinished)` goes before the
+extension, so the file still opens with the right program and is not
+mistaken for a finished one:
 
 ```text
-movie.mkv
-movie.mkv.aria2
+movie (unfinished).mkv
+movie (unfinished).mkv.aria2
 ```
 
-If that name is taken, it gets the next free name, as described
-[below](#when-a-name-is-taken), for example `movie.1.mkv` and
-`movie.1.mkv.aria2`. The `.laria/<job id>/` folder is then removed. The
-control file marks the file as unfinished; delete both when you no
-longer need them. Undo moves them back, so the download resumes.
+A name without an extension gets `(unfinished)` at the end, and
+compressed tarballs keep both parts, as in `src (unfinished).tar.gz`. If
+the name is taken, it gets the next free name, as described
+[below](#when-a-name-is-taken), for example `movie (unfinished).1.mkv`.
+The `.laria/<job id>/` folder is then removed. Delete both files when you
+no longer need them. Undo moves them back, so the download resumes.
 
 `lazyaria remove --delete-files <job>` also moves the job's files to the
 trash: the one in your home folder (`~/.local/share/Trash`) when the file
@@ -168,8 +171,8 @@ It takes only files the job downloaded:
 
 - An unfinished download is stopped first, and its `.laria/<job id>/`
   folder goes to the trash, with the unfinished file and its control
-  file. The trash lists it as `<name> (unfinished)`, so you can tell it
-  apart in a file manager.
+  file. The trash lists it under the same name as above, such as
+  `movie (unfinished).mkv`, so you can tell it apart in a file manager.
 - A finished download takes the file or folder it put in the download
   folder, as long as it is still there under that name. A download saved
   under a new name, such as `notes.1.pdf`, takes that file and leaves

@@ -16,10 +16,10 @@ type keptFile struct{ From, To string }
 
 // keepUnfinished moves a removed unfinished download out of its staging
 // folder into Dir, so the files the remove keeps are where the user looks:
-// each payload entry under the name it would be published under (the next
-// free one if taken), with its .aria2 control file beside it. The staging
-// folder then goes. If a move fails, the ones done are undone and the files
-// stay in the staging folder.
+// each payload entry as "<stem> (unfinished)<ext>" of the name it would be
+// published under (the next free one if taken), with its .aria2 control
+// file beside it. The staging folder then goes. If a move fails, the ones
+// done are undone and the files stay in the staging folder.
 func keepUnfinished(j *store.Job) ([]keptFile, error) {
 	staging := stagingDir(j)
 	if !j.Staged || j.Publish != nil || !lexists(staging) {
@@ -32,7 +32,7 @@ func keepUnfinished(j *store.Job) ([]keptFile, error) {
 	var done []keptFile
 	held := map[string]bool{}
 	for _, e := range entries {
-		name, err := finalName(j, chosenName(j, e.Rel), held)
+		name, err := finalName(j, unfinishedBase(chosenName(j, e.Rel)), held)
 		if err == nil && lexists(filepath.Join(j.Dir, name+".aria2")) {
 			name, err = freeName(filepath.Join(j.Dir, name), held)
 		}
