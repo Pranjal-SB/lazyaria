@@ -1,3 +1,9 @@
+---
+title: Where files go
+parent: Concepts
+nav_order: 2
+---
+
 # Where files go
 
 This page explains where downloads are written, what happens when a name

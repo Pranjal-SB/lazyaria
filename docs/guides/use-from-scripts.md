@@ -1,3 +1,9 @@
+---
+title: Use lazyaria from scripts
+parent: Guides
+nav_order: 3
+---
+
 # Use lazyaria from scripts
 
 Every lazyaria command works without a terminal, prints plain lines, and

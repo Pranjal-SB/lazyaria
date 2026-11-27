@@ -1,3 +1,9 @@
+---
+title: Refresh an expired link
+parent: Guides
+nav_order: 2
+---
+
 # Refresh an expired link
 
 Many download sites hand out links that stop working after a while. If

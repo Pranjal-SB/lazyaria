@@ -1,3 +1,9 @@
+---
+title: Files and paths
+parent: Reference
+nav_order: 3
+---
+
 # Files and paths
 
 lazyaria follows the XDG base directory rules: it puts each kind of file
