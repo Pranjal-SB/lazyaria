@@ -19,6 +19,9 @@ The command, key and settings reference pages are generated from the
 code. After you change a command's help, a flag, a key or a setting, run
 `go generate .`. A test fails when the pages are out of date.
 
+`docs/install.sh` is a copy of `install.sh`, so the docs site serves it.
+After you change `install.sh`, run `go generate .` to copy it.
+
 ## Pull requests
 
 - Use [Conventional Commits](https://www.conventionalcommits.org/) for
