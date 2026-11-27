@@ -1,0 +1,32 @@
+ [1mlazyaria[m   [34m↓[m 12.1 MiB/s [34m  ▁▂▂▃▅▆▅▄▆█[m   [90m↑ 512.0 KiB/s[m                          [90mabout 4 min to finish all[m     [32m●[m aria2 ok
+
+  [1mDownloading 3[m   Waiting 3   Finished 2   [31mProblems 1[m
+  [34m━━━━━━━━━━━━━[90m───────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[34m╭─[m [34;1mDownloading[m [34m────────────────────────────────────────────────────────────────╮[90m╭─[m [90mDetails[m [90m────────────────────────────╮[m
+[34m│▌[m [34m↓[m [90m#16[m [1mubuntu-26.04-[34;22m╭─[m [34;1mAdd a download[m [34m─────────────────────────────────────────────────────────╮[39;1mktop-amd64.iso[m       [90m│[m
+[34m│▌[m  [34m██████████████████│[m                                                                          [34m│ing[m · 76%            [90m│[m
+[34m│[m                     [34m│[m  [34;1mLinks  11 of 12 selected[m                                                [34m│[m                     [90m│[m
+[34m│[m  [34m↓[m [90m#15[m conference-ta[34m│[m  [34;1m[ ] https://example.com/files/part-01.bin[m                               [34m│[m left                [90m│[m
+[34m│[m   [34m███████▎[90m░░░░░░░░░░[34m│[m  [x] https://example.com/files/part-02.bin                               [34m│[m                     [90m│[m
+[34m│[m                     [34m│[m  [x] https://example.com/files/part-03.bin                               [34m│[m                     [90m│[m
+[34m│[m  [34m↓[m [90m#14[m a-file-whose-[34m│[m  [x] https://example.com/files/part-04.bin                               [34m│[m]8;;file:///home/me/Downloadsds]8;;                   [90m│[m
+[34m│[m   [34mstarting[m          [34m│[m  [x] https://example.com/files/part-05.bin                               [34m│[m                     [90m│[m
+[34m│[m                     [34m│[m  [x] https://example.com/files/part-06.bin                               [34m│[m                     [90m│[m
+[34m│[m                     [34m│[m  [x] https://example.com/files/part-07.bin                               [34m│[mcom/file…p-amd64.iso [90m│[m
+[34m│[m                     [34m│[m  [x] https://example.com/files/part-08.bin                               [34m│[m                     [90m│[m
+[34m│[m                     [34m│[m  [90m4 more below[m                                                            [34m│[m                     [90m│[m
+[34m│[m                     [34m│[m                                                                          [34m│[m                     [90m│[m
+[34m│[m                     [34m│[m  [90mSave to[m                                                                 [34m│[m                     [90m│[m
+[34m│[m                     [34m│[m  /dl                                                                     [34m│[m                     [90m│[m
+[34m│[m                     [34m│[m                                                                          [34m│[m                     [90m│[m
+[34m│[m                     [34m│[m  [ ] Start paused                                                        [34m│[m                     [90m│[m
+[34m│[m                     [34m│[m                                                                          [34m│[m                     [90m│[m
+[34m│[m                     [34m│[m  [ Add 11 ]  [ Cancel ]                                                  [34m│[m                     [90m│[m
+[34m│[m                     [34m│[m                                                                          [34m│[m                     [90m│[m
+[34m│[m                     [34m╰──────────────────────────────────────────────────────────────────────────╯[m                     [90m│[m
+[34m│[m                                                                              [34m│[90m│[m                                      [90m│[m
+[34m│[m                                                                              [34m│[90m│[m                                      [90m│[m
+[34m│[m                                                                              [34m│[90m│[m                                      [90m│[m
+[34m│[m                                                                              [34m│[90m│[m                                      [90m│[m
+[34m╰──────────────────────────────────────────────────────────────────────────────╯[90m╰──────────────────────────────────────╯[m
+ [31m✗ [m1 failed, press 4 to see                                            [1ma[m [90madd[m   [1mspace[m [90mpause[m   [1mx[m [90mremove[m   [1m?[m [90mkeys[m   [1mq[m [90mquit[m

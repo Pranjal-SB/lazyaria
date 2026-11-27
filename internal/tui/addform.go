@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"slices"
 	"strings"
@@ -63,6 +64,13 @@ type addForm struct {
 	dupItem addItem      // the link that hit it
 	rest    []addItem    // the links after it
 	dupB    form.Buttons // the duplicate's buttons
+
+	// Two or more links show as a checklist instead of the link field.
+	list  bool
+	rows  []string // the links, as they were given
+	ticks []bool   // which rows are checked
+	cur   int      // the row space toggles
+	top   int      // the first row shown
 }
 
 func newAddForm(t Theme, dir string, links []string) addForm {
@@ -70,11 +78,24 @@ func newAddForm(t Theme, dir string, links []string) addForm {
 	f.fields[stopLink] = form.NewField(labelLink, strings.Join(links, " "), placeLink, t.muted)
 	f.fields[stopDir] = form.NewField(labelSaveTo, dir, "", t.muted)
 	f.fields[stopName] = form.NewField(labelFileName, "", placeFileName, t.muted)
+	f.setList(links)
 	f.setFocus(stopLink)
 	return f
 }
 
-func (f addForm) links() []string { return strings.Fields(f.fields[stopLink].Value()) }
+// links are the links to add: the checked rows, or those in the field.
+func (f addForm) links() []string {
+	if !f.list {
+		return strings.Fields(f.fields[stopLink].Value())
+	}
+	var out []string
+	for i, l := range f.rows {
+		if f.ticks[i] {
+			out = append(out, l)
+		}
+	}
+	return out
+}
 
 // items is one add per link. A file name only applies to a single link.
 // The links are turned into adds, .torrent files read, when the batch runs.
@@ -83,7 +104,7 @@ func (f addForm) items() []addItem {
 	links := f.links()
 	for _, l := range links {
 		p := daemon.AddParams{Dir: strings.TrimSpace(f.fields[stopDir].Value()), StartPaused: f.paused.Checked}
-		if len(links) == 1 {
+		if len(links) == 1 && !f.list {
 			p.Out = strings.TrimSpace(f.fields[stopName].Value())
 		}
 		out = append(out, addItem{link: l, p: p})
@@ -104,7 +125,7 @@ func (f *addForm) setFocus(i int) {
 // move goes to the next focus stop, past a disabled file name.
 func (f *addForm) move(delta int) {
 	i := (f.focus + delta + stops) % stops
-	if i == stopName && len(f.links()) > 1 {
+	if i == stopName && (f.list || len(f.links()) > 1) {
 		i = (i + delta + stops) % stops
 	}
 	f.setFocus(i)
@@ -138,6 +159,10 @@ func (m Model) formKey(k tea.KeyPressMsg) (Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+	// the checklist's cursor goes first; focus moves at its ends
+	if f.focus == stopLink && f.list && (k.String() == "down" && m.listMove(1) || k.String() == "up" && m.listMove(-1)) {
+		return m, nil
+	}
 	switch k.String() {
 	case "esc":
 		m.add = addForm{}
@@ -153,14 +178,19 @@ func (m Model) formKey(k tea.KeyPressMsg) (Model, tea.Cmd) {
 			m.add = addForm{}
 			return m, nil
 		}
-		return m.submit(f.items())
+		return m.submitForm()
 	case "space":
 		switch f.focus {
+		case stopLink:
+			if f.list {
+				f.ticks[f.cur] = !f.ticks[f.cur]
+				return m, nil
+			}
 		case stopPaused:
 			f.paused.Toggle()
 			return m, nil
 		case stopAdd:
-			return m.submit(f.items())
+			return m.submitForm()
 		case stopCancel:
 			m.add = addForm{}
 			return m, nil
@@ -182,8 +212,14 @@ func (m Model) formInput(msg tea.Msg) (Model, tea.Cmd) {
 	if f.focus >= len(f.fields) {
 		return m, nil
 	}
+	if f.list && f.focus == stopLink {
+		return m, nil // the checklist is picked, not typed into
+	}
 	var cmd tea.Cmd
 	f.fields[f.focus], cmd = f.fields[f.focus].Update(msg)
+	if _, ok := msg.(tea.PasteMsg); ok && f.focus == stopLink && len(f.links()) >= 2 {
+		f.setList(f.links())
+	}
 	return m, cmd
 }
 
@@ -202,13 +238,16 @@ func (m Model) formClick(id string) (Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+	if m, ok := m.listClick(id); ok {
+		return m, nil
+	}
 	for i, s := range stopIDs {
 		if id != s {
 			continue
 		}
 		switch i {
 		case stopAdd:
-			return m.submit(f.items())
+			return m.submitForm()
 		case stopCancel:
 			m.add = addForm{}
 		case stopPaused:
@@ -242,6 +281,14 @@ func (m Model) formView(maxW int) overlay {
 	}
 	lines = append(lines, "")
 	for i, fl := range f.fields {
+		if f.list && i == stopName {
+			continue
+		}
+		if f.list && i == stopLink {
+			m.listView(in, add, hitLine)
+			lines = append(lines, "")
+			continue
+		}
 		label := t.muted.Render(fl.Label)
 		if i == f.focus {
 			label = t.accent.Bold(true).Render(fl.Label)
@@ -269,6 +316,8 @@ func (m Model) formView(maxW int) overlay {
 				st = t.accent.Bold(true).Reverse(true)
 			} else if i == danger {
 				st = t.bad
+			} else if f.list && ids[i] == stopIDs[stopAdd] && f.checked() == 0 {
+				st = t.muted // nothing to add
 			}
 			if m.hover == layerModal+ids[i] {
 				st = st.Bold(true)
@@ -285,7 +334,11 @@ func (m Model) formView(maxW int) overlay {
 		focusBtn = f.focus - stopAdd
 	}
 	if f.dup == nil {
-		btn(stopIDs[stopAdd:], form.Buttons{Labels: []string{btnAdd, btnCancel}, Focus: focusBtn}, -1)
+		addLabel := btnAdd
+		if f.list {
+			addLabel = fmt.Sprintf(fmtAddN, f.checked())
+		}
+		btn(stopIDs[stopAdd:], form.Buttons{Labels: []string{addLabel, btnCancel}, Focus: focusBtn}, -1)
 		lines = append(lines, "")
 	}
 	if f.msg != "" {

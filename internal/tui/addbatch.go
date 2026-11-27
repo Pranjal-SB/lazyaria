@@ -46,6 +46,14 @@ type addMsg struct {
 	rest           []addItem // not tried yet
 }
 
+// submitForm adds the form's links. With none checked there is nothing to add.
+func (m Model) submitForm() (Model, tea.Cmd) {
+	if m.add.list && m.add.checked() == 0 {
+		return m, nil
+	}
+	return m.submit(m.add.items())
+}
+
 // submit adds the links one at a time, each with its own deadline. It
 // goes past links the daemon refuses and pauses at a duplicate.
 func (m Model) submit(items []addItem) (Model, tea.Cmd) {
@@ -202,7 +210,7 @@ func (m Model) finishAdd() (Model, tea.Cmd) {
 		for _, x := range f.failed {
 			links = append(links, x.link)
 		}
-		m.add.fields[stopLink].SetValue(strings.Join(links, " "))
+		m.add.setList(links)
 		m.add.msg, m.add.bad = f.failed[0].msg, true
 		if len(f.failed) > 1 {
 			m.add.msg = fmt.Sprintf(fmtFailedMany, len(f.failed), f.failed[0].msg)

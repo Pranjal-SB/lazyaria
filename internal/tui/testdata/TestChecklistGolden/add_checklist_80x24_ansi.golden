@@ -1,0 +1,24 @@
+ [1mlazyaria[m   [34m↓[m 12.1 MiB/s [34m  ▁▂▂▃▅▆▅▄▆█[m   [90m↑ 512.0 KiB/s[m                [32m●[m aria2 ok
+
+  [34m╭─[m [34;1mAdd a download[m [34m─────────────────────────────────────────────────────────╮[m
+  [34m│[m                                                                          [34m│[m
+[34m╭─│[m  [34;1mLinks  12 of 12 selected[m                                                [34m│─╮[m
+[34m│▌│[m  [34;1m[x] https://example.com/files/part-01.bin[m                               [34m│[m [34m│[m
+[34m│▌│[m  [x] https://example.com/files/part-02.bin                               [34m│[m [34m│[m
+[34m│[m [34m│[m  [x] https://example.com/files/part-03.bin                               [34m│[m [34m│[m
+[34m│[m [34m│[m  [x] https://example.com/files/part-04.bin                               [34m│[m [34m│[m
+[34m│[m [34m│[m  [x] https://example.com/files/part-05.bin                               [34m│[m [34m│[m
+[34m│[m [34m│[m  [x] https://example.com/files/part-06.bin                               [34m│[m [34m│[m
+[34m│[m [34m│[m  [x] https://example.com/files/part-07.bin                               [34m│[m [34m│[m
+[34m│[m [34m│[m  [90m5 more below[m                                                            [34m│[m [34m│[m
+[34m│[m [34m│[m                                                                          [34m│[m [34m│[m
+[34m│[m [34m│[m  [90mSave to[m                                                                 [34m│[m [34m│[m
+[34m│[m [34m│[m  /dl                                                                     [34m│[m [34m│[m
+[34m│[m [34m│[m                                                                          [34m│[m [34m│[m
+[34m│[m [34m│[m  [ ] Start paused                                                        [34m│[m [34m│[m
+[34m│[m [34m│[m                                                                          [34m│[m [34m│[m
+[34m│[m [34m│[m  [ Add 12 ]  [ Cancel ]                                                  [34m│[m [34m│[m
+[34m│[m [34m│[m                                                                          [34m│[m [34m│[m
+[34m│[m [34m╰──────────────────────────────────────────────────────────────────────────╯[m [34m│[m
+[34m╰──────────────────────────────────────────────────────────────────────────────╯[m
+ [31m✗ [m1 failed,…  [1ma[m [90madd[m   [1mspace[m [90mpause[m   [1mx[m [90mremove[m   [1menter[m [90mdetails[m   [1m?[m [90mkeys[m   [1mq[m [90mquit[m

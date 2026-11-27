@@ -43,6 +43,8 @@ func (m Model) mouse(msg tea.MouseMsg) (Model, tea.Cmd) {
 			delta = -1
 		}
 		switch {
+		case m.add.open && m.add.list && m.add.dup == nil:
+			m.listScroll(delta)
 		case m.remove.open() || m.help || m.add.open:
 		case kind == "pane" && id == "details":
 			m.detTop = min(max(m.detTop+delta, 0), m.detailsMaxTop())
