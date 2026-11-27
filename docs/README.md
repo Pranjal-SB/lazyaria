@@ -16,8 +16,8 @@ command line, which works next to it.
 
 ## Getting started
 
-- [Installation](getting-started/installation.md): build lazyaria and check
-  your setup.
+- [Installation](getting-started/installation.md): install lazyaria with
+  one command, or build it, and check your setup.
 - [Your first download](getting-started/first-download.md): add, list,
   wait, pause, resume, remove and undo.
 

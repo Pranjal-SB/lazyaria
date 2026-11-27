@@ -34,22 +34,16 @@ A download manager for the terminal, built on aria2.
 
 ## Install
 
-Prebuilt binaries are on the
-[releases page](https://github.com/Pranjal-SB/lazyaria/releases); see
-[Installation](docs/getting-started/installation.md). To build from source
-you need Linux, Go 1.27 or newer, and aria2 1.35 or newer (developed
-against 1.37).
-
 ```sh
-sudo apt install aria2        # or pacman, dnf, zypper, apk, brew
-git clone https://github.com/Pranjal-SB/lazyaria.git
-cd lazyaria
-go build -o lazyaria .
-install -D -m 755 lazyaria ~/.local/bin/lazyaria
-lazyaria doctor
+curl -fsSL https://pranjal-sb.github.io/lazyaria/install.sh | sh
 ```
 
-See [Installation](docs/getting-started/installation.md) for details.
+The script installs `lazyaria` and the short name `laria` to
+`~/.local/bin`, checks the download's checksum, and offers to install
+aria2 (1.35 or newer) if it is missing. There are builds for Linux, macOS
+and FreeBSD; lazyaria is tested on Linux. [Installation](docs/getting-started/installation.md) has its
+options and the other ways: mise, `go install`, a release by hand, or
+from source.
 
 ## Quick start
 
@@ -57,7 +51,13 @@ Run `lazyaria` with no command to open the terminal interface. Paste a
 link, or press `a`, to add a download. Quitting leaves the downloads
 running. See [The terminal interface](docs/guides/terminal-interface.md).
 
-The same works from the command line:
+Give `laria` a link, a magnet or a `.torrent` file to download it:
+
+```sh
+laria https://example.com/files/ubuntu.iso
+```
+
+The same works with the full commands:
 
 ```sh
 lazyaria add https://example.com/files/ubuntu.iso
