@@ -52,4 +52,8 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Optional. An unset secret is empty here, and .goreleaser.yaml
+          # then skips the Homebrew or AUR upload.
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           GORELEASER_CURRENT_TAG: ${{ env.TAG }}

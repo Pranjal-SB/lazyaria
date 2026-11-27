@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -69,6 +71,49 @@ func TestRunUnknown(t *testing.T) {
 	}
 	if !strings.Contains(msg, "lazyaria help") {
 		t.Errorf("stderr %q missing fix hint", msg)
+	}
+}
+
+func TestAddShorthand(t *testing.T) {
+	dir := t.TempDir()
+	tor := filepath.Join(dir, "x.torrent")
+	if err := os.WriteFile(tor, []byte("d4:infod4:name1:xee"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for arg, want := range map[string]bool{
+		"https://example.com/a.iso":      true,
+		"ftp://example.com/a":            true,
+		"magnet:?xt=urn:btih:abc":        true,
+		"MAGNET:?xt=urn:btih:abc":        true,
+		"-":                              true,
+		tor:                              true,
+		filepath.Join(dir, "no.torrent"): false,
+		dir:                              false,
+		"lsit":                           false,
+		"ad":                             false,
+		"--help":                         false,
+		"example.com/a.iso":              false,
+	} {
+		if got := addShorthand(arg); got != want {
+			t.Errorf("addShorthand(%q) = %v, want %v", arg, got, want)
+		}
+	}
+}
+
+// "laria <link>" runs add with every argument; a typo of a command is
+// still an unknown command.
+func TestRunAddShorthand(t *testing.T) {
+	var out, errb bytes.Buffer
+	// An unknown flag stops add before it needs the daemon.
+	code := run(context.Background(), []string{"laria", "https://example.com/a.iso", "--bogus"}, &out, &errb)
+	if code != 2 || !strings.Contains(errb.String(), "-bogus") || strings.Contains(errb.String(), "unknown command") {
+		t.Fatalf("shorthand: exit %d, stderr %q; want add's flag error", code, errb.String())
+	}
+	cli.Prog = "lazyaria"
+	errb.Reset()
+	code = run(context.Background(), []string{"lazyaria", "lsit"}, &out, &errb)
+	if code != 2 || !strings.Contains(errb.String(), `unknown command "lsit"`) {
+		t.Fatalf("typo: exit %d, stderr %q", code, errb.String())
 	}
 }
 

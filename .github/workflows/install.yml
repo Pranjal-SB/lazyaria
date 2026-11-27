@@ -1,0 +1,71 @@
+name: install
+
+# Checks install.sh: lint, then a real run against a release built from
+# this commit and served locally, in several Linux distributions.
+on:
+  push:
+    paths:
+      - install.sh
+      - docs/install.sh
+      - e2e/install-test.sh
+      - .github/workflows/install.yml
+      - main.go
+      - internal/buildinfo/**
+  pull_request:
+    paths:
+      - install.sh
+      - docs/install.sh
+      - e2e/install-test.sh
+      - .github/workflows/install.yml
+      - main.go
+      - internal/buildinfo/**
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      # shellcheck comes with the runner image.
+      - name: Shellcheck
+        run: shellcheck -s sh install.sh e2e/install-test.sh
+
+      - name: Shfmt
+        run: go run mvdan.cc/sh/v3/cmd/shfmt@v3.14.1 -d install.sh e2e/install-test.sh
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - ubuntu:24.04
+          - debian:stable-slim
+          - fedora:latest
+          - alpine:latest
+          - archlinux:latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      - name: Install script
+        run: e2e/install-test.sh "${{ matrix.image }}"
