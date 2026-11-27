@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/Pranjal-SB/lazyaria/internal/aria2"
 )
@@ -201,11 +202,16 @@ func (e *aria2Engine) SetLimit(ctx context.Context, ref EngineRef, down, up int6
 // out of the message, as it may hold credentials.
 func CheckLinks(uris []string) error {
 	for i, u := range uris {
+		bad := fmt.Errorf("link %d is not a valid URL; check its %%-escapes and spaces, then add it again", i+1)
+		// A line break in a magnet would add lines to aria2's session file.
+		if strings.IndexFunc(u, unicode.IsControl) >= 0 {
+			return bad
+		}
 		if strings.HasPrefix(strings.ToLower(u), "magnet:") {
 			continue
 		}
-		if _, err := url.Parse(u); err != nil {
-			return fmt.Errorf("link %d is not a valid URL; check its %%-escapes and spaces, then add it again", i+1)
+		if p, err := url.Parse(u); err != nil || !slices.Contains([]string{"http", "https", "ftp", "sftp"}, strings.ToLower(p.Scheme)) {
+			return bad
 		}
 	}
 	return nil
