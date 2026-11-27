@@ -11,6 +11,9 @@ import (
 	"github.com/Pranjal-SB/lazyaria/internal/store"
 )
 
+// keepRename moves kept files; tests watch the order through it.
+var keepRename = fsutil.RenameNoReplace
+
 // keptFile is a file a remove moved out of a staging folder, for Undo.
 type keptFile struct{ From, To string }
 
@@ -40,12 +43,17 @@ func keepUnfinished(j *store.Job) ([]keptFile, error) {
 			return nil, errors.Join(err, putBack(done))
 		}
 		held[name] = true
-		pairs := []keptFile{{filepath.Join(staging, e.Rel), filepath.Join(j.Dir, name)}}
-		if ctl := pairs[0].From + ".aria2"; lexists(ctl) {
-			pairs = append(pairs, keptFile{ctl, pairs[0].To + ".aria2"})
+		// The control file goes first: a crash in between leaves the payload
+		// in staging, never alone under a name. A partial without one (a
+		// reply of unknown length) still moves: the name says unfinished.
+		payload := keptFile{filepath.Join(staging, e.Rel), filepath.Join(j.Dir, name)}
+		var pairs []keptFile
+		if ctl := payload.From + ".aria2"; lexists(ctl) {
+			pairs = append(pairs, keptFile{ctl, payload.To + ".aria2"})
 		}
+		pairs = append(pairs, payload)
 		for _, k := range pairs {
-			if err := fsutil.RenameNoReplace(k.From, k.To); err != nil {
+			if err := keepRename(k.From, k.To); err != nil {
 				return nil, errors.Join(err, putBack(done))
 			}
 			done = append(done, k)

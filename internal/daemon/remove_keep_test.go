@@ -5,8 +5,39 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/Pranjal-SB/lazyaria/internal/fsutil"
 	"github.com/Pranjal-SB/lazyaria/internal/store"
 )
+
+// The control file moves before the payload, so a crash in between never
+// leaves a lone payload that looks finished. A partial without one (aria2
+// writes none for a reply of unknown length) still moves under the
+// unfinished name, and the same link can be added again.
+func TestKeepUnfinishedControlFileFirst(t *testing.T) {
+	r := newRig(t)
+	a, _ := activeStaged(t, r)
+	b := r.add(t, AddParams{URIs: []string{"http://example.com/b.iso"}, Out: "b.iso"})
+	stageFiles(t, b, map[string]string{"b.iso": "chunked"})
+	var order []string
+	keepRename = func(from, to string) error {
+		order = append(order, filepath.Base(to))
+		return fsutil.RenameNoReplace(from, to)
+	}
+	t.Cleanup(func() { keepRename = fsutil.RenameNoReplace })
+
+	if _, _, err := r.m.Remove(bg, []string{a.ID, b.ID}, false); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"a (unfinished).iso.aria2", "a (unfinished).iso", "b (unfinished).iso"}; !slices.Equal(order, want) {
+		t.Fatalf("moved %v, want %v", order, want)
+	}
+	if read(t, filepath.Join(r.dir, "b (unfinished).iso")) != "chunked" {
+		t.Fatal("the partial without a control file was not kept")
+	}
+	if _, err := r.m.Add(bg, AddParams{URIs: []string{"http://example.com/b.iso"}, Dir: r.dir}); err != nil {
+		t.Fatalf("adding the link again: %v", err)
+	}
+}
 
 // A remove that keeps files leaves an unfinished download in the download
 // folder as "<stem> (unfinished)<ext>" (the next free name if taken), never
