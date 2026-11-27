@@ -39,6 +39,35 @@ func TestKeepUnfinishedControlFileFirst(t *testing.T) {
 	}
 }
 
+// What the move leaves in the staging folder is never hard-deleted, except
+// aria2's own <info-hash>.torrent: the rest (here a file that happens to
+// end in .meta4) goes to the trash, and undo brings it back.
+func TestKeepUnfinishedTrashesWhatIsLeft(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
+	r := newRig(t)
+	a, part := activeStaged(t, r)
+	hash := "0123456789abcdef0123456789abcdef01234567.torrent"
+	stageFiles(t, a, map[string]string{"notes.meta4": "the user's", hash: "meta"})
+
+	tok, _, err := r.m.Remove(bg, []string{a.ID}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exists1(stagingDir(a)) {
+		t.Fatal("staging folder left")
+	}
+	es := r.m.undo[tok].files[a.ID]
+	if len(es) != 1 || read(t, filepath.Join(es[0].TrashedPath, "notes.meta4")) != "the user's" || exists1(filepath.Join(es[0].TrashedPath, hash)) {
+		t.Fatalf("trashed %+v", es)
+	}
+	if err := r.m.Undo(bg, tok); err != nil {
+		t.Fatal(err)
+	}
+	if read(t, part) != "half" || read(t, filepath.Join(stagingDir(a), "notes.meta4")) != "the user's" {
+		t.Fatal("undo did not bring everything back")
+	}
+}
+
 // A remove that keeps files leaves an unfinished download in the download
 // folder as "<stem> (unfinished)<ext>" (the next free name if taken), never
 // under its plain name, with its control file, and no staging folder; undo

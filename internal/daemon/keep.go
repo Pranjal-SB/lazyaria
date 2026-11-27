@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 
 	"github.com/Pranjal-SB/lazyaria/internal/fsutil"
 	"github.com/Pranjal-SB/lazyaria/internal/store"
+	"github.com/Pranjal-SB/lazyaria/internal/trash"
 )
 
 // keepRename moves kept files; tests watch the order through it.
@@ -21,8 +23,8 @@ type keptFile struct{ From, To string }
 // folder into Dir, so the files the remove keeps are where the user looks:
 // each payload entry as "<stem> (unfinished)<ext>" of the name it would be
 // published under (the next free one if taken), with its .aria2 control
-// file beside it. The staging folder then goes. If a move fails, the ones
-// done are undone and the files stay in the staging folder.
+// file beside it. clearStaging then removes the folder. If a move fails,
+// the ones done are undone and the files stay in the staging folder.
 func keepUnfinished(j *store.Job) ([]keptFile, error) {
 	staging := stagingDir(j)
 	if !j.Staged || j.Publish != nil || !lexists(staging) {
@@ -59,12 +61,35 @@ func keepUnfinished(j *store.Job) ([]keptFile, error) {
 			done = append(done, k)
 		}
 	}
-	// What is left is aria2's own (.torrent, .meta4): a re-add fetches it again.
-	if err := os.RemoveAll(staging); err != nil {
-		return done, err
+	return done, nil
+}
+
+// infoHashTorrent is the metadata aria2 saves for a magnet link,
+// <info-hash>.torrent; a re-add fetches it again.
+var infoHashTorrent = regexp.MustCompile(`^[0-9a-fA-F]{40}\.torrent$`)
+
+// clearStaging removes j's staging folder once keepUnfinished has moved the
+// payload out. Only aria2's saved magnet metadata is deleted; anything else
+// left, which may be the user's bytes, goes to the trash in the folder, and
+// its entry is returned for Undo.
+func (m *Manager) clearStaging(j *store.Job) ([]trash.Entry, error) {
+	staging := stagingDir(j)
+	es, _ := os.ReadDir(staging)
+	for _, e := range es {
+		if infoHashTorrent.MatchString(e.Name()) {
+			os.Remove(filepath.Join(staging, e.Name()))
+		}
+	}
+	if err := os.Remove(staging); err != nil && lexists(staging) {
+		te, err := m.trash(staging)
+		if err != nil {
+			return nil, err
+		}
+		os.Remove(filepath.Dir(staging))
+		return []trash.Entry{te}, nil
 	}
 	os.Remove(filepath.Dir(staging)) // .laria, once no job uses it
-	return done, nil
+	return nil, nil
 }
 
 // putBack returns kept files to their staging folder, last first. A file
