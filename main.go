@@ -46,6 +46,8 @@ var commands = map[string]func(ctx context.Context, args []string, out, errOut i
 
 const usage = `usage: lazyaria <command> [args]
        lazyaria    open the terminal interface (in a terminal)
+       lazyaria <link|magnet|file.torrent|->...
+                   same as lazyaria add
 
 commands:
   add [--dir D] [--out F] [--paused] [--wait] [--force] <link|file.torrent|->...
@@ -105,11 +107,29 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	cmd, ok := commands[args[1]]
+	if !ok && addShorthand(args[1]) {
+		return cli.Add(ctx, args[1:], stdout, stderr)
+	}
 	if !ok {
 		fmt.Fprintf(stderr, "%s: unknown command %q. Run \"%[1]s help\" to see the commands.\n", cli.Prog, args[1])
 		return 2
 	}
 	return cmd(ctx, args[2:], stdout, stderr)
+}
+
+// addShorthand reports whether a first argument that is not a command is
+// something to download, so "laria <link>" means "laria add <link>". A typo
+// of a command matches none of these and still gets "unknown command".
+func addShorthand(arg string) bool {
+	lower := strings.ToLower(arg)
+	if arg == "-" || strings.Contains(arg, "://") || strings.HasPrefix(lower, "magnet:") {
+		return true
+	}
+	if strings.HasSuffix(lower, ".torrent") {
+		st, err := os.Stat(arg)
+		return err == nil && st.Mode().IsRegular()
+	}
+	return false
 }
 
 // usageText is usage under the name the binary was invoked as.
