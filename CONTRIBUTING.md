@@ -12,6 +12,7 @@ go build -o lazyaria .
 go vet ./...
 go test -race ./...
 go test -race -timeout 20m -tags e2e -v ./e2e/    # needs aria2c
+e2e/install-test.sh    # install.sh in containers; needs docker and python3
 ```
 
 The command, key and settings reference pages are generated from the
