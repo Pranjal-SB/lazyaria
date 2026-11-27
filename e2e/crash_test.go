@@ -15,8 +15,9 @@ import (
 )
 
 // TestCrashNeverLoses: kill -9 the daemon or aria2c, in turn, at 23 chosen
-// points of progress, three of them above 90%; every job still ends done
-// with the right bytes.
+// points of progress, three of them above 90%, then once each as a file
+// finishes and before it is published; every job still ends done with the
+// right bytes.
 func TestCrashNeverLoses(t *testing.T) {
 	files := map[string][]byte{}
 	for i, name := range []string{"c1.bin", "c2.bin", "c3.bin"} {
@@ -95,8 +96,35 @@ func TestCrashNeverLoses(t *testing.T) {
 		}
 		t.Logf("kill %2d: %s %d at %s, progress %.1f%%", i+1, what, victim, time.Since(start).Round(time.Millisecond), frac*100)
 	}
-	for name := range files {
+	// Finish the files one at a time and kill in each finish window: aria2
+	// has the whole file and has deleted its control file, but lazyaria
+	// has not yet moved it into the download folder. First the daemon,
+	// then aria2c. The window is short, so a miss is logged, not failed.
+	idOf := map[string]string{}
+	for _, j := range e.jobs() {
+		idOf[j.Name] = j.ID
+	}
+	names := []string{"c1.bin", "c2.bin", "c3.bin"}
+	for i, name := range names {
+		pid := e.status().PID
+		victim, what := pid, "daemon"
+		if i == 1 {
+			what = "aria2c"
+			waitFor(t, 10*time.Second, "an aria2c child", func() bool { victim = aria2Child(pid); return victim != 0 })
+		}
 		srv.SetGate(name, -1)
+		if i == 2 {
+			break
+		}
+		staged := filepath.Join(e.dl, ".laria", idOf[name], name)
+		if hitFinish(staged, int64(len(files[name])), filepath.Join(e.dl, name)) {
+			if err := syscall.Kill(victim, syscall.SIGKILL); err != nil {
+				t.Fatalf("kill %s %d: %v", what, victim, err)
+			}
+			t.Logf("finish window: killed %s %d as %s finished", what, victim, name)
+		} else {
+			t.Logf("finish window: missed for %s (%s not killed)", name, what)
+		}
 	}
 
 	for _, id := range ids {
@@ -117,6 +145,22 @@ func TestCrashNeverLoses(t *testing.T) {
 		}
 	}
 	t.Logf("all 3 done %s after the first kill", time.Since(start).Round(time.Millisecond))
+}
+
+// hitFinish watches staged until aria2 has finished it (full size, no
+// .aria2 control file) and reports true, or false once it is published to
+// final or a minute has passed.
+func hitFinish(staged string, size int64, final string) bool {
+	for end := time.Now().Add(time.Minute); time.Now().Before(end); time.Sleep(time.Millisecond) {
+		if lexists(final) {
+			return false
+		}
+		fi, err := os.Stat(staged)
+		if err == nil && fi.Size() == size && !lexists(staged+".aria2") {
+			return true
+		}
+	}
+	return false
 }
 
 func deref(s *string) string {
