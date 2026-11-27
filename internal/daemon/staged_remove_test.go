@@ -108,6 +108,39 @@ func TestReaddWithoutOutKeepsControlledPartial(t *testing.T) {
 	}
 }
 
+// A metalink or torrent link writes the file it names beside its own
+// .meta4 or .torrent, and the row holds the placeholder name until the
+// first poll. That partial is not the link's own file: re-fetching the
+// .meta4 with its name as out would fail forever.
+func TestReaddLeavesALinkFilesPartialAlone(t *testing.T) {
+	for name, files := range map[string]map[string]string{
+		"meta4":       {"payload.bin": "early", "payload.bin.aria2": "ctl", "x.meta4": "m"},
+		"metalink":    {"payload.bin": "early", "payload.bin.aria2": "ctl", "x.metalink": "m"},
+		"torrent":     {"payload.bin": "early", "payload.bin.aria2": "ctl", "x.torrent": "t"},
+		"placeholder": {"payload.bin": "early", "payload.bin.aria2": "ctl"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := newRig(t)
+			j := r.insert(t, store.Active, "old1", func(j *store.Job) {
+				j.Name = "download"
+				if name != "placeholder" {
+					j.Name = "x." + name
+				}
+			})
+			stageFiles(t, j, files)
+			if _, ok := controlledPartial(j); ok {
+				t.Fatal("took the link file's partial for the job's own")
+			}
+			if _, err := r.m.readd(bg, j, false, "readded"); err != nil {
+				t.Fatal(err)
+			}
+			if add := r.e.adds[len(r.e.adds)-1]; add.Out != "" || r.get(t, j.ID).Out != nil {
+				t.Fatalf("re-add out %q", add.Out)
+			}
+		})
+	}
+}
+
 func TestCompletedOfflineStaged(t *testing.T) {
 	t.Run("full size", func(t *testing.T) {
 		r := newRig(t)
