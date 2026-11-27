@@ -1,3 +1,9 @@
+---
+title: The daemon
+parent: Concepts
+nav_order: 1
+---
+
 # The daemon
 
 A daemon is a program that runs in the background. lazyaria has one,

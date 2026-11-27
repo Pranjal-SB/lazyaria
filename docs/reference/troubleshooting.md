@@ -1,3 +1,9 @@
+---
+title: Troubleshooting
+parent: Reference
+nav_order: 6
+---
+
 # Troubleshooting
 
 ## Start with doctor

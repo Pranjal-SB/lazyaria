@@ -1,3 +1,9 @@
+---
+title: Installation
+parent: Getting started
+nav_order: 1
+---
+
 # Installation
 
 lazyaria is pre-release. You can download a prebuilt binary from GitHub

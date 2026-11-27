@@ -1,3 +1,9 @@
+---
+title: The terminal interface
+parent: Guides
+nav_order: 1
+---
+
 # The terminal interface
 
 `lazyaria` with no command opens a screen with your downloads on it. It

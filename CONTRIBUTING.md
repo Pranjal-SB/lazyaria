@@ -35,3 +35,15 @@ release by hand for an existing tag:
 ```sh
 gh workflow run release.yml -f tag=v0.1.0
 ```
+
+## The documentation site
+
+The pages in `docs/` are published with GitHub Pages and the built-in
+Jekyll, at https://pranjal-sb.github.io/lazyaria/. There is no build step
+and no workflow. To turn it on once, open the repository's Settings, then
+Pages, and choose Deploy from a branch, branch `master`, folder `/docs`.
+
+Every page needs front matter (`title`, and `parent` and `nav_order` for
+pages inside a section). The generated reference pages get theirs from
+`go generate .`. Do not use `{{` or `{%` in a page: Jekyll reads them as
+template code. `docs/install.sh` is published as it is.

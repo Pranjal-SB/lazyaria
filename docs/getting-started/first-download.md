@@ -1,3 +1,9 @@
+---
+title: Your first download
+parent: Getting started
+nav_order: 2
+---
+
 # Your first download
 
 This page walks through the everyday commands. The links are examples:
