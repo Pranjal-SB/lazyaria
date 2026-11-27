@@ -172,6 +172,45 @@ func TestConfigSetLiveApplies(t *testing.T) {
 	}
 }
 
+// A setting that took effect tells subscribers; a rejected one does not.
+func TestConfigSetPublishesConfigChanged(t *testing.T) {
+	testutil.RequireAria2(t)
+	e := newEnv(t, "")
+	e.start()
+	c := e.dial()
+	evs, _, err := c.Subscribe(bg, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := func() daemon.Event {
+		t.Helper()
+		select {
+		case ev := <-evs:
+			return ev
+		case <-time.After(5 * time.Second):
+			t.Fatal("no event within 5s")
+			return daemon.Event{}
+		}
+	}
+	if err := c.ConfigSet(bg, "ui.glyphs", "ascii"); err != nil {
+		t.Fatal(err)
+	}
+	if ev := next(); ev.Type != daemon.EvConfigChanged {
+		t.Fatalf("event after config.set: %q, want %q", ev.Type, daemon.EvConfigChanged)
+	}
+	if err := c.ConfigSet(bg, "ui.glyphs", "bogus"); err == nil {
+		t.Fatal("config.set accepted a bad glyph set")
+	}
+	// Events arrive in order, so the job's event coming first proves the
+	// rejected set sent nothing.
+	if _, err := c.Add(bg, daemon.AddParams{URIs: []string{"http://127.0.0.1:1/x.bin"}, StartPaused: true}); err != nil {
+		t.Fatal(err)
+	}
+	if ev := next(); ev.Type != "job.added" {
+		t.Fatalf("event after a rejected config.set: %q, want job.added", ev.Type)
+	}
+}
+
 // jobs.set_limit with no id is the global limit: applied and saved like
 // config set limits.global_down.
 func TestGlobalSetLimitIsSaved(t *testing.T) {

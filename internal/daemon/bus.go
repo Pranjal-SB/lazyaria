@@ -11,7 +11,7 @@ import (
 // Event is a reliable lifecycle event pushed to subscribers.
 type Event struct {
 	Seq  uint64         `json:"seq"`
-	Type string         `json:"type"` // job.added|job.updated|job.removed|engine.state|banner|resync_required
+	Type string         `json:"type"` // job.added|job.updated|job.removed|engine.state|banner|config.changed|resync_required
 	Job  *store.Job     `json:"job,omitempty"`
 	Data map[string]any `json:"data,omitempty"`
 }

@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"path/filepath"
 	"slices"
 	"testing"
 	"time"
@@ -141,7 +142,7 @@ func TestSnapshotDecorated(t *testing.T) {
 		t.Fatalf("%d jobs", len(js))
 	}
 	g := js[0]
-	if g.Label != "downloading" || !slices.Equal(g.Actions, []string{ActPause, ActRemove, ActRefresh}) ||
+	if g.Label != "downloading" || !slices.Equal(g.Actions, []string{ActPause, ActRemove, ActRefresh, ActOpenFolder, ActLimit}) ||
 		g.SpeedDown != 5 || g.ETASeconds == nil || *g.ETASeconds != 18 {
 		t.Fatalf("snapshot job: label %q actions %v down %d eta %v", g.Label, g.Actions, g.SpeedDown, g.ETASeconds)
 	}
@@ -171,5 +172,86 @@ func TestLifecycleFrame(t *testing.T) {
 	ev := <-sub.Events()
 	if ev.Job == nil || ev.Job.Label != "paused" || !slices.Contains(ev.Job.Actions, ActResume) {
 		t.Fatalf("event job %+v", ev.Job)
+	}
+}
+
+// A publish that found the name taken reports where the file really went.
+func TestPayloadPathAfterRenamedPublish(t *testing.T) {
+	r := newRig(t)
+	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}})
+	wfile(t, filepath.Join(r.dir, "a.iso"), "the user's")
+	stageFiles(t, j, map[string]string{"a.iso": "ours"})
+	r.complete(t, j, "a.iso")
+	js := r.m.Snapshot(bg, store.Filter{IncludeHistory: true}).Jobs
+	if want := filepath.Join(r.dir, "a.1.iso"); len(js) != 1 || js[0].Path != want {
+		t.Fatalf("snapshot jobs %+v, want one with path %s", js, want)
+	}
+}
+
+func TestPayloadPathUnfinishedEmpty(t *testing.T) {
+	out := "a.iso"
+	for _, s := range []store.State{store.Queued, store.Active, store.Paused, store.RetryWait, store.Error, store.Removed} {
+		if p := PayloadPath(&store.Job{State: s, Dir: "/dl", Name: "a.iso", Out: &out}); p != "" {
+			t.Errorf("%s job: path %q, want none", s, p)
+		}
+	}
+	// A staged job not yet published has its files in staging only.
+	if p := PayloadPath(&store.Job{State: store.Seeding, Staged: true, Dir: "/dl", Name: "a.iso", Out: &out}); p != "" {
+		t.Errorf("unpublished seeding job: path %q, want none", p)
+	}
+	if p := PayloadPath(&store.Job{State: store.Done, Name: "a.iso"}); p != "" {
+		t.Errorf("job with no folder: path %q, want none", p)
+	}
+	if p := PayloadPath(&store.Job{State: store.Done, Dir: "/dl", Name: "a.iso", Out: &out}); p != "/dl/a.iso" {
+		t.Errorf("done job: path %q, want /dl/a.iso", p)
+	}
+	pub := &store.Publish{Name: "t.1", Seed: true}
+	if p := PayloadPath(&store.Job{State: store.Seeding, Staged: true, Dir: "/dl", Name: "t", Publish: pub}); p != "/dl/t.1" {
+		t.Errorf("seeding published torrent: path %q, want /dl/t.1", p)
+	}
+}
+
+func TestPayloadPathRejectsNonLocal(t *testing.T) {
+	for _, name := range []string{"../x", "/etc/passwd", "."} {
+		out := name
+		if p := PayloadPath(&store.Job{State: store.Done, Dir: "/dl", Name: "a.iso", Out: &out}); p != "" {
+			t.Errorf("out %q: path %q, want none", name, p)
+		}
+		if p := PayloadPath(&store.Job{State: store.Done, Dir: "/dl", Name: name}); p != "" {
+			t.Errorf("name %q: path %q, want none", name, p)
+		}
+		if p := PayloadPath(&store.Job{State: store.Done, Dir: "/dl", Name: "a.iso", Publish: &store.Publish{Name: name}}); p != "" {
+			t.Errorf("published name %q: path %q, want none", name, p)
+		}
+	}
+	if p := PayloadPath(&store.Job{State: store.Done, Dir: "/dl"}); p != "" {
+		t.Errorf("no name: path %q, want none", p)
+	}
+}
+
+func TestActionsOpenFolderAndLimit(t *testing.T) {
+	for _, tc := range []struct {
+		state         store.State
+		folder, limit bool
+	}{
+		{store.Queued, true, true},
+		{store.Active, true, true},
+		{store.Paused, true, true},
+		{store.RetryWait, true, true},
+		{store.Error, true, true},
+		{store.Seeding, true, true},
+		{store.Done, true, false},
+		{store.Removed, false, false},
+	} {
+		a := Actions(&store.Job{State: tc.state, Dir: "/dl", Kind: "http"})
+		if got := slices.Contains(a, ActOpenFolder); got != tc.folder {
+			t.Errorf("%s: open_folder listed %v, want %v (%v)", tc.state, got, tc.folder, a)
+		}
+		if got := slices.Contains(a, ActLimit); got != tc.limit {
+			t.Errorf("%s: limit listed %v, want %v (%v)", tc.state, got, tc.limit, a)
+		}
+		if slices.Contains(Actions(&store.Job{State: tc.state, Kind: "http"}), ActOpenFolder) {
+			t.Errorf("%s: open_folder listed for a job with no folder", tc.state)
+		}
 	}
 }

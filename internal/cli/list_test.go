@@ -40,7 +40,7 @@ func sampleJobs() []*store.Job {
 		{ID: "01JC0000000000000000000001", Num: 1, Kind: "http", Engine: "aria2", EngineRef: ptr("2089b05ecca3d829"), State: store.Active,
 			Name: "debian.iso", URIs: []string{"https://example.com/debian.iso"}, Dir: "/dl", TotalBytes: ptr(int64(4 << 30)),
 			DoneBytes: ptr(int64(1 << 30)), Options: map[string]string{"header": "***"}, Queue: "default", CreatedAt: at,
-			SpeedDown: 1 << 20, ETASeconds: ptr(int64(3072)), Label: "downloading", Actions: []string{"pause", "remove", "refresh"}},
+			SpeedDown: 1 << 20, ETASeconds: ptr(int64(3072)), Label: "downloading", Actions: []string{"pause", "remove", "refresh", "open_folder", "limit"}},
 		{ID: "01JC0000000000000000000002", Num: 2, Kind: "magnet", Engine: "aria2", State: store.Error, ErrorKind: ptr("not-found"),
 			ErrorCode: ptr(3), ErrorMsg: ptr("404"), Name: "x", URIs: []string{"magnet:?xt=urn:btih:abc"}, Dir: "/dl",
 			Options: map[string]string{}, Queue: "default", CreatedAt: at},

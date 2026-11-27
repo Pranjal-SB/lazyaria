@@ -10,7 +10,6 @@ import (
 	"github.com/Pranjal-SB/lazyaria/internal/config"
 	"github.com/Pranjal-SB/lazyaria/internal/daemon"
 	"github.com/Pranjal-SB/lazyaria/internal/ipc"
-	"github.com/Pranjal-SB/lazyaria/internal/store"
 )
 
 // handler adapts the daemon to ipc.Handler. Job methods come straight
@@ -53,10 +52,6 @@ func (h handler) Upgrade(ctx context.Context) error {
 }
 
 func (h handler) RestartEngine(context.Context) error { return h.d.restartEngine() }
-
-func (h handler) Search(ctx context.Context, q string, limit, offset int) ([]*store.Job, error) {
-	return h.d.st.Search(ctx, q, limit, offset)
-}
 
 func (h handler) Subscribe(progress bool) *daemon.Sub { return h.d.bus.Subscribe(progress) }
 

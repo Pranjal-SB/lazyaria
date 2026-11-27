@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"math"
+	"path/filepath"
 	"strings"
 
 	"github.com/Pranjal-SB/lazyaria/internal/store"
@@ -16,6 +17,8 @@ const (
 	ActRefresh     = "refresh"
 	ActStopSeeding = "stop_seeding"
 	ActOpen        = "open"
+	ActOpenFolder  = "open_folder"
+	ActLimit       = "limit"
 )
 
 // Summary is the totals a client shows over the whole list.
@@ -70,7 +73,7 @@ func Label(j *store.Job) string {
 }
 
 // Actions lists what the Manager does something for on j now. It mirrors
-// Manager.pause, resume, StopSeeding and RefreshURI.
+// Manager.pause, resume, StopSeeding, RefreshURI and SetLimit.
 func Actions(j *store.Job) []string {
 	if j.State == store.Removed {
 		return nil
@@ -95,16 +98,46 @@ func Actions(j *store.Job) []string {
 	if j.State == store.Done || j.State == store.Seeding {
 		a = append(a, ActOpen)
 	}
+	if j.Dir != "" {
+		a = append(a, ActOpenFolder)
+	}
+	if j.State != store.Done {
+		a = append(a, ActLimit)
+	}
 	return a
 }
 
-// decorate returns a copy of j with live progress, its label and actions.
+// PayloadPath is where a done or seeding job's payload is in its download
+// folder: Dir joined with the published name (else Out, else Name). It is
+// "" for any other job, for a staged job not yet published (its files are
+// in staging only), and for a name that would leave Dir.
+func PayloadPath(j *store.Job) string {
+	if j.State != store.Done && j.State != store.Seeding || j.Dir == "" {
+		return ""
+	}
+	name := j.Name
+	switch {
+	case j.Publish != nil:
+		name = j.Publish.Name
+	case j.Staged:
+		return ""
+	case j.Out != nil && *j.Out != "":
+		name = *j.Out
+	}
+	if !filepath.IsLocal(name) || filepath.Clean(name) == "." {
+		return ""
+	}
+	return filepath.Join(j.Dir, name)
+}
+
+// decorate returns a copy of j with live progress, its label, actions and
+// payload path.
 func (m *Manager) decorate(j *store.Job) *store.Job {
 	if j == nil {
 		return nil
 	}
 	c := *m.prog.overlay(j)
-	c.Label, c.Actions = Label(&c), Actions(&c)
+	c.Label, c.Actions, c.Path = Label(&c), Actions(&c), PayloadPath(&c)
 	return &c
 }
 

@@ -40,7 +40,9 @@
     "actions": [
       "pause",
       "remove",
-      "refresh"
+      "refresh",
+      "open_folder",
+      "limit"
     ]
   },
   "files": [

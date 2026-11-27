@@ -67,6 +67,7 @@ type Job struct {
 	ETASeconds *int64   `json:"eta_seconds,omitempty"`
 	Label      string   `json:"label,omitempty"`   // the state in words: "downloading", "link expired", ...
 	Actions    []string `json:"actions,omitempty"` // what the job allows now: daemon.Act*
+	Path       string   `json:"path,omitempty"`    // where a done or seeding job's payload is; "" otherwise
 }
 
 // Publish is the recorded plan of a move from staging into Dir. It never

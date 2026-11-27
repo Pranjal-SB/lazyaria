@@ -263,3 +263,19 @@ func (m *Manager) Snapshot(ctx context.Context, f store.Filter) Snapshot {
 	}
 	return Snapshot{Seq: seq, Jobs: js, Speed: m.prog.samples(), Summary: m.summary(ctx)}
 }
+
+// Search matches q against every job's name and links, history included,
+// with live progress as Snapshot has it.
+func (m *Manager) Search(ctx context.Context, q string, limit, offset int) ([]*store.Job, error) {
+	js, err := m.st.Search(ctx, q, limit, offset)
+	for i, j := range js {
+		js[i] = m.decorate(j)
+	}
+	return js, err
+}
+
+// EvConfigChanged tells subscribers the settings changed; they re-read them.
+const EvConfigChanged = "config.changed"
+
+// ConfigChanged tells subscribers a settings change took effect.
+func (m *Manager) ConfigChanged() { m.bus.Publish(Event{Type: EvConfigChanged}) }

@@ -47,7 +47,11 @@ func (d *daemonProc) reload(ctx context.Context) error {
 	d.level.Set(logLevel(cur.Log.Level))
 	d.redact.Store(cur.Privacy.RedactLogs)
 	d.kick()
-	return d.applyEngine(ctx, prev, cur)
+	err = d.applyEngine(ctx, prev, cur)
+	// The new settings are in place even when aria2 refused some, so
+	// clients re-read them either way.
+	d.m.ConfigChanged()
+	return err
 }
 
 // applyEngine pushes changed live aria2 options to the running aria2.
