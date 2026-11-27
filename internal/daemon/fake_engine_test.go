@@ -212,7 +212,7 @@ type rig struct {
 
 var bg = context.Background()
 
-func newRig(t *testing.T) *rig {
+func newRig(t testing.TB) *rig {
 	t.Helper()
 	st, err := store.Open(filepath.Join(t.TempDir(), "l.db"))
 	if err != nil {

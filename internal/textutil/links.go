@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-var linkRe = regexp.MustCompile(`(?i)(?:(?:https?|ftp|sftp)://|magnet:\?xt=)[^\s<>"']+|file://[^\s<>"']*\.torrent|/[^\s<>"']*\.torrent`)
+var linkRe = regexp.MustCompile(`(?i)(?:(?:https?|ftp|sftp)://|magnet:\?xt=)[^\s<>"'\p{Cc}\p{Z}]+|file://[^\s<>"'\p{Cc}\p{Z}]*\.torrent|/[^\s<>"'\p{Cc}\p{Z}]*\.torrent`)
 
 // ExtractLinks returns the downloadable links in text, de-duplicated, in order of appearance.
 func ExtractLinks(text string) []string {
