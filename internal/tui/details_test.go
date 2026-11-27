@@ -75,6 +75,7 @@ func detailsDaemon() *fakeDaemon {
 
 // Ten frames within a second fetch the details at most twice.
 func TestDetailsFetchLimited(t *testing.T) {
+	t.Parallel() // mostly sleeps; a slower run only makes fewer calls
 	d := newFakeDaemon(job(1, "a.iso", store.Active, daemon.ActPause))
 	u := startTUI(t, options(t, d), 120, 32)
 	u.waitFor(t, "a.iso")
@@ -92,6 +93,7 @@ func TestDetailsFetchLimited(t *testing.T) {
 
 // With the pane closed on a narrow terminal nothing is fetched.
 func TestDetailsNotFetchedWhenHidden(t *testing.T) {
+	t.Parallel() // mostly sleeps
 	d := newFakeDaemon(job(1, "a.iso", store.Active, daemon.ActPause))
 	u := startTUI(t, options(t, d), 90, 30)
 	u.waitFor(t, "a.iso")

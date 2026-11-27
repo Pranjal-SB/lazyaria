@@ -46,6 +46,7 @@ func TestSpaceKeyName(t *testing.T) {
 }
 
 func TestSpaceTogglesByActions(t *testing.T) {
+	t.Parallel() // mostly waits to see that no call comes
 	for _, tc := range []struct {
 		tab  string
 		want []string
@@ -119,6 +120,7 @@ func TestUndoWithinToast(t *testing.T) {
 }
 
 func TestUndoAfterToastIgnored(t *testing.T) {
+	t.Parallel() // mostly waits out the toast
 	d := actionDaemon()
 	o := options(t, d)
 	o.Settings.UI.ToastSeconds = 1

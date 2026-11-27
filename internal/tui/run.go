@@ -23,6 +23,16 @@ type Daemon interface {
 	Remove(ctx context.Context, ids []string, deleteFiles bool) (string, []string, error)
 	Undo(ctx context.Context, token string) error
 	Details(ctx context.Context, id string, cells int) (daemon.Details, error)
+	Refresh(ctx context.Context, id, uri string) (*store.Job, error)
+	SetLimit(ctx context.Context, id string, down, up int64) error
+	PauseAll(ctx context.Context) error
+	ResumeAll(ctx context.Context) error
+	RestartEngine(ctx context.Context) error
+	StopSeeding(ctx context.Context, ids ...string) error
+	Search(ctx context.Context, query string, limit, offset int) ([]*store.Job, error)
+	ConfigList(ctx context.Context) ([]ipc.ConfigEntry, error)
+	ConfigSet(ctx context.Context, key, value string) error
+	ConfigReset(ctx context.Context, key string) error
 	Close() error
 }
 

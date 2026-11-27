@@ -100,6 +100,7 @@ func key(s string) tea.Msg {
 // last frame, not the byte stream: the stream depends on render timing.
 func runGolden(t *testing.T, tc goldenCase) {
 	t.Helper()
+	t.Parallel() // each case has its own program, fake and clock
 	o := options(t, tc.d)
 	o.Now = func() time.Time { return goldenNow }
 	if tc.set != nil {

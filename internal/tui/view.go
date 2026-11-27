@@ -37,9 +37,12 @@ func (m Model) View() tea.View {
 	return v
 }
 
-// compose lays out the screen: the drawn lines, and blank layers with ids
-// over the parts a click can reach.
-func (m Model) compose() *lipgloss.Compositor {
+// compose lays out the screen for drawing and hit tests.
+func (m Model) compose() *lipgloss.Compositor { return lipgloss.NewCompositor(m.layers()...) }
+
+// layers are the screen's layers: the drawn lines, and blank layers with
+// ids over the parts a click can reach.
+func (m Model) layers() []*lipgloss.Layer {
 	l := m.layout()
 	var hits []*lipgloss.Layer
 	hitBox := func(id string, x, y, w, h, z int) {
@@ -95,7 +98,7 @@ func (m Model) compose() *lipgloss.Compositor {
 			layers = append(layers, lipgloss.NewLayer(blank(a.w, a.h)).ID(a.id).X(x+a.x).Y(y+a.y).Z(zModalBtn))
 		}
 	}
-	return lipgloss.NewCompositor(layers...)
+	return layers
 }
 
 // overlay is the dialog or help drawn over the screen, if one is open.

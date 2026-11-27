@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path"
 	"slices"
@@ -28,13 +29,17 @@ type fakeDaemon struct {
 	fr      chan daemon.Frame
 	pause   func(ids []string) // nil: record only
 	add     func(ctx context.Context, p daemon.AddParams) (*store.Job, error)
-	details map[string]daemon.Details // by job id; others get no extras
+	details map[string]daemon.Details                // by job id; others get no extras
+	refresh func(id, uri string) (*store.Job, error) // nil: the snapshot's job, uri added
+	found   []*store.Job                             // Search's results; nil: snapshot jobs whose name holds the query
+	config  []ipc.ConfigEntry                        // ConfigList's reply
 
 	detailsCalls atomic.Int32
 
 	mu     sync.Mutex
 	paused []string
-	calls  []string // "resume a.iso", "remove a.iso keep", "undo tok-1", ...
+	calls  []string         // "resume a.iso", "remove a.iso keep", "undo tok-1", ...
+	fail   map[string]error // by method name ("ConfigSet"): the error that method returns
 	closed bool
 }
 
@@ -42,6 +47,14 @@ func (f *fakeDaemon) record(s string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, s)
+}
+
+// do records the call line s and returns the error scripted for method.
+func (f *fakeDaemon) do(method, s string) error {
+	f.record(s)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.fail[method]
 }
 
 func (f *fakeDaemon) called() []string {
@@ -129,6 +142,71 @@ func (f *fakeDaemon) Details(_ context.Context, id string, _ int) (daemon.Detail
 	return d, nil
 }
 
+func (f *fakeDaemon) Refresh(_ context.Context, id, uri string) (*store.Job, error) {
+	if err := f.do("Refresh", "refresh "+id+" "+uri); err != nil {
+		return nil, err
+	}
+	if f.refresh != nil {
+		return f.refresh(id, uri)
+	}
+	j := &store.Job{ID: id, State: store.Queued}
+	if i := slices.IndexFunc(f.snap.Jobs, func(j *store.Job) bool { return j.ID == id }); i >= 0 {
+		c := *f.snap.Jobs[i]
+		j = &c
+	}
+	j.URIs = append(slices.Clone(j.URIs), uri)
+	return j, nil
+}
+
+func (f *fakeDaemon) SetLimit(_ context.Context, id string, down, up int64) error {
+	return f.do("SetLimit", fmt.Sprintf("limit %s %d %d", id, down, up))
+}
+
+func (f *fakeDaemon) PauseAll(context.Context) error  { return f.do("PauseAll", "pause all") }
+func (f *fakeDaemon) ResumeAll(context.Context) error { return f.do("ResumeAll", "resume all") }
+func (f *fakeDaemon) RestartEngine(context.Context) error {
+	return f.do("RestartEngine", "restart engine")
+}
+
+func (f *fakeDaemon) StopSeeding(_ context.Context, ids ...string) error {
+	return f.do("StopSeeding", "stop seeding "+strings.Join(ids, " "))
+}
+
+func (f *fakeDaemon) Search(_ context.Context, query string, limit, offset int) ([]*store.Job, error) {
+	if err := f.do("Search", fmt.Sprintf("search %s %d %d", query, limit, offset)); err != nil {
+		return nil, err
+	}
+	if f.found != nil {
+		return f.found, nil
+	}
+	var out []*store.Job
+	for _, j := range f.snap.Jobs {
+		if strings.Contains(j.Name, query) {
+			out = append(out, j)
+		}
+	}
+	out = out[min(offset, len(out)):]
+	if limit > 0 {
+		out = out[:min(limit, len(out))]
+	}
+	return out, nil
+}
+
+func (f *fakeDaemon) ConfigList(context.Context) ([]ipc.ConfigEntry, error) {
+	if err := f.do("ConfigList", "config list"); err != nil {
+		return nil, err
+	}
+	return f.config, nil
+}
+
+func (f *fakeDaemon) ConfigSet(_ context.Context, key, value string) error {
+	return f.do("ConfigSet", "config set "+key+" "+value)
+}
+
+func (f *fakeDaemon) ConfigReset(_ context.Context, key string) error {
+	return f.do("ConfigReset", "config reset "+key)
+}
+
 func (f *fakeDaemon) Close() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -156,7 +234,23 @@ func (panicDaemon) Undo(context.Context, string) error { panic("Undo called") }
 func (panicDaemon) Details(context.Context, string, int) (daemon.Details, error) {
 	panic("Details called")
 }
-func (panicDaemon) Close() error { panic("Close called") }
+func (panicDaemon) Refresh(context.Context, string, string) (*store.Job, error) {
+	panic("Refresh called")
+}
+func (panicDaemon) SetLimit(context.Context, string, int64, int64) error { panic("SetLimit called") }
+func (panicDaemon) PauseAll(context.Context) error                       { panic("PauseAll called") }
+func (panicDaemon) ResumeAll(context.Context) error                      { panic("ResumeAll called") }
+func (panicDaemon) RestartEngine(context.Context) error                  { panic("RestartEngine called") }
+func (panicDaemon) StopSeeding(context.Context, ...string) error         { panic("StopSeeding called") }
+func (panicDaemon) Search(context.Context, string, int, int) ([]*store.Job, error) {
+	panic("Search called")
+}
+func (panicDaemon) ConfigList(context.Context) ([]ipc.ConfigEntry, error) {
+	panic("ConfigList called")
+}
+func (panicDaemon) ConfigSet(context.Context, string, string) error { panic("ConfigSet called") }
+func (panicDaemon) ConfigReset(context.Context, string) error       { panic("ConfigReset called") }
+func (panicDaemon) Close() error                                    { panic("Close called") }
 
 // options dials the fakes in turn, then fails.
 func options(t *testing.T, ds ...Daemon) Options {
@@ -236,6 +330,46 @@ func (u tui) quit(t *testing.T) Model {
 	t.Helper()
 	u.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	return u.FinalModel(t, teatest.WithFinalTimeout(5*time.Second)).(probe).Model
+}
+
+// Each call is recorded with its arguments, and returns the error scripted
+// for its method.
+func TestFakeRecordsNewCalls(t *testing.T) {
+	f := newFakeDaemon(job(1, "a", store.Seeding))
+	var d Daemon = f
+	ctx := context.Background()
+	calls := []struct {
+		method, line string
+		call         func() error
+	}{
+		{"Refresh", "refresh a https://e.example/b", func() error { _, err := d.Refresh(ctx, "a", "https://e.example/b"); return err }},
+		{"SetLimit", "limit a 1024 0", func() error { return d.SetLimit(ctx, "a", 1024, 0) }},
+		{"PauseAll", "pause all", func() error { return d.PauseAll(ctx) }},
+		{"ResumeAll", "resume all", func() error { return d.ResumeAll(ctx) }},
+		{"RestartEngine", "restart engine", func() error { return d.RestartEngine(ctx) }},
+		{"StopSeeding", "stop seeding a b", func() error { return d.StopSeeding(ctx, "a", "b") }},
+		{"Search", "search iso 200 400", func() error { _, err := d.Search(ctx, "iso", 200, 400); return err }},
+		{"ConfigList", "config list", func() error { _, err := d.ConfigList(ctx); return err }},
+		{"ConfigSet", "config set ui.glyphs ascii", func() error { return d.ConfigSet(ctx, "ui.glyphs", "ascii") }},
+		{"ConfigReset", "config reset ui.glyphs", func() error { return d.ConfigReset(ctx, "ui.glyphs") }},
+	}
+	var want []string
+	for _, c := range calls {
+		if err := c.call(); err != nil {
+			t.Errorf("%s: %v with no error scripted", c.method, err)
+		}
+		want = append(want, c.line)
+	}
+	if got := f.called(); !slices.Equal(got, want) {
+		t.Fatalf("calls %q, want %q", got, want)
+	}
+	boom := errors.New("boom")
+	for _, c := range calls {
+		f.fail = map[string]error{c.method: boom}
+		if err := c.call(); !errors.Is(err, boom) {
+			t.Errorf("%s returned %v, want the scripted error", c.method, err)
+		}
+	}
 }
 
 func waitFor(t *testing.T, what string, cond func() bool) {
