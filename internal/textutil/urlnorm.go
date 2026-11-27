@@ -50,6 +50,9 @@ func NormalizeURL(raw string) (string, error) {
 	if _, err := url.Parse(out); err != nil {
 		return "", err
 	}
+	if out != strings.TrimSpace(out) { // a bare space in the query, which the next call would trim
+		return "", fmt.Errorf("not a clean url: %q", raw)
+	}
 	return out, nil
 }
 

@@ -1,0 +1,2 @@
+go test fuzz v1
+string("HTTP://E12x0leXCC2c\xad:80/0? #0000000000")
