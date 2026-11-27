@@ -1,3 +1,9 @@
+---
+title: Exit codes
+parent: Reference
+nav_order: 2
+---
+
 # Exit codes
 
 Every `lazyaria` command exits with one of these codes. Errors go to

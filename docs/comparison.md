@@ -1,3 +1,8 @@
+---
+title: How lazyaria compares
+nav_order: 6
+---
+
 # How lazyaria compares
 
 There are several good download managers. This page says how lazyaria

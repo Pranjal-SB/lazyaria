@@ -1,0 +1,12 @@
+title: lazyaria
+description: A download manager for the terminal, powered by aria2.
+remote_theme: just-the-docs/just-the-docs
+url: https://pranjal-sb.github.io
+baseurl: /lazyaria
+search_enabled: true
+heading_anchors: true
+aux_links:
+  GitHub: https://github.com/Pranjal-SB/lazyaria
+# install.sh is served as-is (a file without front matter is copied unchanged).
+include:
+  - install.sh

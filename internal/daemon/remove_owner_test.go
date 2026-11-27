@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Pranjal-SB/lazyaria/internal/engine"
 )
@@ -97,12 +98,41 @@ func TestRemoveWhenPauseFailsUsesPolledBytes(t *testing.T) {
 func TestUndoUnknownTokenSaysWhy(t *testing.T) {
 	r := newRig(t)
 	err := r.m.Undo(bg, "nope")
-	if !errors.Is(err, ErrUndoExpired) {
+	if !errors.Is(err, ErrUndoUnknown) || errors.Is(err, ErrUndoExpired) {
 		t.Fatalf("got %v", err)
 	}
-	for _, want := range []string{"unknown or has expired", "restarts", "lazyaria add", "Trash"} {
+	for _, want := range []string{"no undo with that token", "restarts", "lazyaria add", "Trash"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("%q does not mention %q", err, want)
+		}
+	}
+	if strings.Contains(err.Error(), "expired") {
+		t.Errorf("%q says expired for an unknown token", err)
+	}
+}
+
+// An expired token says so, and after how long, every time it is tried.
+func TestUndoExpiredTokenSaysHowLong(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", filepath.Join(t.TempDir(), "data"))
+	r := newRig(t)
+	j := r.add(t, AddParams{URIs: []string{"http://example.com/a.iso"}, Out: "a.iso"})
+	tok, _, err := r.m.Remove(bg, []string{j.ID}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.clk.add(11 * time.Second)
+	if _, _, err := r.m.Remove(bg, []string{r.add(t, AddParams{URIs: []string{"http://example.com/b.iso"}}).ID}, false); err != nil {
+		t.Fatal(err) // a later remove prunes old tokens
+	}
+	for range 2 {
+		err := r.m.Undo(bg, tok)
+		if !errors.Is(err, ErrUndoExpired) || errors.Is(err, ErrUndoUnknown) {
+			t.Fatalf("got %v", err)
+		}
+		for _, want := range []string{"expired", "10 seconds", "remove.undo_seconds", "lazyaria add"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("%q does not mention %q", err, want)
+			}
 		}
 	}
 }

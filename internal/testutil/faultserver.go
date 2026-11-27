@@ -48,6 +48,7 @@ type FaultServer struct {
 	served    map[string]int64
 	overrides map[string]Mode
 	ranges    map[string][]string
+	gates     map[string]int64
 }
 
 // NewFaultServer starts a server for files. The server is closed when t ends.
@@ -59,6 +60,7 @@ func NewFaultServer(t *testing.T, files map[string][]byte) *FaultServer {
 		served:    make(map[string]int64),
 		overrides: make(map[string]Mode),
 		ranges:    make(map[string][]string),
+		gates:     make(map[string]int64),
 	}
 	f.srv = httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(f.srv.Close)
@@ -111,9 +113,13 @@ func (f *FaultServer) serve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cw := &countWriter{ResponseWriter: w, f: f, name: name}
+	// Set, so ServeContent does not sniff the type by reading past a gate.
+	w.Header().Set("Content-Type", "application/octet-stream")
+	body := &gated{Reader: bytes.NewReader(data), ctx: r.Context(), f: f, name: name,
+		flush: func() { _ = http.NewResponseController(w).Flush() }}
 	switch mode {
 	case ModeOK:
-		http.ServeContent(cw, r, name, time.Time{}, bytes.NewReader(data))
+		http.ServeContent(cw, r, name, time.Time{}, body)
 	case Mode403, Mode404, Mode410, Mode503:
 		code, _ := strconv.Atoi(string(mode))
 		http.Error(w, http.StatusText(code), code)
@@ -122,7 +128,7 @@ func (f *FaultServer) serve(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
 	case ModeSlow:
 		th := &throttled{ResponseWriter: cw, start: time.Now()}
-		http.ServeContent(th, r, name, time.Time{}, bytes.NewReader(data))
+		http.ServeContent(th, r, name, time.Time{}, body)
 	case ModeExpire:
 		if served >= expireLimit {
 			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)

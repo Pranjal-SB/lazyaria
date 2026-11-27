@@ -155,6 +155,36 @@ func TestSetModeAndHits(t *testing.T) {
 	}
 }
 
+// A gate holds the body at a file offset, for a ranged request too, until
+// it is raised; the bytes sent are the file's.
+func TestGate(t *testing.T) {
+	srv := newTestServer(t)
+	name, data := "a.bin", srv.files["a.bin"]
+	srv.SetGate(name, 1000)
+	resp := get(t, srv.URL(name, ModeOK), http.Header{"Range": {"bytes=100-"}})
+	got := make([]byte, 900)
+	if _, err := io.ReadFull(resp.Body, got); err != nil || !bytes.Equal(got, data[100:1000]) {
+		t.Fatalf("before the gate: %v", err)
+	}
+	more := make(chan error, 1)
+	go func() {
+		b, err := io.ReadAll(resp.Body)
+		if err == nil && !bytes.Equal(b, data[1000:]) {
+			err = io.ErrUnexpectedEOF
+		}
+		more <- err
+	}()
+	select {
+	case err := <-more:
+		t.Fatalf("read past the gate: %v", err)
+	case <-time.After(200 * time.Millisecond):
+	}
+	srv.SetGate(name, -1)
+	if err := <-more; err != nil {
+		t.Fatalf("after the gate opened: %v", err)
+	}
+}
+
 func TestRandBytesDeterministic(t *testing.T) {
 	a := RandBytes(1024)
 	b := RandBytes(1024)

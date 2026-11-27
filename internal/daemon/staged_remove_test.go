@@ -42,7 +42,7 @@ func TestRemoveStagedTrashesStagingOnly(t *testing.T) {
 		t.Fatal("the user's a.iso was touched")
 	}
 	// The trash shows it by the download's name, not the job id.
-	if got := filepath.Base(es[0].TrashedPath); got != "a.iso (unfinished)" {
+	if got := filepath.Base(es[0].TrashedPath); got != "a (unfinished).iso" {
 		t.Fatalf("trashed as %q", got)
 	}
 	if names := listDir(t, es[0].TrashedPath); !slices.Equal(names, []string{"a.iso", "a.iso.aria2"}) {
@@ -85,6 +85,59 @@ func TestReaddWithoutControlFileEmptiesStaging(t *testing.T) {
 	}
 	if read(t, user) != "the user's" {
 		t.Fatal("a file outside staging was touched")
+	}
+}
+
+// A crash before the first poll leaves no Out on the row, but aria2 may
+// already have written a partial with its control file: keep both, and
+// resume into them under that name.
+func TestReaddWithoutOutKeepsControlledPartial(t *testing.T) {
+	r := newRig(t)
+	j := r.insert(t, store.Active, "old1", func(j *store.Job) { j.Name = "page" })
+	stageFiles(t, j, map[string]string{"real.iso": "early", "real.iso.aria2": "ctl"})
+	if _, err := r.m.readd(bg, j, false, "readded"); err != nil {
+		t.Fatal(err)
+	}
+	if names := listDir(t, stagingDir(j)); !slices.Equal(names, []string{"real.iso", "real.iso.aria2"}) {
+		t.Fatalf("staging holds %v", names)
+	}
+	add := r.e.adds[len(r.e.adds)-1]
+	got := r.get(t, j.ID)
+	if add.Out != "real.iso" || got.Out == nil || *got.Out != "real.iso" || got.Name != "real.iso" {
+		t.Fatalf("re-add out %q, row out %v name %q", add.Out, got.Out, got.Name)
+	}
+}
+
+// A metalink or torrent link writes the file it names beside its own
+// .meta4 or .torrent, and the row holds the placeholder name until the
+// first poll. That partial is not the link's own file: re-fetching the
+// .meta4 with its name as out would fail forever.
+func TestReaddLeavesALinkFilesPartialAlone(t *testing.T) {
+	for name, files := range map[string]map[string]string{
+		"meta4":       {"payload.bin": "early", "payload.bin.aria2": "ctl", "x.meta4": "m"},
+		"metalink":    {"payload.bin": "early", "payload.bin.aria2": "ctl", "x.metalink": "m"},
+		"torrent":     {"payload.bin": "early", "payload.bin.aria2": "ctl", "x.torrent": "t"},
+		"placeholder": {"payload.bin": "early", "payload.bin.aria2": "ctl"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := newRig(t)
+			j := r.insert(t, store.Active, "old1", func(j *store.Job) {
+				j.Name = "download"
+				if name != "placeholder" {
+					j.Name = "x." + name
+				}
+			})
+			stageFiles(t, j, files)
+			if _, ok := controlledPartial(j); ok {
+				t.Fatal("took the link file's partial for the job's own")
+			}
+			if _, err := r.m.readd(bg, j, false, "readded"); err != nil {
+				t.Fatal(err)
+			}
+			if add := r.e.adds[len(r.e.adds)-1]; add.Out != "" || r.get(t, j.ID).Out != nil {
+				t.Fatalf("re-add out %q", add.Out)
+			}
+		})
 	}
 }
 

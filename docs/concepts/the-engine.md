@@ -1,3 +1,9 @@
+---
+title: The engine
+parent: Concepts
+nav_order: 3
+---
+
 # The engine
 
 lazyaria does not download anything itself. The downloading is done by

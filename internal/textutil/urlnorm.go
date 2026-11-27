@@ -26,6 +26,9 @@ func NormalizeURL(raw string) (string, error) {
 	}
 	u.Scheme = strings.ToLower(u.Scheme)
 	host, port := strings.ToLower(u.Hostname()), u.Port()
+	if host == "" {
+		return "", fmt.Errorf("not an absolute url: %q", raw)
+	}
 	if port == defaultPorts[u.Scheme] {
 		port = ""
 	}
@@ -41,7 +44,16 @@ func NormalizeURL(raw string) (string, error) {
 	if q, err := url.ParseQuery(u.RawQuery); err == nil && wellFormed(u.RawQuery) {
 		u.RawQuery = q.Encode()
 	}
-	return u.String(), nil
+	// A host url.Parse took but cannot be written back (a bare "::0") would
+	// not normalize twice the same.
+	out := u.String()
+	if _, err := url.Parse(out); err != nil {
+		return "", err
+	}
+	if out != strings.TrimSpace(out) { // a bare space in the query, which the next call would trim
+		return "", fmt.Errorf("not a clean url: %q", raw)
+	}
+	return out, nil
 }
 
 // MagnetKey is the normalised form of a magnet with this v1 info-hash.

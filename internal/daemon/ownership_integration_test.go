@@ -34,8 +34,8 @@ func reportServer(t *testing.T, data []byte) (*httptest.Server, *atomic.Int32) {
 
 // ownershipCase adds link (with out), lets the first attempt fail with 503,
 // puts the user's report.pdf in place, runs recover and checks the user's
-// file is untouched and the job was published beside it as report.1.pdf.
-func ownershipCase(t *testing.T, out string, recover func(d *liveDaemon, j *store.Job, srvURL string) error) {
+// file is untouched and the job was published as want.
+func ownershipCase(t *testing.T, out, want string, recover func(d *liveDaemon, j *store.Job, srvURL string) error) {
 	testutil.RequireAria2(t)
 	data := testutil.RandBytes(256 << 10)
 	srv, hits := reportServer(t, data)
@@ -68,8 +68,8 @@ func ownershipCase(t *testing.T, out string, recover func(d *liveDaemon, j *stor
 	if b, _ := os.ReadFile(orig); string(b) != string(old) {
 		t.Fatalf("the existing file was changed (now %d bytes)", len(b))
 	}
-	if got.Name != "report.1.pdf" || got.Out == nil || *got.Out != got.Name || got.Staged {
-		t.Fatalf("name %q out %v; want report.1.pdf published beside the user's file", got.Name, got.Out)
+	if got.Name != want || got.Out == nil || *got.Out != got.Name || got.Staged {
+		t.Fatalf("name %q out %v; want %s published beside the user's file", got.Name, got.Out, want)
 	}
 	if testutil.SHA256File(t, filepath.Join(workDir(got), got.Name)) != testutil.SHA256File(t, writeFile(t, data)) {
 		t.Fatal("sha mismatch")
@@ -77,9 +77,10 @@ func ownershipCase(t *testing.T, out string, recover func(d *liveDaemon, j *stor
 }
 
 // A refreshed link on a server-named job that never got a reply must not
-// resume into the user's file the server names now.
+// resume into the user's file the server names now. It keeps the name it
+// showed, from its first link.
 func TestRefreshNeverResumesIntoUnownedFile(t *testing.T) {
-	ownershipCase(t, "", func(d *liveDaemon, j *store.Job, u string) error {
+	ownershipCase(t, "", "get", func(d *liveDaemon, j *store.Job, u string) error {
 		_, err := d.m.RefreshURI(bg, j.ID, u+"/get2")
 		return err
 	})
@@ -88,7 +89,7 @@ func TestRefreshNeverResumesIntoUnownedFile(t *testing.T) {
 // A job with --out that never wrote a byte does not own that name: a file
 // the user puts there before the retry is never written into.
 func TestRetryWithOutNeverWritesUnownedFile(t *testing.T) {
-	ownershipCase(t, "report.pdf", func(d *liveDaemon, j *store.Job, _ string) error {
+	ownershipCase(t, "report.pdf", "report.1.pdf", func(d *liveDaemon, j *store.Job, _ string) error {
 		return d.m.Resume(bg, []string{j.ID})
 	})
 }
@@ -96,7 +97,7 @@ func TestRetryWithOutNeverWritesUnownedFile(t *testing.T) {
 // With --out the failed first attempt reports a path but no bytes, so the
 // refresh takes the completedLength == 0 branch, not the no-path one.
 func TestRefreshWithOutNeverResumesIntoUnownedFile(t *testing.T) {
-	ownershipCase(t, "report.pdf", func(d *liveDaemon, j *store.Job, u string) error {
+	ownershipCase(t, "report.pdf", "report.1.pdf", func(d *liveDaemon, j *store.Job, u string) error {
 		_, err := d.m.RefreshURI(bg, j.ID, u+"/get2")
 		return err
 	})

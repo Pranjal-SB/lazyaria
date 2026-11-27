@@ -51,14 +51,14 @@ func (t *TrashFiles) move(p, shownAs string) (trash.Entry, error) {
 }
 
 // unfinishedName is how an unfinished download's staging folder shows in
-// the trash: "<name> (unfinished)" beside where the download would have
-// landed, instead of a folder named by the job's id.
+// the trash: "<stem> (unfinished)<ext>" beside where the download would
+// have landed, instead of a folder named by the job's id.
 func unfinishedName(j *store.Job) string {
 	name := j.ID
 	if p, ok := payloadPath(&store.Job{Dir: j.Dir, Name: j.Name, Out: j.Out}); ok {
 		name = filepath.Base(p)
 	}
-	return filepath.Join(j.Dir, fmt.Sprintf("%s (unfinished)", name))
+	return filepath.Join(j.Dir, unfinishedBase(name))
 }
 
 func (t *TrashFiles) probe(p string) error {
@@ -163,9 +163,6 @@ func (t *TrashFiles) RemoveFiles(_ context.Context, j *store.Job, files []string
 		if real, err := filepath.EvalSymlinks(p); err == nil {
 			pruneEmpty(real, done)
 		}
-	}
-	if j.Staged {
-		os.Remove(filepath.Dir(stagingDir(j))) // .laria, once no job uses it
 	}
 	return done, nil
 }

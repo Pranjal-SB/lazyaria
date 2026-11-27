@@ -1,3 +1,9 @@
+---
+title: Refresh an expired link
+parent: Guides
+nav_order: 2
+---
+
 # Refresh an expired link
 
 Many download sites hand out links that stop working after a while. If
@@ -48,6 +54,8 @@ which the shell would otherwise read as its own syntax.
 - The new link must point at the same file. lazyaria carries on writing
   the file it has, so a link to a different file gives you a broken
   result.
+- The job keeps the name it shows. A refresh changes only the link, even
+  when the new link ends in another file name.
 - You can refresh a job while it runs, while it is paused, or after it
   failed. A paused job stays paused; `lazyaria resume` continues it from
   the new link.

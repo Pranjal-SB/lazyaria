@@ -181,6 +181,13 @@ func (m *Manager) RefreshURI(ctx context.Context, id, uri string) (*store.Job, e
 	stopped := j.State == store.Error || j.State == store.RetryWait
 	j, err = m.change(ctx, id, "refreshed", "", func(x *store.Job) {
 		x.URIs, x.Options = []string{clean}, opts
+		if x.Out == nil && x.Name != "" && x.Name != "download" {
+			// The job keeps the name it shows, not one from the new link.
+			// "download" is the placeholder before a metalink or torrent
+			// names its files, not a name.
+			name := x.Name
+			x.Out = &name
+		}
 		if newRef == "" {
 			return
 		}

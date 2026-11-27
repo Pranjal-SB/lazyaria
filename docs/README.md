@@ -1,3 +1,9 @@
+---
+title: Home
+nav_order: 1
+permalink: /
+---
+
 # lazyaria documentation
 
 lazyaria is a download manager for the terminal. It keeps a list of
