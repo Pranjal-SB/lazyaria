@@ -13,8 +13,12 @@ import (
 	"github.com/Pranjal-SB/lazyaria/internal/trash"
 )
 
-// keepRename moves kept files; tests watch the order through it.
-var keepRename = fsutil.RenameNoReplace
+// keepRename moves kept files and keepTrash trashes their control files;
+// tests watch the order through them.
+var (
+	keepRename = fsutil.RenameNoReplace
+	keepTrash  = trash.TrashAs
+)
 
 // keptFile is a file a remove moved out of a staging folder, for Undo.
 // Ino and Dev identify it at To, so Undo never takes another file.
@@ -26,19 +30,26 @@ type keptFile struct {
 // keepUnfinished moves a removed unfinished download out of its staging
 // folder into Dir, so the files the remove keeps are where the user looks:
 // each payload entry as "<stem> (unfinished)<ext>" of the name it would be
-// published under (the next free one if taken), with its .aria2 control
-// file beside it. clearStaging then removes the folder. If a move fails,
-// the ones done are undone and the files stay in the staging folder.
-func keepUnfinished(j *store.Job) ([]keptFile, error) {
+// published under (the next free one if taken). Its .aria2 control file,
+// which only an Undo needs, goes to the trash, listed as the kept name plus
+// .aria2; without a usable trash it moves beside the payload instead.
+// clearStaging then removes the folder. If a step fails, the ones done are
+// undone and the files stay in the staging folder. It returns the moved
+// files and the trashed control files, for Undo.
+func keepUnfinished(j *store.Job) ([]keptFile, []trash.Entry, error) {
 	staging := stagingDir(j)
 	if !j.Staged || j.Publish != nil || !lexists(staging) {
-		return nil, nil
+		return nil, nil, nil
 	}
 	entries, err := publishEntries(staging)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var done []keptFile
+	var trashed []trash.Entry
+	fail := func(err error) ([]keptFile, []trash.Entry, error) {
+		return nil, nil, errors.Join(err, putBack(done), restoreAll(trashed))
+	}
 	held := map[string]bool{}
 	for _, e := range entries {
 		name, err := finalName(j, unfinishedBase(chosenName(j, e.Rel)), held)
@@ -46,7 +57,7 @@ func keepUnfinished(j *store.Job) ([]keptFile, error) {
 			name, err = freeName(filepath.Join(j.Dir, name), held)
 		}
 		if err != nil {
-			return nil, errors.Join(err, putBack(done))
+			return fail(err)
 		}
 		held[name] = true
 		// The control file goes first: a crash in between leaves the payload
@@ -55,24 +66,41 @@ func keepUnfinished(j *store.Job) ([]keptFile, error) {
 		payload := keptFile{From: filepath.Join(staging, e.Rel), To: filepath.Join(j.Dir, name)}
 		var pairs []keptFile
 		if ctl := payload.From + ".aria2"; lexists(ctl) {
-			pairs = append(pairs, keptFile{From: ctl, To: payload.To + ".aria2"})
+			te, err := keepTrash(ctl, payload.To+".aria2")
+			switch {
+			case err == nil:
+				trashed = append(trashed, te)
+			case errors.Is(err, trash.ErrNoTrash):
+				pairs = append(pairs, keptFile{From: ctl, To: payload.To + ".aria2"})
+			default:
+				return fail(err)
+			}
 		}
 		pairs = append(pairs, payload)
 		for _, k := range pairs {
 			if err := keepRename(k.From, k.To); err != nil {
-				return nil, errors.Join(err, putBack(done))
+				return fail(err)
 			}
 			// A rename keeps the inode; the move is undone at once if
 			// the file cannot be identified afterwards.
 			var err error
 			if k.Ino, k.Dev, _, err = fsutil.FileID(k.To); err != nil {
 				keepRename(k.To, k.From)
-				return nil, errors.Join(err, putBack(done))
+				return fail(err)
 			}
 			done = append(done, k)
 		}
 	}
-	return done, nil
+	return done, trashed, nil
+}
+
+// restoreAll puts trashed files back, last first.
+func restoreAll(es []trash.Entry) error {
+	var errs []error
+	for i := len(es) - 1; i >= 0; i-- {
+		errs = append(errs, trash.Restore(es[i]))
+	}
+	return errors.Join(errs...)
 }
 
 // infoHashTorrent is the metadata aria2 saves for a magnet link,

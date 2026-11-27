@@ -144,22 +144,24 @@ Two settings change this:
 `lazyaria remove <job>` takes the job off the list and keeps its files. A
 finished download stays where it is, in the download folder. An
 unfinished one is stopped and moved out of `.laria/<job id>/` into the
-download folder, together with its `.aria2` control file. It never gets
-the name the finished download would have: `(unfinished)` goes before the
-extension, so the file still opens with the right program and is not
-mistaken for a finished one:
+download folder. It never gets the name the finished download would
+have: `(unfinished)` goes before the extension, so the file still opens
+with the right program and is not mistaken for a finished one:
 
 ```text
 movie (unfinished).mkv
-movie (unfinished).mkv.aria2
 ```
 
 A name without an extension gets `(unfinished)` at the end, and
 compressed tarballs keep both parts, as in `src (unfinished).tar.gz`. If
 the name is taken, it gets the next free name, as described
 [below](#when-a-name-is-taken), for example `movie (unfinished).1.mkv`.
-The `.laria/<job id>/` folder is then removed. Delete both files when you
-no longer need them. Undo moves them back, so the download resumes.
+
+Its `.aria2` control file goes to the trash, listed as
+`movie (unfinished).mkv.aria2`. Only undo needs it. When no trash can be
+used on that disk, it stays beside the file instead. The `.laria/<job id>/`
+folder is then removed; anything else left in it goes to the trash too.
+Undo puts the file and its control file back, so the download resumes.
 
 `lazyaria remove --delete-files <job>` also moves the job's files to the
 trash: the one in your home folder (`~/.local/share/Trash`) when the file

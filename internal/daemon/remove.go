@@ -118,13 +118,16 @@ func (m *Manager) Remove(ctx context.Context, ids []string, deleteFiles bool) (t
 			moves = append(moves, &pendingTrash{j: j, listed: listed})
 			return nil
 		}
-		ks, err := keepUnfinished(j)
+		ks, ctls, err := keepUnfinished(j)
 		if err != nil {
 			m.log.Warn("move the unfinished download into the download folder; it stays in its staging folder", "job", j.ID, "path", stagingDir(j), "err", err)
 		} else if j.Staged && j.Publish == nil {
-			if files[j.ID], err = m.clearStaging(j); err != nil {
+			left, err := m.clearStaging(j)
+			if err != nil {
 				m.log.Warn("trash what is left in the staging folder; it stays there", "job", j.ID, "path", stagingDir(j), "err", err)
 			}
+			// Undo restores the staging folder before the control files go into it.
+			files[j.ID] = append(left, ctls...)
 		}
 		m.removed(ctx, j)
 		prev[j.ID], moved[j.ID] = j.State, ks
