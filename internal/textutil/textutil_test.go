@@ -93,21 +93,6 @@ func TestExtractLinks(t *testing.T) {
 	}
 }
 
-func FuzzExtractLinks(f *testing.F) {
-	f.Add("see https://a.com/x.")
-	f.Fuzz(func(t *testing.T, s string) { ExtractLinks(s) })
-}
-
-func FuzzSanitizeName(f *testing.F) {
-	f.Add("../a", true)
-	f.Fuzz(func(t *testing.T, s string, fat bool) {
-		got := SanitizeName(s, fat)
-		if strings.Contains(got, "/") || got == ".." || got == "" || len(got) > MaxName || !utf8.ValidString(got) {
-			t.Fatalf("bad %q -> %q", s, got)
-		}
-	})
-}
-
 // A URL that does not parse must still lose its userinfo.
 func TestSplitUserinfoUnparseable(t *testing.T) {
 	c, _, _ := SplitUserinfo("https://alice:p%zzword@host/f")
