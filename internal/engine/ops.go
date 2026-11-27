@@ -210,7 +210,7 @@ func CheckLinks(uris []string) error {
 		if strings.HasPrefix(strings.ToLower(u), "magnet:") {
 			continue
 		}
-		if p, err := url.Parse(u); err != nil || !slices.Contains([]string{"http", "https", "ftp", "sftp"}, strings.ToLower(p.Scheme)) {
+		if p, err := url.Parse(u); err != nil || p.Host == "" || !slices.Contains([]string{"http", "https", "ftp", "sftp"}, strings.ToLower(p.Scheme)) {
 			return bad
 		}
 	}
