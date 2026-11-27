@@ -44,7 +44,13 @@ func NormalizeURL(raw string) (string, error) {
 	if q, err := url.ParseQuery(u.RawQuery); err == nil && wellFormed(u.RawQuery) {
 		u.RawQuery = q.Encode()
 	}
-	return u.String(), nil
+	// A host url.Parse took but cannot be written back (a bare "::0") would
+	// not normalize twice the same.
+	out := u.String()
+	if _, err := url.Parse(out); err != nil {
+		return "", err
+	}
+	return out, nil
 }
 
 // MagnetKey is the normalised form of a magnet with this v1 info-hash.
