@@ -73,9 +73,11 @@ func detailsDaemon() *fakeDaemon {
 	return d
 }
 
-// Ten frames within a second fetch the details at most twice.
+// Frames fetch the details at most once per detailsEvery, however many
+// arrive.
 func TestDetailsFetchLimited(t *testing.T) {
-	t.Parallel() // mostly sleeps; a slower run only makes fewer calls
+	t.Parallel() // mostly sleeps; the limit below follows the time it took
+	start := time.Now()
 	d := newFakeDaemon(job(1, "a.iso", store.Active, daemon.ActPause))
 	u := startTUI(t, options(t, d), 120, 32)
 	u.waitFor(t, "a.iso")
@@ -84,8 +86,11 @@ func TestDetailsFetchLimited(t *testing.T) {
 		u.Send(frameMsg{f: daemon.Frame{Items: []daemon.ProgressItem{{ID: "a.iso", Done: 1, Total: 10}}}})
 		time.Sleep(80 * time.Millisecond)
 	}
-	if n := d.detailsCalls.Load() - 1; n > 2 {
-		t.Fatalf("%d details calls for ten frames in a second", n)
+	// Each fetch after the first starts at least detailsEvery after the
+	// one before, and the first started after start.
+	n, most := d.detailsCalls.Load()-1, int32(time.Since(start)/detailsEvery)
+	if n > most {
+		t.Fatalf("%d details calls after the first in %v, want at most %d", n, time.Since(start).Round(time.Millisecond), most)
 	}
 	waitFor(t, "a details call after the frames", func() bool { return d.detailsCalls.Load() >= 2 })
 	u.quit(t)

@@ -71,8 +71,13 @@ func job(num int64, name string, st store.State, actions ...string) *store.Job {
 	return &store.Job{ID: name, Num: num, Name: name, State: st, Label: string(st), Actions: actions}
 }
 
+// List returns fresh slices, as a reply decoded off the wire would: the
+// model writes into its rows while Details reads the fake's on another
+// goroutine.
 func (f *fakeDaemon) List(context.Context, bool, int, ...string) (ipc.SnapshotResult, error) {
-	return f.snap, nil
+	s := f.snap
+	s.Jobs, s.Speed = slices.Clone(s.Jobs), slices.Clone(s.Speed)
+	return s, nil
 }
 
 func (f *fakeDaemon) Subscribe(context.Context, bool) (<-chan daemon.Event, <-chan daemon.Frame, error) {
@@ -177,7 +182,7 @@ func (f *fakeDaemon) Search(_ context.Context, query string, limit, offset int) 
 		return nil, err
 	}
 	if f.found != nil {
-		return f.found, nil
+		return slices.Clone(f.found), nil
 	}
 	var out []*store.Job
 	for _, j := range f.snap.Jobs {
