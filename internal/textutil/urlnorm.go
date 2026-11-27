@@ -26,6 +26,9 @@ func NormalizeURL(raw string) (string, error) {
 	}
 	u.Scheme = strings.ToLower(u.Scheme)
 	host, port := strings.ToLower(u.Hostname()), u.Port()
+	if host == "" {
+		return "", fmt.Errorf("not an absolute url: %q", raw)
+	}
 	if port == defaultPorts[u.Scheme] {
 		port = ""
 	}
