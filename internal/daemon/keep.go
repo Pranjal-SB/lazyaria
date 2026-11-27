@@ -17,7 +17,11 @@ import (
 var keepRename = fsutil.RenameNoReplace
 
 // keptFile is a file a remove moved out of a staging folder, for Undo.
-type keptFile struct{ From, To string }
+// Ino and Dev identify it at To, so Undo never takes another file.
+type keptFile struct {
+	From, To string
+	Ino, Dev uint64
+}
 
 // keepUnfinished moves a removed unfinished download out of its staging
 // folder into Dir, so the files the remove keeps are where the user looks:
@@ -48,14 +52,21 @@ func keepUnfinished(j *store.Job) ([]keptFile, error) {
 		// The control file goes first: a crash in between leaves the payload
 		// in staging, never alone under a name. A partial without one (a
 		// reply of unknown length) still moves: the name says unfinished.
-		payload := keptFile{filepath.Join(staging, e.Rel), filepath.Join(j.Dir, name)}
+		payload := keptFile{From: filepath.Join(staging, e.Rel), To: filepath.Join(j.Dir, name)}
 		var pairs []keptFile
 		if ctl := payload.From + ".aria2"; lexists(ctl) {
-			pairs = append(pairs, keptFile{ctl, payload.To + ".aria2"})
+			pairs = append(pairs, keptFile{From: ctl, To: payload.To + ".aria2"})
 		}
 		pairs = append(pairs, payload)
 		for _, k := range pairs {
 			if err := keepRename(k.From, k.To); err != nil {
+				return nil, errors.Join(err, putBack(done))
+			}
+			// A rename keeps the inode; the move is undone at once if
+			// the file cannot be identified afterwards.
+			var err error
+			if k.Ino, k.Dev, _, err = fsutil.FileID(k.To); err != nil {
+				keepRename(k.To, k.From)
 				return nil, errors.Join(err, putBack(done))
 			}
 			done = append(done, k)
@@ -93,11 +104,11 @@ func (m *Manager) clearStaging(j *store.Job) ([]trash.Entry, error) {
 }
 
 // putBack returns kept files to their staging folder, last first. A file
-// no longer at its kept name (put back already, or the user took it) is
-// skipped. It first checks every staging path is free, so a blocked one
-// fails the whole set before anything moves.
+// no longer at its kept name (put back already, or the user took it or
+// put another file there) is skipped. It first checks every staging path
+// is free, so a blocked one fails the whole set before anything moves.
 func putBack(ks []keptFile) error {
-	ks = slices.DeleteFunc(slices.Clone(ks), func(k keptFile) bool { return !lexists(k.To) })
+	ks = slices.DeleteFunc(slices.Clone(ks), func(k keptFile) bool { return !sameFile(k.To, k.Ino, k.Dev, -1) })
 	for _, k := range ks {
 		if lexists(k.From) {
 			return fmt.Errorf("%s already exists; move it aside and retry (the kept file is %s)", k.From, k.To)

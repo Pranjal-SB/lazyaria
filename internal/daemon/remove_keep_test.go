@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"os"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -36,6 +37,33 @@ func TestKeepUnfinishedControlFileFirst(t *testing.T) {
 	}
 	if _, err := r.m.Add(bg, AddParams{URIs: []string{"http://example.com/b.iso"}, Dir: r.dir}); err != nil {
 		t.Fatalf("adding the link again: %v", err)
+	}
+}
+
+// Undo only takes back the files the remove moved: another file now at
+// the kept name stays where it is.
+func TestUndoLeavesAForeignFileAtTheKeptName(t *testing.T) {
+	r := newRig(t)
+	a, part := activeStaged(t, r)
+	tok, _, err := r.m.Remove(bg, []string{a.ID}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept := filepath.Join(r.dir, "a (unfinished).iso")
+	// Made before the kept file goes, so it cannot reuse its inode.
+	other := filepath.Join(t.TempDir(), "other")
+	wfile(t, other, "someone else's")
+	if err := os.Rename(other, kept); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.m.Undo(bg, tok); err != nil {
+		t.Fatal(err)
+	}
+	if read(t, kept) != "someone else's" || exists1(part) {
+		t.Fatal("undo moved a file the remove did not move")
+	}
+	if !exists1(part + ".aria2") {
+		t.Fatal("the control file the remove moved did not come back")
 	}
 }
 
