@@ -19,7 +19,9 @@ builds:
 
 archives:
   - formats: [tar.gz]
-    name_template: "lazyaria_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    # No version in the name, so releases/latest/download/<name> is a stable
+    # link for the install script, mise's github backend and eget.
+    name_template: "lazyaria_{{ .Os }}_{{ .Arch }}"
     files:
       - LICENSE
       - NOTICE

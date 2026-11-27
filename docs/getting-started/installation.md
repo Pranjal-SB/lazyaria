@@ -40,13 +40,14 @@ aria2 version 1.37.0
 Releases have binaries for Linux (amd64, arm64), macOS (amd64, arm64) and
 FreeBSD (amd64). Download the tarball for your platform and `checksums.txt`
 from the [releases page](https://github.com/Pranjal-SB/lazyaria/releases).
-The tarball is named `lazyaria_<version>_<os>_<arch>.tar.gz`.
+The tarball is named `lazyaria_<os>_<arch>.tar.gz`, for example
+`lazyaria_linux_amd64.tar.gz`.
 
 Verify it and unpack it:
 
 ```sh
 sha256sum --ignore-missing -c checksums.txt
-tar xzf lazyaria_<version>_linux_amd64.tar.gz lazyaria
+tar xzf lazyaria_linux_amd64.tar.gz lazyaria
 ```
 
 On macOS use `shasum -a 256 -c checksums.txt` in place of `sha256sum`. On
