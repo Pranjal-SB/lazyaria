@@ -9,6 +9,22 @@ import (
 	"github.com/Pranjal-SB/lazyaria/internal/store"
 )
 
+// The "download" placeholder (a metalink or torrent link before its first
+// poll) is no name: refresh does not pin it.
+func TestRefreshNeverPinsThePlaceholder(t *testing.T) {
+	r := newRig(t)
+	j := r.insert(t, store.Error, "", func(j *store.Job) {
+		j.Name, j.URIs = "download", []string{"http://example.com/x.meta4"}
+	})
+	got, err := r.m.RefreshURI(bg, j.ID, "http://mirror.example.com/x.meta4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Out != nil || r.e.adds[len(r.e.adds)-1].Out != "" {
+		t.Fatalf("pinned out %q", *got.Out)
+	}
+}
+
 // A job keeps the name it shows: refreshing one that never started with a
 // link to a differently named file only swaps the link, both on a re-add
 // and when aria2 picks the name from the new link itself.
