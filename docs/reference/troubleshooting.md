@@ -162,12 +162,17 @@ in brackets. `lazyaria list --json` adds a short `error_kind`.
 
 ## Remove and undo
 
-**`nothing to undo: the undo token is unknown or has expired (tokens end after remove.undo_seconds or when the daemon restarts)...`** (exit code 1)
+**`the undo has expired: undo works for 10 seconds after a remove (remove.undo_seconds)...`** (exit code 1)
 
-Undo works for 10 seconds after a remove (`remove.undo_seconds`), and only
-while the same daemon runs. Check that you copied the whole token. To get
-a job back after that, add its link again with `lazyaria add`. Files moved
-to the trash are still in the trash; restore them from there.
+The undo came too late. To get the job back, add its link again with
+`lazyaria add`. Files moved to the trash are still in the trash; restore
+them from there. Raise `remove.undo_seconds` for a longer window.
+
+**`no undo with that token: check that you copied all of it; tokens also end when the daemon restarts...`** (exit code 1)
+
+The daemon does not know the token: it was mistyped, or the daemon has
+restarted since the remove, which ends every token. Check that you copied
+the whole token. Otherwise add the link again with `lazyaria add`.
 
 **`kept <folder>: cannot tell which files are this torrent's`**
 

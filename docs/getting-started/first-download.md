@@ -123,11 +123,16 @@ removed #3
 undo: lazyaria undo KJY3SB2H4I2VYVUFLL4DC3QIXK
 ```
 
-This takes the job off the list and leaves its file where it is.
+This takes the job off the list and keeps its file. A finished file stays
+where it is. An unfinished one is moved into the download folder with
+`(unfinished)` before its extension, such as `movie (unfinished).mkv`.
+aria2's `.aria2` control file for it goes to the trash, where undo finds
+it.
 
 To remove the file too, add `--delete-files`. lazyaria does not delete
 it. It moves it to the trash; an unfinished download goes there as a
-folder named `<name> (unfinished)`, with aria2's `.aria2` control file:
+folder with the same kind of name, such as `movie (unfinished).mkv`,
+holding the file and its `.aria2` control file:
 
 ```sh
 lazyaria remove --delete-files 4

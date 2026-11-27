@@ -43,6 +43,33 @@ func targetName(dir string, p AddParams) string {
 	return textutil.SanitizeName(name, fsinfo.IsFAT(dir))
 }
 
+// unfinishedBase is the name an unfinished download goes by outside its
+// staging folder: "<stem> (unfinished)<ext>", so it keeps its type and
+// cannot pass for the finished file. The extension starts at the last dot
+// after the first character, or covers a compressed tarball's two parts.
+// A long stem is cut, on a character boundary, so the name still fits with
+// a clash number (freeName's ".N", up to 4 digits) and the .aria2 beside it.
+func unfinishedBase(name string) string {
+	const suffix = " (unfinished)"
+	stem, ext := name, ""
+	if i := strings.LastIndexByte(name, '.'); i > 0 {
+		stem, ext = name[:i], name[i:]
+	}
+	lower := strings.ToLower(name)
+	for _, tar := range []string{".tar.gz", ".tar.xz", ".tar.zst", ".tar.bz2"} {
+		if strings.HasSuffix(lower, tar) && len(name) > len(tar) {
+			stem, ext = name[:len(name)-len(tar)], name[len(name)-len(tar):]
+		}
+	}
+	if keep := textutil.MaxName - len(".9999") - len(suffix) - len(ext); len(stem) > keep {
+		stem = stem[:max(keep, 0)]
+		for !utf8.ValidString(stem) {
+			stem = stem[:len(stem)-1]
+		}
+	}
+	return stem + suffix + ext
+}
+
 // freeName picks the name aria2 itself would rename path to: the first
 // base.N.ext not on disk and not held by a live job, shortened to fit
 // textutil.MaxName.

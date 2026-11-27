@@ -38,7 +38,8 @@ commands:
   undo <token>
             bring back what a remove took, files included
   refresh <job> <link>
-            give a download a fresh link and keep its progress
+            give a download a fresh link; it keeps its progress and
+            its name
   config list [--json] | get KEY | set KEY VALUE | reset KEY | edit | path | keys
   doctor [--json] [--restart-engine]
             check the setup and say how to fix what is wrong
@@ -163,7 +164,8 @@ pause|resume <job>...
 
 ```text
 refresh <job> <link>
-          give a download a fresh link and keep its progress
+          give a download a fresh link; it keeps its progress and
+          its name
 ```
 
 ## remove

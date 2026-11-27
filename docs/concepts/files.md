@@ -141,9 +141,27 @@ Two settings change this:
 
 ## Removing a job and its files
 
-`lazyaria remove <job>` takes the job off the list. Its file stays where
-it is: a finished one in the download folder, an unfinished one in its
-`.laria/<job id>/` folder.
+`lazyaria remove <job>` takes the job off the list and keeps its files. A
+finished download stays where it is, in the download folder. An
+unfinished one is stopped and moved out of `.laria/<job id>/` into the
+download folder. It never gets the name the finished download would
+have: `(unfinished)` goes before the extension, so the file still opens
+with the right program and is not mistaken for a finished one:
+
+```text
+movie (unfinished).mkv
+```
+
+A name without an extension gets `(unfinished)` at the end, and
+compressed tarballs keep both parts, as in `src (unfinished).tar.gz`. If
+the name is taken, it gets the next free name, as described
+[below](#when-a-name-is-taken), for example `movie (unfinished).1.mkv`.
+
+Its `.aria2` control file goes to the trash, listed as
+`movie (unfinished).mkv.aria2`. Only undo needs it. When no trash can be
+used on that disk, it stays beside the file instead. The `.laria/<job id>/`
+folder is then removed; anything else left in it goes to the trash too.
+Undo puts the file and its control file back, so the download resumes.
 
 `lazyaria remove --delete-files <job>` also moves the job's files to the
 trash: the one in your home folder (`~/.local/share/Trash`) when the file
@@ -155,8 +173,8 @@ It takes only files the job downloaded:
 
 - An unfinished download is stopped first, and its `.laria/<job id>/`
   folder goes to the trash, with the unfinished file and its control
-  file. The trash lists it as `<name> (unfinished)`, so you can tell it
-  apart in a file manager.
+  file. The trash lists it under the same name as above, such as
+  `movie (unfinished).mkv`, so you can tell it apart in a file manager.
 - A finished download takes the file or folder it put in the download
   folder, as long as it is still there under that name. A download saved
   under a new name, such as `notes.1.pdf`, takes that file and leaves
@@ -184,16 +202,24 @@ removed #3
 undo: lazyaria undo VCDLIKHYM7PNFOM5FLMGY6FZ2Q
 ```
 
-It brings back the jobs and any files the remove moved to the trash. A
-job that was running comes back paused. The command works for 10 seconds
-(`remove.undo_seconds`; `0` turns undo off) and only while the same
-daemon runs. If a file cannot go back because something else now has its
-name, undo says so and the token stays valid for another try.
+It brings back the jobs and any files the remove moved, to the trash or
+out of `.laria`. A job that was running comes back paused. The command
+works for 10 seconds (`remove.undo_seconds`; `0` turns undo off) and only
+while the same daemon runs. If a file cannot go back because something
+else now has its name, undo says so and the token stays valid for another
+try.
 
 After that, undo exits with 1:
 
 ```text
-lazyaria undo: nothing to undo: the undo token is unknown or has expired (tokens end after remove.undo_seconds or when the daemon restarts). Add the link again with `lazyaria add`; files that were deleted are in the Trash
+lazyaria undo: the undo has expired: undo works for 10 seconds after a remove (remove.undo_seconds). Add the link again with `lazyaria add`; files that were deleted are in the Trash
+```
+
+A token the daemon does not know, because it was mistyped or the daemon
+has restarted since, also exits with 1:
+
+```text
+lazyaria undo: no undo with that token: check that you copied all of it; tokens also end when the daemon restarts. Add the link again with `lazyaria add`; files that were deleted are in the Trash
 ```
 
 The files are still in the trash.
