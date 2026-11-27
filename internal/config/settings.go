@@ -19,6 +19,7 @@ type Settings struct {
 	Privacy     PrivacySettings     `toml:"privacy"`
 	History     HistorySettings     `toml:"history"`
 	UI          UISettings          `toml:"ui"`
+	Updates     UpdatesSettings     `toml:"updates"`
 
 	// Keys maps an action to its key list. The "preset" entry is a single
 	// element list holding the validated preset name (default|vim).
@@ -151,6 +152,11 @@ type UISettings struct {
 	OpenFolderCommand   string `toml:"open_folder_command" default:"" live:"true" help:"Command used to open folders; empty uses open_command." unused:"true"`
 	ReducedMotion       bool   `toml:"reduced_motion" default:"false" live:"true" help:"Turn off animation." unused:"true"`
 	FirstRun            bool   `toml:"first_run" default:"true" live:"false" help:"Show the first-run screen; cleared after it is shown." unused:"true"`
+}
+
+type UpdatesSettings struct {
+	Check bool `toml:"check" default:"true" live:"true" help:"Check GitHub for a newer lazyaria in the background; only the latest version number is fetched, nothing about you is sent." unused:"true"`
+	Auto  bool `toml:"auto" default:"true" live:"true" help:"Install updates by itself when nothing is downloading, if lazyaria was installed with the install script." unused:"true"`
 }
 
 type LogSettings struct {

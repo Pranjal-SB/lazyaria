@@ -1038,6 +1038,28 @@
     "not_used_yet": true
   },
   {
+    "key": "updates.check",
+    "type": "bool",
+    "value": true,
+    "default": true,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Check GitHub for a newer lazyaria in the background; only the latest version number is fetched, nothing about you is sent.",
+    "not_used_yet": true
+  },
+  {
+    "key": "updates.auto",
+    "type": "bool",
+    "value": true,
+    "default": true,
+    "source": "default",
+    "live": true,
+    "enum": [],
+    "help": "Install updates by itself when nothing is downloading, if lazyaria was installed with the install script.",
+    "not_used_yet": true
+  },
+  {
     "key": "log.level",
     "type": "string",
     "value": "info",

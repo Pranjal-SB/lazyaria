@@ -198,6 +198,13 @@ warning.
 | `ui.reduced_motion` | `false` | now | Turn off animation. *Not used yet.* |
 | `ui.first_run` | `true` | restart | Show the first-run screen; cleared after it is shown. *Not used yet.* |
 
+## updates
+
+| Setting | Default | Applies | Description |
+|---|---|---|---|
+| `updates.check` | `true` | now | Check GitHub for a newer lazyaria in the background; only the latest version number is fetched, nothing about you is sent. *Not used yet.* |
+| `updates.auto` | `true` | now | Install updates by itself when nothing is downloading, if lazyaria was installed with the install script. *Not used yet.* |
+
 ## log
 
 | Setting | Default | Applies | Description |
