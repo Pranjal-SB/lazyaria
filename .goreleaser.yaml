@@ -15,7 +15,9 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - -s -w -X github.com/Pranjal-SB/lazyaria/internal/buildinfo.Version={{.Version}}
+      - -s -w
+      - -X github.com/Pranjal-SB/lazyaria/internal/buildinfo.Version={{.Version}}
+      - -X github.com/Pranjal-SB/lazyaria/internal/buildinfo.Source=release
 
 archives:
   - formats: [tar.gz]
@@ -30,6 +32,53 @@ archives:
 checksum:
   name_template: checksums.txt
   algorithm: sha256
+
+# The Homebrew cask and the AUR package are published only when their
+# secret is set, so a release without them still goes to GitHub. See
+# "Releasing" in CONTRIBUTING.md. Both reuse the release tarballs above.
+homebrew_casks:
+  - name: lazyaria
+    description: A download manager for the terminal, built on aria2
+    homepage: https://github.com/Pranjal-SB/lazyaria
+    repository:
+      owner: Pranjal-SB
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    skip_upload: '{{ if isEnvSet "HOMEBREW_TAP_GITHUB_TOKEN" }}auto{{ else }}true{{ end }}'
+    commit_msg_template: "lazyaria {{ .Tag }}"
+    dependencies:
+      - formula: aria2
+    binaries: [lazyaria]
+    # The short name. custom_block goes at the top of the cask; the cask
+    # DSL does not depend on stanza order.
+    custom_block: |
+      binary "lazyaria", target: "laria"
+    hooks:
+      post:
+        # The binaries are not signed or notarized, so macOS would refuse
+        # to run them with the quarantine attribute set.
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/lazyaria"]
+          end
+
+aurs:
+  - name: lazyaria-bin
+    description: A download manager for the terminal, built on aria2
+    homepage: https://github.com/Pranjal-SB/lazyaria
+    license: Apache-2.0
+    git_url: ssh://aur@aur.archlinux.org/lazyaria-bin.git
+    private_key: "{{ .Env.AUR_SSH_PRIVATE_KEY }}"
+    skip_upload: '{{ if isEnvSet "AUR_SSH_PRIVATE_KEY" }}auto{{ else }}true{{ end }}'
+    commit_msg_template: "lazyaria {{ .Tag }}"
+    depends: [aria2]
+    provides: [lazyaria]
+    conflicts: [lazyaria]
+    package: |-
+      install -Dm755 ./lazyaria "${pkgdir}/usr/bin/lazyaria"
+      ln -s lazyaria "${pkgdir}/usr/bin/laria"
+      install -Dm644 ./LICENSE "${pkgdir}/usr/share/licenses/lazyaria-bin/LICENSE"
+      install -Dm644 ./NOTICE "${pkgdir}/usr/share/licenses/lazyaria-bin/NOTICE"
 
 changelog:
   sort: asc

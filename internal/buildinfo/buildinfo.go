@@ -9,6 +9,12 @@ import (
 // Version is overridden at link time with -ldflags "-X ...buildinfo.Version=...".
 var Version = "dev"
 
+// Source says how the binary was shipped, set at link time like Version:
+// "release" for the GitHub release tarballs (which the Homebrew cask and the
+// AUR lazyaria-bin package reuse). A package that builds from source can set
+// its own name, such as "homebrew" or "aur". Empty for a build from source.
+var Source string
+
 // Protocol is the IPC protocol version shared by the CLI and the daemon.
 const Protocol = 1
 
